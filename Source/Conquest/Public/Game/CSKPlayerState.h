@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "GameFramework/PlayerState.h"
 #include "CSKPlayerState.generated.h"
 
@@ -20,15 +20,21 @@ public:
 
 protected:
 
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
+
+protected:
+
 	/** The amount of gold this player owns */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Resources)
-	int32 Gold : 8;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = Resources)
+	uint8 Gold;
 
 	/** The amount of mana this player owns */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Resources)
-	int32 Mana : 8;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = Resources)
+	uint8 Mana;
 
 	/** This players assigned color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Resources)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = Resources)
 	FColor AssignedColor;
 };

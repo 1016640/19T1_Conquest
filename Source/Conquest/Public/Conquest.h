@@ -3,5 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UnrealNetwork.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogConquest, Log, All);
