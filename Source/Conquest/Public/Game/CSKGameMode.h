@@ -2,15 +2,15 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "GameFramework/GameModeBase.h"
-#include "ConquestGameModeBase.generated.h"
+#include "CSKGameMode.generated.h"
 
 /**
- * 
+ * Manages and handles events present in CSK
  */
 UCLASS()
-class CONQUEST_API AConquestGameModeBase : public AGameModeBase
+class CONQUEST_API ACSKGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 	
