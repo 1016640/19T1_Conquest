@@ -7,6 +7,6 @@ ACSKPlayerState::ACSKPlayerState()
 	Gold = 0;
 	Mana = 0;
 
-	// Gold
+	// Bronze
 	AssignedColor = FColor(80, 50, 20);
 }
