@@ -8,13 +8,13 @@
 UENUM(BlueprintType, meta = (DisplayName = "ElementType", Bitflags, UseEnumValuesAsMaskValuesInEditor = "true"))
 enum class ECSKElementType : uint8
 {
-	None	= 0,
 	Fire	= 1,
 	Water	= 2,
 	Earth	= 4,
 	Air		= 8,
 
-	All		= 15 UMETA(Hidden="true")
+	All		= 15	UMETA(Hidden="true"),
+	None	= 0		UMETA(Hidden="true")
 };
 
 ENUM_CLASS_FLAGS(ECSKElementType);

@@ -7,7 +7,13 @@ public class Conquest : ModuleRules
 	public Conquest(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
+
+        PublicIncludePaths.AddRange(new string[]
+        {
+            "Board",
+            "Game"
+        });
+
 		PublicDependencyModuleNames.AddRange(new string[] 
         {
             "Core",

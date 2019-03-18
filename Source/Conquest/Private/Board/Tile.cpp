@@ -7,3 +7,7 @@ ATile::ATile()
 	PrimaryActorTick.bCanEverTick = false;
 }
 
+void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+}

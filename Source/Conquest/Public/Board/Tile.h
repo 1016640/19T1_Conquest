@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "BoardTypes.h"
 #include "GameFramework/Actor.h"
 #include "Tile.generated.h"
 
@@ -18,4 +18,16 @@ class CONQUEST_API ATile : public AActor
 public:	
 	
 	ATile();
+
+protected:
+
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
+
+protected:
+
+	/** The element type of this tile */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	uint8 TileType;
 };
