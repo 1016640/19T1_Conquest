@@ -10,11 +10,7 @@ public class Conquest : ModuleRules
 
         PublicIncludePaths.AddRange(new string[]
         {
-            "Conquest/Public",
-
-            "Board",
-            "Game",
-            "Resources"
+            "Conquest/Public"
         });
 
 		PublicDependencyModuleNames.AddRange(new string[] 

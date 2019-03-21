@@ -9,10 +9,8 @@
 ABoardManager::ABoardManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
-	bReplicates = true;
 
-	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	SetRootComponent(DummyRoot);
+	bReplicates = true;
 
 	bTestingToggle = false;
 	HexSize = 200.f;
