@@ -5,14 +5,14 @@
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleManager.h"
 
-class IConquestModule : public IModuleInterface
+class IConquestEditorModule : public IModuleInterface
 {
 public:
 
 	/** Get conquest module */
-	static inline IConquestModule& GetConquestModule()
+	static inline IConquestEditorModule& GetConquestModule()
 	{
-		return FModuleManager::LoadModuleChecked<IConquestModule>("Conquest");
+		return FModuleManager::LoadModuleChecked<IConquestEditorModule>("ConquestEditor");
 	}
 };
 

@@ -9,6 +9,10 @@ public class ConquestEditorTarget : TargetRules
 	{
 		Type = TargetType.Editor;
 
-		ExtraModuleNames.AddRange( new string[] { "Conquest" } );
+		ExtraModuleNames.AddRange(new string[] 
+        {
+            "Conquest",
+            "ConquestEditor"
+        } );
 	}
 }

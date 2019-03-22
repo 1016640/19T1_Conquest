@@ -9,6 +9,9 @@ public class ConquestTarget : TargetRules
 	{
 		Type = TargetType.Game;
 
-		ExtraModuleNames.AddRange( new string[] { "Conquest" } );
+		ExtraModuleNames.AddRange(new string[] 
+        {
+            "Conquest",
+        });
 	}
 }
