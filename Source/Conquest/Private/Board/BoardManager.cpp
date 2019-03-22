@@ -3,6 +3,9 @@
 #include "BoardManager.h"
 #include "Tile.h"
 
+#include "UObject/ConstructorHelpers.h"
+#include "Components/BillboardComponent.h"
+
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 
@@ -13,6 +16,18 @@ ABoardManager::ABoardManager()
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
+
+	#if WITH_EDITORONLY_DATA
+	UBillboardComponent* Billboard = CreateEditorOnlyDefaultSubobject<UBillboardComponent>(TEXT("Billboard"));
+	Billboard->SetupAttachment(DummyRoot);
+	Billboard->bIsEditorOnly = true;
+
+	static ConstructorHelpers::FObjectFinder<UTexture2D> ActorTexture(TEXT("/Engine/EditorResources/S_Actor.S_Actor"));
+	if (ActorTexture.Succeeded())
+	{
+		Billboard->SetSprite(ActorTexture.Object);
+	}
+	#endif
 
 	bTestingToggle = false;
 	HexSize = 200.f;
@@ -27,14 +42,53 @@ void ABoardManager::OnConstruction(const FTransform& Transform)
 	if (!bTestingToggle)
 		return;
 
-	FVector2D GridSize((float)HexSize, (float)HexSize);
-	auto hex_corner_offset = [this, GridSize](float start_angle, int32 corner)->FVector
+	FVector GridOrigin = GetActorLocation();
+	FVector GridSize(HexSize, HexSize, 0.f);
+
+	auto GeneratePredicate = [this, GridOrigin, GridSize](const FHexGrid::FHex& Hex, int32 Row, int32 Column)->ATile*
 	{
-		float angle = 2.f * PI * (start_angle + (float)corner) / 6;
-		return FVector(GridSize.X * FMath::Cos(angle), GridSize.Y * sin(angle), this->GetActorLocation().Z);
+		UWorld* World = this->GetWorld();
+		if (World)
+		{
+			FVector TileLocation = FHexGrid::ConvertHexToWorld(Hex, GridOrigin, GridSize);
+			ATile* Tile = nullptr; //World->SpawnActor<ATile>(ATile::StaticClass(), TileLocation, FRotator::ZeroRotator);
+			if (true)//Tile)
+			{
+				//Tile->Hex = Hex;
+				//Tile->Row = Row;
+				//Tile->Column = Column;
+
+				this->DrawDebugHexagon(TileLocation, HexSize, DrawTime);
+				this->DrawDebugHexagon(TileLocation, HexSize * .75f, DrawTime);
+				// Potential init
+			}
+
+			return Tile;
+		}
+
+		return nullptr;
 	};
+
+	// for now
+	TArray<ATile*> ts;
+	HexGrid.GridMap.GenerateValueArray(ts);
+
+	for (auto t : ts)
+	{
+		if (t)
+			t->Destroy();
+	}
+
+	HexGrid.GenerateGrid(GridX, GridY, GeneratePredicate);
+
+	//FVector2D GridSize((float)HexSize, (float)HexSize);
+	//auto hex_corner_offset = [this, GridSize](float start_angle, int32 corner)->FVector
+	//{
+	//	float angle = 2.f * PI * (start_angle + (float)corner) / 6;
+	//	return FVector(GridSize.X * FMath::Cos(angle), GridSize.Y * sin(angle), this->GetActorLocation().Z);
+	//};
 	
-	auto hex_to_world = [this, GridSize](FIntVector hex)->FVector
+	/*auto hex_to_world = [this, GridSize](FIntVector hex)->FVector
 	{
 		float X = (FMath::Sqrt(3.f) * hex.X + (FMath::Sqrt(3.f) / 2.f) * hex.Y) * GridSize.X;
 		float Y = (0.f * hex.X + (3.f / 2.f) * hex.Y) * GridSize.Y;
@@ -72,7 +126,7 @@ void ABoardManager::OnConstruction(const FTransform& Transform)
 				Pos = hex_to_world(FIntVector(X, Y, 0));
 				DrawDebugHexagon(Pos, HexSize, DrawTime);
 		}
-	}
+	}*/
 }
 
 void ABoardManager::DrawDebugHexagon(const FVector& Position, float Size, float Time)

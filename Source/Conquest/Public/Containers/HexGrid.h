@@ -3,6 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "HexGrid.generated.h"
+
+class ATile;
 
 /**
  * A grid genereted using hexagons. This grid uses cube coordinates
@@ -10,12 +13,28 @@
  * and thank RedBlob Games for their article on Hex Grids
  * https://www.redblobgames.com/grids/hexagons/
  */
+USTRUCT()
 struct CONQUEST_API FHexGrid
 {
+	GENERATED_BODY()
+
 public:
 
 	using FHex = FIntVector;
 	using FFracHex = FVector;
+
+	static constexpr float StartAngle()
+	{
+		return 0.5f;
+	}
+
+public:
+
+	FHexGrid()
+		: bGridGenerated(false)
+	{
+		
+	}
 
 private:
 
@@ -43,7 +62,7 @@ private:
 		return HexLength(H1 - H2);
 	}
 
-	FORCEINLINE static FHex HexRound(const FVector& FracHex)
+	FORCEINLINE static FHex HexRound(const FFracHex& FracHex)
 	{
 		float X = FMath::RoundToFloat(FracHex.X);
 		float Y = FMath::RoundToFloat(FracHex.Y);
@@ -75,39 +94,64 @@ private:
 
 public:
 
+	/** Get row and column indices as a hex cell */
+	FORCEINLINE static FHex ConvertIndicesToHex(int32 Row, int32 Column)
+	{
+		FHex Hex(Row, Column, -Row - Column);
+		check(IsValidHex(Hex));
+
+		return Hex;
+	}
+
 	/** Converts a hex cell into a world position based off an origin and cell size.
 	The cell is only applied onto the XY plane, with Z being the same as Origin.Z */
-	static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
+	FORCEINLINE static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
 	{
 		const float f0 = FMath::Sqrt(3.f);
-		const float f1 = f0 - 2.f;
+		const float f1 = f0 / 2.f;
+		const float f2 = 0.f;
 		const float f3 = 3.f / 2.f;
 
 		float X = (f0 * static_cast<float>(Hex.X) + f1 * static_cast<float>(Hex.Y)) * Size.X;
-		float Y = (f3 * static_cast<float>(Hex.Y)) * Size.Y;
+		float Y = (f2 * static_cast<float>(Hex.X) + f3 * static_cast<float>(Hex.Y)) * Size.Y;
 
 		return FVector(Origin.X + X, Origin.Y + Y, Origin.Z);
 	}
 
 	/** Converts a world position to a hex cell. Z axis does not affect calculation */
-	static FHex ConvertWorldToHex(const FVector& Position, const FVector& Origin, const FVector& Size)
+	FORCEINLINE static FHex ConvertWorldToHex(const FVector& Position, const FVector& Origin, const FVector& Size)
 	{
 		const float b0 = FMath::Sqrt(3.f) / 3.f;
 		const float b1 = -1.f / 3.f;
+		const float b2 = 0.f;
 		const float b3 = 2.f / 3.f;
 
 		float PointX = (Position.X - Origin.X) / Size.X;
 		float PointY = (Position.Y - Origin.Y) / Size.Y;
 
 		float X = b0 * PointX + b1 * PointY;
-		float Y = b3 * PointY;
+		float Y = b2 * PointX + b3 * PointY;
 
-		return HexRound(FVector(X, Y, -X - Y));
+		return HexRound(FFracHex(X, Y, -X - Y));
 	}
-};
 
-const FHexGrid::FHex FHexGrid::DirectionTable[6] =
-{
-	FHex(+1, -1, 0), FHex(+1, 0, -1), FHex(0, +1, -1),
-	FHex(-1, +1, 0), FHex(-1, 0, +1), FHex(0, -1, +1)
+public:
+
+	/** Generates a rectangular shaped map with given rows and columns.
+	Takes in a predicate which is used to initialize each cell, predicate
+	should expect the hex index, and the cells row and column index */
+	void GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(const FHex&, int32, int32)>& Predicate);
+
+	/** Clears the grid, will destroy all tiles that have been spawned */
+	void ClearGrid();
+
+public:
+
+	/** Map containing all tiles in the map */
+	UPROPERTY()
+	TMap<FIntVector, ATile*> GridMap;
+
+	/** If the grid has been generated */
+	UPROPERTY()
+	uint8 bGridGenerated : 1;
 };

@@ -37,4 +37,10 @@ protected:
 	/** This players assigned color */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = Resources)
 	FColor AssignedColor;
+
+private:
+
+	/** The amount of tiles this player has travelled */
+	UPROPERTY()
+	int32 TilesTraversed;
 };

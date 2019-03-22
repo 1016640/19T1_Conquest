@@ -18,10 +18,10 @@ ATile::ATile()
 	Billboard->SetupAttachment(DummyRoot);
 	Billboard->bIsEditorOnly = true;
 
-	static ConstructorHelpers::FObjectFinder<UTexture2D> WaypointTexture(TEXT("/Engine/EditorResources/Waypoint.Waypoint"));
-	if (WaypointTexture.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UTexture2D> ActorTexture(TEXT("/Engine/EditorResources/S_Actor.S_Actor"));
+	if (ActorTexture.Succeeded())
 	{
-		Billboard->SetSprite(WaypointTexture.Object);
+		Billboard->SetSprite(ActorTexture.Object);
 	}
 	#endif
 

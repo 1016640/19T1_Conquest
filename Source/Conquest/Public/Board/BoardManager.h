@@ -4,9 +4,8 @@
 
 #include "Conquest.h"
 #include "GameFramework/Actor.h"
+#include "Containers/HexGrid.h"
 #include "BoardManager.generated.h"
-
-class ATile;
 
 /**
  * Manages the board aspect of the game. Maintains each tile of the board
@@ -45,5 +44,8 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	int32 GridY;
+
+	UPROPERTY()
+	FHexGrid HexGrid;
 };
 

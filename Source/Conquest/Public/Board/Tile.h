@@ -58,4 +58,15 @@ public:
 	/** If this tile has a building on it */
 	UFUNCTION(BlueprintPure, Category = "Board|Tile")
 	bool HasBuilding() const { return true; }
+
+public:
+
+	UPROPERTY(VisibleAnywhere)
+	FIntVector Hex;
+
+	UPROPERTY(VisibleAnywhere)
+	int32 Row;
+
+	UPROPERTY(VisibleAnywhere)
+	int32 Column;
 };
