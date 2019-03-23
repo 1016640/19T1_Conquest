@@ -2,15 +2,19 @@
 
 #include "BoardEdMode.h"
 
-const FEditorModeID FEdModeBoard::EM_BoardModeID(TEXT("EM_BoardEdMode"));
+const FEditorModeID FEdModeBoard::EM_BoardMode(TEXT("EM_BoardEdMode"));
 
 void FEdModeBoard::Enter()
 {
+	FEdMode::Enter();
+
 	UE_LOG(LogConquestEditor, Log, TEXT("Entered Conquest Board Editor mode"));
 }
 
 void FEdModeBoard::Exit()
 {
+	FEdMode::Exit();
+
 	UE_LOG(LogConquestEditor, Log, TEXT("Exited Conquest Board Editor mode"));
 }
 

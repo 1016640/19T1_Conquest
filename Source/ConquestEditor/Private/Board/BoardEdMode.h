@@ -4,6 +4,7 @@
 
 #include "ConquestEditor.h"
 #include "EdMode.h"
+#include "BoardEditorObject.h"
 
 class ABoardManager;
 
@@ -14,7 +15,7 @@ class FEdModeBoard : public FEdMode
 {
 public:
 
-	const static FEditorModeID EM_BoardModeID;
+	const static FEditorModeID EM_BoardMode;
 
 public:
 
@@ -41,9 +42,21 @@ private:
 	/** Notify that current map has changed */
 	//void OnMapChange(uint32 Event);
 
+public:
+
+	FORCEINLINE UBoardEditorObject* GetBoardSettings() const { return BoardSettings; }
+
 private:
 
-	/** The board manager we are currently editing */
+	/** Get the board manager of the current level */
+	ABoardManager* GetLevelsBoardManager() const;
+
+private:
+
+	/** The board settings for either new or current board */
+	UBoardEditorObject* BoardSettings;
+
+	/** The board manager we are currently editing (if it exists) */
 	TWeakObjectPtr<ABoardManager> BoardManager;
 };
 

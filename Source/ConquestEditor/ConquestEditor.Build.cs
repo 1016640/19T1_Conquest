@@ -29,6 +29,7 @@ public class ConquestEditor : ModuleRules
         {
             "Conquest",
             "EditorStyle",
+            "PropertyEditor",
             "Slate",
             "SlateCore",
             "UnrealED"

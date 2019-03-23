@@ -28,7 +28,7 @@ private:
 	{
 		FEditorModeRegistry& EdModeRegistry = FEditorModeRegistry::Get();
 		EdModeRegistry.RegisterMode<FEdModeBoard>(
-			FEdModeBoard::EM_BoardModeID,
+			FEdModeBoard::EM_BoardMode,
 			LOCTEXT("BoardMode", "Conquest Board Editor"),
 			FSlateIcon(),
 			true);
@@ -38,7 +38,7 @@ private:
 	void UnregisterBoardEditor()
 	{
 		FEditorModeRegistry& EdModeRegistry = FEditorModeRegistry::Get();
-		EdModeRegistry.UnregisterMode(FEdModeBoard::EM_BoardModeID);
+		EdModeRegistry.UnregisterMode(FEdModeBoard::EM_BoardMode);
 	}
 };
 

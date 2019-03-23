@@ -10,12 +10,12 @@ class FEdModeBoard;
 /** 
  * Toolkit that supports board editor mode
  */
-class FEdModeBoardToolkit : public FModeToolkit
+class FBoardToolkit : public FModeToolkit
 {
 public:
 
-	FEdModeBoardToolkit(FEdModeBoard* EdMode);
-	virtual ~FEdModeBoardToolkit() = default;
+	FBoardToolkit(FEdModeBoard* EdMode);
+	virtual ~FBoardToolkit() = default;
 
 public:
 

@@ -1,27 +1,27 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "BoardEdModeToolkit.h"
+#include "BoardToolkit.h"
 #include "BoardEdMode.h"
 
 #define LOCTEXT_NAMESPACE "FEdModeBoardToolkit"
 
-FEdModeBoardToolkit::FEdModeBoardToolkit(FEdModeBoard* EdMode)
+FBoardToolkit::FBoardToolkit(FEdModeBoard* EdMode)
 	: BoardEdMode(EdMode)
 {
 	
 }
 
-FText FEdModeBoardToolkit::GetBaseToolkitName() const
+FText FBoardToolkit::GetBaseToolkitName() const
 {
 	return LOCTEXT("BoardEditorToolkitBaseName", "BoardEditorToolkit");
 }
 
-FName FEdModeBoardToolkit::GetToolkitFName() const
+FName FBoardToolkit::GetToolkitFName() const
 {
 	return TEXT("BoardEditorToolkit");
 }
 
-FEdMode* FEdModeBoardToolkit::GetEditorMode() const
+FEdMode* FBoardToolkit::GetEditorMode() const
 {
 	return BoardEdMode;
 }
