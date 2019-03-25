@@ -58,6 +58,10 @@ public:
 	UPROPERTY(EditAnywhere, NonTransactional, Category = "New Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
 	float New_BoardHexSize;
 
+	/** The origin for a new board */
+	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 10, DislplayName = "Position", BoardState = "New"))
+	FVector New_BoardOrigin;
+
 	/** The amount of rows to regenerate the existing board with */
 	UPROPERTY(EditAnywhere, NonTransactional, Category = "Edit Board", meta = (ClampMin = 2, DisplayName = "Rows", BoardState = "Edit"))
 	int32 Edit_BoardRows;
@@ -69,10 +73,6 @@ public:
 	/** The size of each cell for the existing board */
 	UPROPERTY(EditAnywhere, NonTransactional, Category = "Edit Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "Edit"))
 	float Edit_BoardHexSize;
-
-	/** The position of the first tiles center */
-	UPROPERTY(EditAnywhere, Category = "Settings", meta = (ClampMin = 10, DislplayName = "Position"))
-	FVector BoardOrigin;
 
 private:
 
