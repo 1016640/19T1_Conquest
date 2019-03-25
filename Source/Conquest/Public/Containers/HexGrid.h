@@ -105,7 +105,7 @@ public:
 
 	/** Converts a hex cell into a world position based off an origin and cell size.
 	The cell is only applied onto the XY plane, with Z being the same as Origin.Z */
-	FORCEINLINE static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
+	static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
 	{
 		const float f0 = FMath::Sqrt(3.f);
 		const float f1 = f0 / 2.f;
@@ -144,6 +144,17 @@ public:
 
 	/** Clears the grid, will destroy all tiles that have been spawned */
 	void ClearGrid();
+
+public:
+
+	/** Get all tiles in the grid */
+	FORCEINLINE TArray<ATile*> GetAllTiles() const
+	{
+		TArray<ATile*> Tiles;
+		GridMap.GenerateValueArray(Tiles);
+
+		return Tiles;
+	}
 
 public:
 

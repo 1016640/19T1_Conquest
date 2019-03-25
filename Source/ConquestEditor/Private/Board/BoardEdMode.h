@@ -7,6 +7,7 @@
 #include "BoardEditorObject.h"
 
 class ABoardManager;
+class FBoardToolkit;
 class FUICommandList;
 
 /** 
@@ -36,6 +37,11 @@ public:
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 	// End FGCObject Interface
 
+public:
+
+	/** Generates a new grid based off current settings */
+	void GenerateGrid();
+
 private:
 
 	/** Notify that the current level has changed */
@@ -43,6 +49,11 @@ private:
 
 	/** Notify that current map has changed */
 	//void OnMapChange(uint32 Event);
+
+private:
+
+	/** Draws a hexagon of given size at given location */
+	void DrawHexagon(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Origin, float HexSize);
 
 public:
 
@@ -53,12 +64,15 @@ public:
 	FORCEINLINE ABoardManager* GetCachedBoardManager() const { return BoardManager.Get(); }
 
 	/** If we are currently editing an existing board */
-	FORCEINLINE bool IsEditingBoard() const { return BoardManager.IsValid(); }
+	FORCEINLINE bool IsEditingBoard() const { return false; }// BoardManager.IsValid(); }
 
 private:
 
 	/** Get the board manager of the current level */
 	ABoardManager* GetLevelsBoardManager() const;
+
+	/** Get toolkit as a board editor toolkit */
+	TSharedPtr<FBoardToolkit> GetBoardToolkit() const;
 
 private:
 

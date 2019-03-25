@@ -25,6 +25,43 @@ protected:
 
 	/** Get the board editor mode */
 	static FEdModeBoard* GetEditorMode();
+
+protected:
+
+	// Thanks to the Landscape module for these helper functions!
+	
+	/** Get value of a property */
+	template <typename Type>
+	static Type GetPropertyValue(TSharedRef<IPropertyHandle> PropertyHandle)
+	{
+		Type Value;
+		if (PropertyHandle->GetValue(Value) == FPropertyAccess::Success)
+		{
+			return Value;
+		}
+
+		return Type();
+	}
+
+	/** Get optional version of a property */
+	template <typename Type>
+	static TOptional<Type> GetOptionalPropertyValue(TSharedRef<IPropertyHandle> PropertyHandle)
+	{
+		Type Value;
+		if (PropertyHandle->GetValue(Value) == FPropertyAccess::Success)
+		{
+			return TOptional<Type>(Value);
+		}
+
+		return TOptional<Type>();
+	}
+
+	/** Sets the value of a property */
+	template <typename Type>
+	static void SetPropertyValue(Type Value, ETextCommit::Type CommitInfo, TSharedRef<IPropertyHandle> PropertyHandle)
+	{
+		ensure(PropertyHandle->SetValue(Value) == FPropertyAccess::Success);
+	}
 };
 
 /** 
@@ -44,4 +81,7 @@ public:
 	// End IDetailCustomization Interface
 
 protected:
+
+	/** Notify that generate grid button has been pressed */
+	FReply OnGenerateGridClicked();
 };

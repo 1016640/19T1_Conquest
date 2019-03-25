@@ -22,13 +22,13 @@ void UBoardEditorObject::PostEditChangeProperty(FPropertyChangedEvent& PropertyC
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
-	if (GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardOrigin) == PropertyName)
+	const FName PropertyName = PropertyChangedEvent.MemberProperty ? PropertyChangedEvent.MemberProperty->GetFName() : NAME_None;
+	if (GET_MEMBER_NAME_CHECKED(UBoardEditorObject, New_BoardOrigin) == PropertyName)
 	{
 		if (BoardEdMode && BoardEdMode->IsEditingBoard())
 		{
 			ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
-			BoardManager->SetActorLocation(BoardOrigin);
+			BoardManager->SetActorLocation(New_BoardOrigin);
 		}
 	}
 }
@@ -49,6 +49,5 @@ void UBoardEditorObject::UpdateBoardEditProperties()
 		Edit_BoardRows = 10;
 		Edit_BoardColumns = 10;
 		Edit_BoardHexSize = 200.f;
-		BoardOrigin = BoardManager->GetActorLocation();
 	}
 }

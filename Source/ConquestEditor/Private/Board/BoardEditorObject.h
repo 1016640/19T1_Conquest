@@ -47,15 +47,15 @@ public:
 public:
 
 	/** The amount of rows to generate for a new board */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "New Board", meta = (ClampMin = 2, DisplayName="Rows", BoardState="New"))
+	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 2, DisplayName="Rows", BoardState="New"))
 	int32 New_BoardRows;
 
 	/** The amount of columns to generate for a new board */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "New Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "New"))
 	int32 New_BoardColumns;
 
 	/** The size of each cell for a new board */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "New Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
 	float New_BoardHexSize;
 
 	/** The origin for a new board */

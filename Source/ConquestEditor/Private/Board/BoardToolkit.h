@@ -28,6 +28,11 @@ public:
 	virtual TSharedPtr<SWidget> GetInlineContent() const override;
 	// End IToolkit Interface
 
+public:
+
+	/** Notify that the board editing state has changed */
+	void NotifyEditingStateChanged();
+
 private:
 
 	/** The widget to edit the board with */
