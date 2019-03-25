@@ -1,14 +1,17 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "BoardToolkit.h"
-#include "BoardEdMode.h"
+#include "SBoardEditor.h"
+
+#include "EditorModeManager.h"
 
 #define LOCTEXT_NAMESPACE "FEdModeBoardToolkit"
 
-FBoardToolkit::FBoardToolkit(FEdModeBoard* EdMode)
-	: BoardEdMode(EdMode)
+void FBoardToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolkitHost)
 {
-	
+	BoardWidget = SNew(SBoardEditor, SharedThis(this));
+
+	FModeToolkit::Init(InitToolkitHost);
 }
 
 FText FBoardToolkit::GetBaseToolkitName() const
@@ -21,9 +24,14 @@ FName FBoardToolkit::GetToolkitFName() const
 	return TEXT("BoardEditorToolkit");
 }
 
-FEdMode* FBoardToolkit::GetEditorMode() const
+FEdModeBoard* FBoardToolkit::GetEditorMode() const
 {
-	return BoardEdMode;
+	return (FEdModeBoard*)GLevelEditorModeTools().GetActiveMode(FEdModeBoard::EM_Board);
+}
+
+TSharedPtr<SWidget> FBoardToolkit::GetInlineContent() const
+{
+	return BoardWidget.ToSharedRef();
 }
 
 #undef LOCTEXT_NAMESPACE

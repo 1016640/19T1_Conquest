@@ -24,13 +24,16 @@ public:
 	/** Constructs this widget */
 	void Construct(const FArguments& InArgs, TSharedRef<FBoardToolkit> InParentToolkit);
 
+public:
+
+	/** Refreshes the detail panel based on editors current state */
+	void RefreshDetailsPanel() const;
+
 private:
 
 	/** If the given property should be visible. This will check the current editing state 
 	to determine if new board variables or existing board variables should be shown */
 	bool GetIsPropertyVisible(const FPropertyAndParent& PropertyAndParent) const;
-
-private:
 
 	/** Get the current board editing mode */
 	FEdModeBoard* GetEditorMode() const;

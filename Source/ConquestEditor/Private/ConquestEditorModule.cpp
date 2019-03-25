@@ -3,7 +3,9 @@
 #include "ConquestEditorModule.h"
 #include "ConquestEditor.h"
 
+#include "PropertyEditorModule.h"
 #include "Board/BoardEdMode.h"
+#include "Board/BoardEditorDetailCustomization.h"
 
 #define LOCTEXT_NAMESPACE "ConquestEditorModule"
 
@@ -13,32 +15,48 @@ public:
 
 	virtual void StartupModule() override
 	{
-		RegisterBoardEditor();
+		RegisterEditorModes();
+		RegisterDetailCustomizers();
 	}
 
 	virtual void ShutdownModule() override
 	{
-		UnregisterBoardEditor();
+		UnregisterDetailCustomizers();
+		UnregisterEditorModes();
 	}
 
 private:
 
-	/** Registers board editor mode */
-	void RegisterBoardEditor()
+	/** Registers editor modes */
+	void RegisterEditorModes()
 	{
 		FEditorModeRegistry& EdModeRegistry = FEditorModeRegistry::Get();
 		EdModeRegistry.RegisterMode<FEdModeBoard>(
-			FEdModeBoard::EM_BoardMode,
+			FEdModeBoard::EM_Board,
 			LOCTEXT("BoardMode", "Conquest Board Editor"),
 			FSlateIcon(),
 			true);
 	}
 
-	/** Unregisters board editor mode */
-	void UnregisterBoardEditor()
+	/** Unregisters editor modes */
+	void UnregisterEditorModes()
 	{
 		FEditorModeRegistry& EdModeRegistry = FEditorModeRegistry::Get();
-		EdModeRegistry.UnregisterMode(FEdModeBoard::EM_BoardMode);
+		EdModeRegistry.UnregisterMode(FEdModeBoard::EM_Board);
+	}
+
+	/** Registers any custom detail customizers */
+	void RegisterDetailCustomizers()
+	{
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.RegisterCustomClassLayout("BoardEditorObject", FOnGetDetailCustomizationInstance::CreateStatic(&FBoardEditorDetailCustomization_NewBoard::MakeInstance));
+	}
+
+	/** Unregisters any custom detail customizers */
+	void UnregisterDetailCustomizers()
+	{
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.UnregisterCustomClassLayout("BoardEditorObject");
 	}
 };
 

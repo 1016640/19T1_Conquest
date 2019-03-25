@@ -4,8 +4,9 @@
 
 #include "ConquestEditor.h"
 #include "Toolkits/BaseToolkit.h"
+#include "BoardEdMode.h"
 
-class FEdModeBoard;
+class SBoardEditor;
 
 /** 
  * Toolkit that supports board editor mode
@@ -14,20 +15,22 @@ class FBoardToolkit : public FModeToolkit
 {
 public:
 
-	FBoardToolkit(FEdModeBoard* EdMode);
+	FBoardToolkit() = default;
 	virtual ~FBoardToolkit() = default;
 
 public:
 
 	// Begin IToolkit Interface 
+	virtual void Init(const TSharedPtr<IToolkitHost>& InitToolkitHost) override;
 	virtual FText GetBaseToolkitName() const override;
 	virtual FName GetToolkitFName() const override;
-	virtual class FEdMode* GetEditorMode() const override;
+	virtual FEdModeBoard* GetEditorMode() const override;
+	virtual TSharedPtr<SWidget> GetInlineContent() const override;
 	// End IToolkit Interface
 
 private:
 
-	/** The editor mode we belong to */
-	FEdModeBoard* BoardEdMode;
+	/** The widget to edit the board with */
+	TSharedPtr<SBoardEditor> BoardWidget;
 };
 

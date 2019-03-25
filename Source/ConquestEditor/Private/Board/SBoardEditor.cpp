@@ -33,6 +33,7 @@ void SBoardEditor::Construct(const FArguments& InArgs, TSharedRef<FBoardToolkit>
 	[
 		SNew(SBorder)
 		.HAlign(HAlign_Center)
+		.Padding(0)
 		[
 			BoardDetailsPanel.ToSharedRef()
 		]
@@ -42,11 +43,36 @@ END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 bool SBoardEditor::GetIsPropertyVisible(const FPropertyAndParent& PropertyAndParent) const
 {
-	return true;
+	const UProperty& Property = PropertyAndParent.Property;
+
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		// Only display this property is it relates to the board editing state
+		if (Property.HasMetaData("BoardState"))
+		{
+			const FString RequiredState = BoardEdMode->IsEditingBoard() ? "Edit" : "New";
+			return Property.GetMetaData("BoardState").Contains(RequiredState);
+		}
+
+		// If property does not specify a board state, assume it can be used with either
+		return true;
+	}
+
+	return false;
+}
+
+void SBoardEditor::RefreshDetailsPanel() const
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		BoardDetailsPanel->SetObject(BoardEdMode->GetBoardSettings(), true);
+	}
 }
 
 FEdModeBoard* SBoardEditor::GetEditorMode() const
 {
 	FEditorModeTools& ModeTools = GLevelEditorModeTools();
-	return static_cast<FEdModeBoard*>(ModeTools.GetActiveMode(FEdModeBoard::EM_BoardMode));
+	return static_cast<FEdModeBoard*>(ModeTools.GetActiveMode(FEdModeBoard::EM_Board));
 }
