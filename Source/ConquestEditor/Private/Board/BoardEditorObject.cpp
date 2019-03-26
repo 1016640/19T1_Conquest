@@ -31,6 +31,11 @@ void UBoardEditorObject::PostEditChangeProperty(FPropertyChangedEvent& PropertyC
 			BoardManager->SetActorLocation(New_BoardOrigin);
 		}
 	}
+
+	if (BoardEdMode)
+	{
+		BoardEdMode->RefreshEditorWidget();
+	}
 }
 #endif
 

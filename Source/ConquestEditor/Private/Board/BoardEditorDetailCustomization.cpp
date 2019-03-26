@@ -135,6 +135,7 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 			SNew(SVectorInputBox)
 			.Font(DetailBuilder.GetDetailFont())
 			.bColorAxisLabels(true)
+			.AllowSpin(false)
 			.X_Static(&GetOptionalPropertyValue<float>, PropertyHandle_OriginX)
 			.Y_Static(&GetOptionalPropertyValue<float>, PropertyHandle_OriginY)
 			.Z_Static(&GetOptionalPropertyValue<float>, PropertyHandle_OriginZ)
@@ -168,7 +169,7 @@ FReply FBoardEditorDetailCustomization_NewBoard::OnGenerateGridClicked()
 	FEdModeBoard* BoardEdMode = GetEditorMode();
 	if (BoardEdMode)
 	{
-		BoardEdMode->GenerateGrid();
+		BoardEdMode->GenerateBoard();
 	}
 
 	return FReply::Handled();

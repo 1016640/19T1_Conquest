@@ -33,6 +33,9 @@ public:
 	/** Notify that the board editing state has changed */
 	void NotifyEditingStateChanged();
 
+	/** Refreshes the board widget details panel */
+	void RefreshEditorWidget();
+
 private:
 
 	/** The widget to edit the board with */

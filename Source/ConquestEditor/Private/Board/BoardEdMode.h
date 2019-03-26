@@ -10,6 +10,14 @@ class ABoardManager;
 class FBoardToolkit;
 class FUICommandList;
 
+/** Tracks the state for when editing a board */
+enum class EBoardEditingState : uint8
+{
+	GenerateBoard,
+	EditBoard,
+	TileSelected
+};
+
 /** 
  * Editor for laying out the board in conquest 
  */
@@ -39,8 +47,8 @@ public:
 
 public:
 
-	/** Generates a new grid based off current settings */
-	void GenerateGrid();
+	/** Generates a new board based off current settings */
+	void GenerateBoard();
 
 private:
 
@@ -52,8 +60,15 @@ private:
 
 private:
 
+	/** Draws a preview render of the grid currently in creation */
+	void DrawPreviewBoard(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) const;
+
+	/** Draws the render of the existing board manager */
+	void DrawExistingBoard(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) const;
+
 	/** Draws a hexagon of given size at given location */
-	void DrawHexagon(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Origin, float HexSize);
+	void DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Origin, float HexSize,
+		const FLinearColor& PerimeterColor, const FLinearColor& CenterColor = FLinearColor::Transparent) const;
 
 public:
 
@@ -65,6 +80,11 @@ public:
 
 	/** If we are currently editing an existing board */
 	FORCEINLINE bool IsEditingBoard() const { return false; }// BoardManager.IsValid(); }
+
+public:
+
+	/** Informs editor widget to refresh */
+	void RefreshEditorWidget() const;
 
 private:
 

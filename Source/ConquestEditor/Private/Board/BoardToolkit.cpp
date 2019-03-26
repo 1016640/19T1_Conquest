@@ -36,7 +36,15 @@ TSharedPtr<SWidget> FBoardToolkit::GetInlineContent() const
 
 void FBoardToolkit::NotifyEditingStateChanged()
 {
-	BoardWidget->RefreshDetailsPanel();
+	RefreshEditorWidget();
+}
+
+void FBoardToolkit::RefreshEditorWidget()
+{
+	if (BoardWidget.IsValid())
+	{
+		BoardWidget->RefreshDetailsPanel();
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

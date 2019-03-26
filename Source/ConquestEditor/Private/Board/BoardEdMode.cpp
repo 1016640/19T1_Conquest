@@ -9,6 +9,7 @@
 #include "EditorSupportDelegates.h"
 #include "EditorViewportClient.h"
 #include "EngineUtils.h"
+
 #include "ScopedTransaction.h"
 #include "ToolkitManager.h"
 #include "Engine/World.h"
@@ -65,17 +66,13 @@ void FEdModeBoard::Render(const FSceneView* View, FViewport* Viewport, FPrimitiv
 {
 	FEdMode::Render(View, Viewport, PDI);
 
-	// for now
 	if (BoardManager.IsValid())
 	{
-		const TArray<ATile*> Tiles = BoardManager->GetHexGrid().GetAllTiles();
-		for (ATile* Tile : Tiles)
-		{
-			if (Tile)
-			{
-				DrawHexagon(View, Viewport, PDI, Tile->GetActorLocation(), BoardManager->GetHexSize());
-			}
-		}
+		DrawExistingBoard(View, Viewport, PDI);
+	}
+	else
+	{
+		DrawPreviewBoard(View, Viewport, PDI);
 	}
 }
 
@@ -91,7 +88,7 @@ void FEdModeBoard::AddReferencedObjects(FReferenceCollector& Collector)
 	Collector.AddReferencedObject(BoardSettings);
 }
 
-void FEdModeBoard::GenerateGrid()
+void FEdModeBoard::GenerateBoard()
 {
 	if (!IsEditingBoard())
 	{
@@ -100,10 +97,15 @@ void FEdModeBoard::GenerateGrid()
 		// TODO: IsEditingBoard always return false, we can clear this check once it is put back to normal
 		if (!BoardManager.IsValid())
 		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Name = TEXT("BoardManager");
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
 			UWorld* World = GetWorld();
-			ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->New_BoardOrigin, FRotator::ZeroRotator);
+			ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->New_BoardOrigin, FRotator::ZeroRotator, SpawnParams);
 			if (NewBoardManager)
 			{
+				NewBoardManager->SetActorLabel("BoardManager");
 				BoardManager = NewBoardManager;
 			}
 			else
@@ -132,15 +134,58 @@ void FEdModeBoard::GenerateGrid()
 	}
 }
 
-void FEdModeBoard::DrawHexagon(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Position, float HexSize)
+void FEdModeBoard::DrawPreviewBoard(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) const
+{
+	using FHex = FHexGrid::FHex;
+
+	const int32 Rows = BoardSettings->New_BoardRows;
+	const int32 Columns = BoardSettings->New_BoardColumns;
+	const float HexSize = BoardSettings->New_BoardHexSize;
+	const FVector SizeVec = FVector(HexSize);
+	const FVector& Origin = BoardSettings->New_BoardOrigin;
+
+	const FLinearColor PreviewPerimeterColor = FLinearColor::Green;
+	const FLinearColor PreviewCenterColor = FLinearColor::Red;
+
+	for (int32 c = 0; c < Columns; ++c)
+	{
+		int32 COffset = FMath::FloorToInt(c / 2);
+		for (int32 r = -COffset; r < Rows - COffset; ++r)
+		{
+			// Need hex value to determine location
+			FHex Hex = FHexGrid::ConvertIndicesToHex(r, c);
+
+			FVector TileLocation = FHexGrid::ConvertHexToWorld(Hex, Origin, SizeVec);
+			DrawHexagon(Viewport, PDI, TileLocation, HexSize, PreviewPerimeterColor, PreviewCenterColor);
+		}
+	}
+}
+
+void FEdModeBoard::DrawExistingBoard(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) const
+{
+	check(BoardManager.IsValid());
+
+	const FLinearColor PerimeterColor = FLinearColor::Yellow;
+
+	// Simply draw every tile
+	const TArray<ATile*> Tiles = BoardManager->GetHexGrid().GetAllTiles();
+	for (ATile* Tile : Tiles)
+	{
+		if (Tile)
+		{
+			DrawHexagon(Viewport, PDI, Tile->GetActorLocation(), BoardManager->GetHexSize(), PerimeterColor);
+		}
+	}
+}
+
+void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Position, float HexSize, 
+	const FLinearColor& PerimeterColor, const FLinearColor& CenterColor) const
 {
 	check(Viewport);
 	check(PDI);
 
 	const float PerimeterSize = 5.f;
 	const float CenterSize = HexSize * 0.25f;
-	const FLinearColor PerimeterColor = FLinearColor::Green;
-	const FLinearColor CenterColor = FLinearColor::Red;
 	const ELevelViewportType ViewportType = static_cast<FEditorViewportClient*>(Viewport->GetClient())->ViewportType;
 
 	// Get the location of a hexagons vertex based on index
@@ -150,8 +195,8 @@ void FEdModeBoard::DrawHexagon(const FSceneView* View, FViewport* Viewport, FPri
 		float Radians = FMath::DegreesToRadians(Angle);
 
 		return FVector(
-			Position.X + Size * FMath::Cos(Radians), 
-			Position.Y + Size * FMath::Sin(Radians), 
+			Position.X + Size * FMath::Cos(Radians),
+			Position.Y + Size * FMath::Sin(Radians),
 			Position.Z);
 	};
 
@@ -180,6 +225,11 @@ TSharedRef<FUICommandList> FEdModeBoard::GetUICommandList() const
 {
 	check(Toolkit.IsValid());
 	return Toolkit->GetToolkitCommands();
+}
+
+void FEdModeBoard::RefreshEditorWidget() const
+{
+	GetBoardToolkit()->RefreshEditorWidget();
 }
 
 ABoardManager* FEdModeBoard::GetLevelsBoardManager() const

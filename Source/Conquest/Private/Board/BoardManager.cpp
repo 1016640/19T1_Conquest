@@ -162,17 +162,7 @@ void ABoardManager::InitBoard(const FBoardInitData& InitData)
 	check(InitData.IsValid());
 
 	// Clear all existing tiles // TODO: Only remove expired tiles (and avoiding re-creating all tiles)
-	if (HexGrid.bGridGenerated)
-	{
-		TArray<ATile*> Tiles = HexGrid.GetAllTiles();
-		for (ATile* Tile : Tiles)
-		{
-			if (Tile)
-			{
-				Tile->Destroy();
-			}
-		}
-	}
+	HexGrid.ClearGrid();
 
 	GridDimensions = InitData.Dimensions;
 	GridHexSize = InitData.HexSize;
@@ -193,17 +183,20 @@ void ABoardManager::InitBoard(const FBoardInitData& InitData)
 		if (World)
 		{
 			FVector TileLocation = FHexGrid::ConvertHexToWorld(Hex, this->GetActorLocation(), GridSize);
-			FString TileID = FString("BoardTile") + FString::FromInt(CellID++);
+			FString TileID = FString("BoardTile") + FString::FromInt(CellID);
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.Owner = this;
-			//SpawnParams.Name = FName(*TileID); // This is causing weird issues when rebuilding
+			//SpawnParams.Name = FName(*TileID); // This is causing weird issues when rebuilding (assuming this is due to these actors potentially existing at this point)
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 			// Init tile
 			ATile* Tile = World->SpawnActor<ATile>(TileTemplate, TileLocation, FRotator::ZeroRotator, SpawnParams);
 			if (Tile)
 			{
+				// Easy identifier for in editor work (TODO: Have hex be printed instead of ID)
+				Tile->SetActorLabel(TileID);
+
 				Tile->AttachToActor(this, FAttachmentTransformRules::KeepWorldTransform);
 
 				Tile->Hex = Hex;
