@@ -39,6 +39,25 @@ public:
 	virtual void Exit() override;
 	virtual void Render(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) override;
 	virtual bool UsesToolkits() const override;
+
+	virtual EEditAction::Type GetActionEditDuplicate() override;
+	virtual EEditAction::Type GetActionEditDelete() override;
+	virtual EEditAction::Type GetActionEditCut() override;
+	virtual EEditAction::Type GetActionEditCopy() override;
+	virtual EEditAction::Type GetActionEditPaste() override;
+	virtual bool ProcessEditDuplicate() override;
+	virtual bool ProcessEditDelete() override;
+	virtual bool ProcessEditCut() override;
+	virtual bool ProcessEditCopy() override;
+	virtual bool ProcessEditPaste() override;
+
+	virtual bool AllowWidgetMove() override;
+	virtual bool ShouldDrawWidget() const override;
+	virtual bool UsesTransformWidget() const override;
+	virtual FVector GetWidgetLocation() const override;
+	virtual EAxisList::Type GetWidgetAxisToDraw(FWidget::EWidgetMode InWidgetMode) const override;
+
+	virtual bool InputDelta(FEditorViewportClient* InViewportClient, FViewport* InViewport, FVector& InDrag, FRotator& InRot, FVector& InScale) override;
 	// End FEdMode Interface
 
 	// Begin FGCObject Interface

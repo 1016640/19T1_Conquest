@@ -3,9 +3,11 @@
 #pragma once
 
 #include "ConquestEditor.h"
+#include "SubclassOf.h"
 #include "BoardEditorObject.generated.h"
 
 class ABoardManager;
+class ATile;
 class FEdModeBoard;
 
 USTRUCT()
@@ -32,7 +34,8 @@ public:
 
 	// Begin UObject Interface
 	#if WITH_EDITOR	
-	void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;	
+	virtual void PreEditChange(UProperty* PropertyAboutToChange) override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;	
 	#endif
 	// End UObject Interface
 
@@ -47,32 +50,43 @@ public:
 public:
 
 	/** The amount of rows to generate for a new board */
-	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 2, DisplayName="Rows", BoardState="New"))
-	int32 New_BoardRows;
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName="Rows", BoardState="New"))
+	int32 BoardRows;
 
 	/** The amount of columns to generate for a new board */
-	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "New"))
-	int32 New_BoardColumns;
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "New"))
+	int32 BoardColumns;
 
 	/** The size of each cell for a new board */
-	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
-	float New_BoardHexSize;
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
+	float BoardHexSize;
 
 	/** The origin for a new board */
-	UPROPERTY(EditAnywhere, Category = "New Board", meta = (ClampMin = 10, DislplayName = "Position", BoardState = "New"))
-	FVector New_BoardOrigin;
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DislplayName = "Position", BoardState = "New"))
+	FVector BoardOrigin;
 
-	/** The amount of rows to regenerate the existing board with */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "Edit Board", meta = (ClampMin = 2, DisplayName = "Rows", BoardState = "Edit"))
-	int32 Edit_BoardRows;
+	/** The type of tile to use when generating the board */
+	UPROPERTY(EditAnywhere, Category = "Board", NoClear, meta = (DisplayName = "Tile Template", BoardState = "New"))
+	TSubclassOf<ATile> BoardTileTemplate;
 
-	/** The amount of columns to regenerate the existing board with */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "Edit Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "Edit"))
-	int32 Edit_BoardColumns;
+public:
 
-	/** The size of each cell for the existing board */
-	UPROPERTY(EditAnywhere, NonTransactional, Category = "Edit Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "Edit"))
-	float Edit_BoardHexSize;
+	/** Notify from editor mode that editing has started */
+	void NotifyEditingStart();
+
+	/** Notify from editor that a board has been generated */
+	void NotifyBoardGenerated();
+
+public:
+
+	/** The tile template used to generate the last grid. This will
+	get modified by our editor mode when the board has been generated */
+	TSubclassOf<ATile> LastBoardsTileType;
+
+	/** If the board tile template has changed since the board has been generated. We
+	should warn the user that generating the board will result in destruction of all tiles
+	and that any changes applied to those tiles will be wiped */
+	uint32 bWarnOfTileDifference : 1;
 
 private:
 

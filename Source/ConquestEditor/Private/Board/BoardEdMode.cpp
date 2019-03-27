@@ -3,7 +3,6 @@
 #include "BoardEdMode.h"
 #include "BoardToolkit.h"
 #include "Board/BoardManager.h"
-#include "Board/Tile.h"
 
 #include "EditorModeManager.h"
 #include "EditorSupportDelegates.h"
@@ -12,6 +11,7 @@
 
 #include "ScopedTransaction.h"
 #include "ToolkitManager.h"
+#include "Engine/Selection.h"
 #include "Engine/World.h"
 
 const FEditorModeID FEdModeBoard::EM_Board(TEXT("EM_BoardEdMode"));
@@ -43,6 +43,9 @@ void FEdModeBoard::Enter()
 		Toolkit = MakeShareable(new FBoardToolkit);
 		Toolkit->Init(Owner->GetToolkitHost());
 	}
+
+	// Notify settings to match potential existing board
+	BoardSettings->NotifyEditingStart();
 }
 
 void FEdModeBoard::Exit()
@@ -81,6 +84,142 @@ bool FEdModeBoard::UsesToolkits() const
 	return true;
 }
 
+EEditAction::Type FEdModeBoard::GetActionEditDuplicate()
+{
+	return EEditAction::Skip;
+}
+
+EEditAction::Type FEdModeBoard::GetActionEditDelete()
+{
+	if (BoardManager.IsValid() && BoardManager->IsSelected())
+	{
+		return EEditAction::Process;
+	}
+
+	return EEditAction::Skip;
+}
+
+EEditAction::Type FEdModeBoard::GetActionEditCut()
+{
+	return EEditAction::Halt;
+}
+
+EEditAction::Type FEdModeBoard::GetActionEditCopy()
+{
+	return EEditAction::Process;
+}
+
+EEditAction::Type FEdModeBoard::GetActionEditPaste()
+{
+	return EEditAction::Process;
+}
+
+bool FEdModeBoard::ProcessEditDuplicate()
+{
+	return true;
+}
+
+bool FEdModeBoard::ProcessEditDelete()
+{
+	if (BoardManager.IsValid() && BoardManager->IsSelected())
+	{
+		BoardManager->DestroyBoard();
+		BoardManager.Reset();
+	}
+
+	return true;
+}
+
+bool FEdModeBoard::ProcessEditCut()
+{
+	return true;
+}
+
+bool FEdModeBoard::ProcessEditCopy()
+{
+	return true;
+}
+
+bool FEdModeBoard::ProcessEditPaste()
+{
+	return true;
+}
+
+bool FEdModeBoard::AllowWidgetMove()
+{
+	return true;
+}
+
+bool FEdModeBoard::ShouldDrawWidget() const
+{
+	return UsesTransformWidget();
+}
+
+bool FEdModeBoard::UsesTransformWidget() const
+{
+	return true;
+}
+
+FVector FEdModeBoard::GetWidgetLocation() const
+{
+	if (BoardManager.IsValid())
+	{
+		return BoardManager->GetActorLocation();
+	}
+	else
+	{
+		return BoardSettings->BoardOrigin;
+	}
+}
+
+EAxisList::Type FEdModeBoard::GetWidgetAxisToDraw(FWidget::EWidgetMode InWidgetMode) const
+{
+	switch (InWidgetMode)
+	{
+		case FWidget::WM_Translate:
+			return EAxisList::XYZ;
+		case FWidget::WM_Rotate:
+			return EAxisList::None;
+		case FWidget::WM_Scale:
+			return BoardManager.IsValid() ? EAxisList::XYZ : EAxisList::X;
+		default:
+			return EAxisList::None;
+	}
+}
+
+bool FEdModeBoard::InputDelta(FEditorViewportClient* InViewportClient, FViewport* InViewport, FVector& InDrag, FRotator& InRot, FVector& InScale)
+{
+	if (!BoardManager.IsValid())
+	{
+		if (InViewportClient->GetCurrentWidgetAxis() != EAxisList::None)
+		{
+			BoardSettings->Modify();
+			BoardSettings->BoardOrigin += InDrag;
+			BoardSettings->BoardHexSize = FMath::Max(10.f, BoardSettings->BoardHexSize + InScale.X * 10.f);
+
+			return true;
+		}
+	}
+	else
+	{
+		if (InViewportClient->GetCurrentWidgetAxis() != EAxisList::None)
+		{
+			FVector NewLocation = BoardManager->GetActorLocation() + InDrag;
+
+			BoardManager->Modify();
+			BoardManager->SetActorLocation(NewLocation);
+			BoardManager->SetActorScale3D(BoardManager->GetActorScale() + InScale);
+
+			BoardSettings->Modify();
+			BoardSettings->BoardOrigin = NewLocation;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void FEdModeBoard::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	FEdMode::AddReferencedObjects(Collector);
@@ -102,7 +241,7 @@ void FEdModeBoard::GenerateBoard()
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 			UWorld* World = GetWorld();
-			ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->New_BoardOrigin, FRotator::ZeroRotator, SpawnParams);
+			ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->BoardOrigin, FRotator::ZeroRotator, SpawnParams);
 			if (NewBoardManager)
 			{
 				NewBoardManager->SetActorLabel("BoardManager");
@@ -111,25 +250,32 @@ void FEdModeBoard::GenerateBoard()
 			else
 			{
 				UE_LOG(LogConquestEditor, Warning, TEXT("Unable to spawn new board manager"));
+				Transaction.Cancel();
 			}	
 		}
 
 		if (BoardManager.IsValid())
 		{
 			FBoardInitData InitData(
-				FIntPoint(BoardSettings->New_BoardRows, BoardSettings->New_BoardColumns),
-				BoardSettings->New_BoardHexSize,
-				BoardSettings->New_BoardOrigin,
-				FRotator::ZeroRotator);
+				FIntPoint(BoardSettings->BoardRows, BoardSettings->BoardColumns),
+				BoardSettings->BoardHexSize,
+				BoardSettings->BoardOrigin,
+				FRotator::ZeroRotator,
+				BoardSettings->BoardTileTemplate);
 
 			BoardManager->InitBoard(InitData);
 
-			// Notify the toolkit to update anything based around edit state
-			GetBoardToolkit()->NotifyEditingStateChanged();
+			// Post generation notifies // TODO: Use a delegate?
+			BoardSettings->NotifyBoardGenerated();
+			GetBoardToolkit()->NotifyEditingStateChanged(); // TODO: rename
+
+			// We might have a tile that did exist but is now dead selected, so default to selecting the board
+			GEditor->SelectActor(BoardManager.Get(), true, true);
 		}
 		else
 		{
 			UE_LOG(LogConquestEditor, Warning, TEXT("Unable to generate grid as board manager was null"));
+			Transaction.Cancel();
 		}
 	}
 }
@@ -138,11 +284,11 @@ void FEdModeBoard::DrawPreviewBoard(const FSceneView* View, FViewport* Viewport,
 {
 	using FHex = FHexGrid::FHex;
 
-	const int32 Rows = BoardSettings->New_BoardRows;
-	const int32 Columns = BoardSettings->New_BoardColumns;
-	const float HexSize = BoardSettings->New_BoardHexSize;
+	const int32 Rows = BoardSettings->BoardRows;
+	const int32 Columns = BoardSettings->BoardColumns;
+	const float HexSize = BoardSettings->BoardHexSize;
 	const FVector SizeVec = FVector(HexSize);
-	const FVector& Origin = BoardSettings->New_BoardOrigin;
+	const FVector& Origin = BoardSettings->BoardOrigin;
 
 	const FLinearColor PreviewPerimeterColor = FLinearColor::Green;
 	const FLinearColor PreviewCenterColor = FLinearColor::Red;
@@ -173,7 +319,7 @@ void FEdModeBoard::DrawExistingBoard(const FSceneView* View, FViewport* Viewport
 	{
 		if (Tile)
 		{
-			DrawHexagon(Viewport, PDI, Tile->GetActorLocation(), BoardManager->GetHexSize(), PerimeterColor);
+			DrawHexagon(Viewport, PDI, Tile->GetActorLocation(), BoardManager->GetGridHexSize(), PerimeterColor);
 		}
 	}
 }

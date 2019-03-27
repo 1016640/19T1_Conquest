@@ -31,7 +31,8 @@ public:
 public:
 
 	FHexGrid()
-		: bGridGenerated(false)
+		: GridDimensions(0, 0)
+		, bGridGenerated(false)
 	{
 		
 	}
@@ -105,7 +106,7 @@ public:
 
 	/** Converts a hex cell into a world position based off an origin and cell size.
 	The cell is only applied onto the XY plane, with Z being the same as Origin.Z */
-	static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
+	FORCEINLINE static FVector ConvertHexToWorld(const FHex& Hex, const FVector& Origin, const FVector& Size)
 	{
 		const float f0 = FMath::Sqrt(3.f);
 		const float f1 = f0 / 2.f;
@@ -140,10 +141,13 @@ public:
 	/** Generates a rectangular shaped map with given rows and columns.
 	Takes in a predicate which is used to initialize each cell, predicate
 	should expect the hex index, and the cells row and column index */
-	void GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(const FHex&, int32, int32)>& Predicate);
+	void GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(const FHex&, int32, int32)>& Predicate, bool bClear = false);
 
 	/** Clears the grid, will destroy all tiles that have been spawned */
 	void ClearGrid();
+
+	/** Removes all cells starting and beyond given row and column */
+	void RemoveCellsFrom(int32 Row, int32 Column);
 
 public:
 
@@ -165,4 +169,10 @@ public:
 	/** If the grid has been generated */
 	UPROPERTY()
 	uint8 bGridGenerated : 1;
+
+private:
+
+	/** Dimensions of the grid */
+	UPROPERTY()
+	FIntPoint GridDimensions;
 };

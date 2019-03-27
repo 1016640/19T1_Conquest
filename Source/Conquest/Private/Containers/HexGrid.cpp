@@ -10,9 +10,18 @@ const FHexGrid::FHex FHexGrid::DirectionTable[] =
 	FHex(-1, +1, 0), FHex(-1, 0, +1), FHex(0, -1, +1)
 };
 
-void FHexGrid::GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(const FHex&, int32, int32)>& Predicate)
+void FHexGrid::GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(const FHex&, int32, int32)>& Predicate, bool bClearGrid)
 {
-	GridMap.Empty();
+	if (bClearGrid)
+	{
+		ClearGrid();
+	}
+	else
+	{
+		// Clear only the tiles beyond new dimensions
+		RemoveCellsFrom(Rows, Columns);
+	}
+
 	GridMap.Reserve(Rows * Columns);
 
 	for (int32 c = 0; c < Columns; ++c)
@@ -21,6 +30,10 @@ void FHexGrid::GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(co
 		for (int32 r = -COffset; r < Rows - COffset; ++r)
 		{
 			FHex Hex = ConvertIndicesToHex(r, c);
+			if (GridMap.Contains(Hex))
+			{
+				continue;
+			}
 
 			// Generate tile, we also inform of hex cell so
 			// we can easily find specific cells later
@@ -34,6 +47,7 @@ void FHexGrid::GenerateGrid(int32 Rows, int32 Columns, const TFunction<ATile*(co
 		}
 	}
 
+	GridDimensions = FIntPoint(Rows, Columns);
 	bGridGenerated = true;
 }
 
@@ -56,6 +70,47 @@ void FHexGrid::ClearGrid()
 		}
 
 		GridMap.Empty();
+		GridDimensions = FIntPoint::ZeroValue;
 		bGridGenerated = false;
 	}
+}
+
+void FHexGrid::RemoveCellsFrom(int32 Row, int32 Column)
+{
+	if (!bGridGenerated)
+	{
+		return;
+	}
+
+	if (Row < 1 || Column < 1)
+	{
+		ClearGrid();
+		return;
+	}
+
+	int32 MaxRows = FMath::Max(Row, GridDimensions.X);
+	int32 MaxCols = FMath::Max(Column, GridDimensions.Y);
+
+	// Cycle through every cell and simply remove the cells
+	// that lie beyond the specified limit
+	for (int32 c = 0; c < MaxRows; ++c)
+	{	
+		for (int32 r = 0; r < MaxCols; ++r)
+		{
+			// Cell is out of range
+			if (r >= Row || c >= Column)
+			{
+				int32 COffset = FMath::FloorToInt(c / 2);
+				FHex Hex = ConvertIndicesToHex(r - COffset, c);
+				
+				ATile* Tile = nullptr;
+				if (GridMap.RemoveAndCopyValue(Hex, Tile) && ensure(Tile != nullptr))
+				{
+					Tile->Destroy();
+				}
+			}
+		}
+	}
+
+	GridMap.Shrink();
 }

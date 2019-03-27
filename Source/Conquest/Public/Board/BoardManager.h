@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Conquest.h"
-#include "GameFramework/Actor.h"
+#include "Tile.h"
 #include "Containers/HexGrid.h"
 #include "BoardManager.generated.h"
 
@@ -43,6 +43,12 @@ public:
 		return bIsValid;
 	}
 
+	/** Get validated tile template (should be used over accessing it directly) */
+	FORCEINLINE TSubclassOf<ATile> GetTileTemplate() const
+	{
+		return TileTemplate != nullptr ? TileTemplate : ATile::StaticClass();
+	}
+
 public:
 
 	/** Dimensions of the board */
@@ -74,41 +80,27 @@ public:
 	
 	ABoardManager();
 
-protected:
+public:
 
-	virtual void OnConstruction(const FTransform& Transform) override;
-	void DrawDebugHexagon(const FVector& Position, float Size, float Time);
-
-	UFUNCTION(Exec)
-	void RebuildGrid();
+	/** Destroys this board (including tiles) */
+	void DestroyBoard();
 
 public:
 
 	/** Get the hex grid associated with the board */
 	FORCEINLINE const FHexGrid& GetHexGrid() const { return HexGrid; }
 
+	/** Get the dimensions of the grid */
+	FORCEINLINE const FIntPoint& GetGridDimensions() const { return GridDimensions; }
+
 	/** Get the size of a hex cell */
-	FORCEINLINE float GetHexSize() const { return GridHexSize; }
+	FORCEINLINE float GetGridHexSize() const { return GridHexSize; }
 
-public:
-
-	UPROPERTY(EditAnywhere)
-	uint8 bTestingToggle : 1;
-
-	UPROPERTY(EditAnywhere)
-	float HexSize;
-
-	UPROPERTY(EditAnywhere)
-	float DrawTime;
-
-	UPROPERTY(EditAnywhere)
-	int32 GridX;
-
-	UPROPERTY(EditAnywhere)
-	int32 GridY;
-
-	UPROPERTY()
-	FHexGrid HexGrid;
+	#if WITH_EDITOR
+	/** Get last tile template used to generate the grid with */
+	FORCEINLINE TSubclassOf<ATile> GetGridTileTemplate() const { return GridTileTemplate; }
+	#endif
+	
 
 public:
 
@@ -119,6 +111,10 @@ public:
 
 protected:
 
+	/** The hex grid containing all tiles of the board */
+	UPROPERTY()
+	FHexGrid HexGrid;
+
 	/** The dimensions of the board */
 	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName="Board Dimensions"))
 	FIntPoint GridDimensions;
@@ -126,5 +122,11 @@ protected:
 	/** The size of each cell of the baord */
 	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName="Board Dimensions"))
 	float GridHexSize;
+
+	#if WITH_EDITORONLY_DATA
+	/** Uses along side board editor mode so board settings can update appropriately */
+	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName = "Board Tile Type"))
+	TSubclassOf<ATile> GridTileTemplate;
+	#endif
 };
 

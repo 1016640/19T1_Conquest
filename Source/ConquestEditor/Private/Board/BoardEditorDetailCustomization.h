@@ -64,6 +64,7 @@ protected:
 	}
 };
 
+// TODO: Rename to _Board
 /** 
  * Detail view for creating a new board 
  */
@@ -79,6 +80,11 @@ public:
 	// Begin IDetailCustomization Interface
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 	// End IDetailCustomization Interface
+
+protected:
+
+	/** Get if tile template warning message should be displayed */
+	static EVisibility GetVisibilityTileTemplateWarning();
 
 protected:
 

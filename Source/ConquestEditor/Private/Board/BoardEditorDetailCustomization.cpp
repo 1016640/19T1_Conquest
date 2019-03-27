@@ -6,6 +6,7 @@
 
 #include "EditorModeManager.h"
 #include "SlateOptMacros.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SVectorInputBox.h"
@@ -40,18 +41,18 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 		return;
 	}
 
-	IDetailCategoryBuilder& NewBoardCategory = DetailBuilder.EditCategory("New Board");
+	IDetailCategoryBuilder& BoardCategory = DetailBuilder.EditCategory("Board");
 
 	// Description
 	{
-		NewBoardCategory.AddCustomRow(LOCTEXT("NewBoardDescRow", "Description"))
+		BoardCategory.AddCustomRow(LOCTEXT("BoardDescRow", "Description"))
 		[
 			SNew(SBorder)
 			.Padding(FMargin(5.f))
 			.HAlign(HAlign_Fill)
 			[
 				SNew(STextBlock)
-				.Text(LOCTEXT("NewBoardDescription", "Tool for creating a new board.\nThe board is created using a rectangular Hex Grid that can be customized in terms of Rows, Columns and Hex Size."))
+				.Text(LOCTEXT("BoardDescription", "Tool for creating a new board.\nThe board is created using a rectangular Hex Grid that can be customized in terms of Rows, Columns and Hex Size."))
 				.Justification(ETextJustify::Center)
 				.AutoWrapText(true)
 				.Font(DetailBuilder.GetDetailFont())
@@ -61,8 +62,8 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 
 	// Adjust rows
 	{
-		TSharedRef<IPropertyHandle> PropertyHandle_Rows = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, New_BoardRows));
-		NewBoardCategory.AddProperty(PropertyHandle_Rows)
+		TSharedRef<IPropertyHandle> PropertyHandle_Rows = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardRows));
+		BoardCategory.AddProperty(PropertyHandle_Rows)
 		.CustomWidget()
 		.NameContent()
 		[
@@ -80,8 +81,8 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 
 	// Adjust columns
 	{
-		TSharedRef<IPropertyHandle> PropertyHandle_Columns = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, New_BoardColumns));
-		NewBoardCategory.AddProperty(PropertyHandle_Columns)
+		TSharedRef<IPropertyHandle> PropertyHandle_Columns = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardColumns));
+		BoardCategory.AddProperty(PropertyHandle_Columns)
 		.CustomWidget()
 		.NameContent()
 		[
@@ -99,8 +100,8 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 
 	// Adjust hex size
 	{
-		TSharedRef<IPropertyHandle> PropertyHandle_HexSize = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, New_BoardHexSize));
-		NewBoardCategory.AddProperty(PropertyHandle_HexSize)
+		TSharedRef<IPropertyHandle> PropertyHandle_HexSize = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardHexSize));
+		BoardCategory.AddProperty(PropertyHandle_HexSize)
 		.CustomWidget()
 		.NameContent()
 		[
@@ -118,11 +119,11 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 
 	// Adjust origin
 	{
-		TSharedRef<IPropertyHandle> PropertyHandle_Origin = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, New_BoardOrigin));
+		TSharedRef<IPropertyHandle> PropertyHandle_Origin = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardOrigin));
 		TSharedRef<IPropertyHandle> PropertyHandle_OriginX = PropertyHandle_Origin->GetChildHandle("X").ToSharedRef();
 		TSharedRef<IPropertyHandle> PropertyHandle_OriginY = PropertyHandle_Origin->GetChildHandle("Y").ToSharedRef();
 		TSharedRef<IPropertyHandle> PropertyHandle_OriginZ = PropertyHandle_Origin->GetChildHandle("Z").ToSharedRef();
-		NewBoardCategory.AddProperty(PropertyHandle_Origin)
+		BoardCategory.AddProperty(PropertyHandle_Origin)
 		.CustomWidget()
 		.NameContent()
 		[
@@ -145,9 +146,30 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 		];
 	}
 
+	// Change tile type
+	{
+		TSharedRef<IPropertyHandle> PropertyHandle_TileTemplate = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UBoardEditorObject, BoardTileTemplate));
+		BoardCategory.AddProperty(PropertyHandle_TileTemplate);
+
+		BoardCategory.AddCustomRow(LOCTEXT("BoardTileWarnRow", "Tile Template Warning"))
+		[
+			SNew(SBorder)
+			.Padding(FMargin(5.f))
+			.HAlign(HAlign_Fill)
+			.Visibility_Static(&GetVisibilityTileTemplateWarning)
+			[
+				SNew(STextBlock)
+				.Font(DetailBuilder.GetDetailFont())
+				.Text(LOCTEXT("BoardTileTemplateWarning", "Changing the type of tile will force complete re-creation of the board. This will wipe all changes made to individual tiles!"))
+				.ColorAndOpacity(FLinearColor::Red)
+				.AutoWrapText(true)
+			]
+		];
+	}
+
 	// Generate button
 	{
-		NewBoardCategory.AddCustomRow(FText::GetEmpty())
+		BoardCategory.AddCustomRow(FText::GetEmpty())
 		[
 			SNew(SButton)
 			.HAlign(HAlign_Center)
@@ -161,7 +183,19 @@ void FBoardEditorDetailCustomization_NewBoard::CustomizeDetails(IDetailLayoutBui
 		];
 	}
 
-	NewBoardCategory.InitiallyCollapsed(false);
+	BoardCategory.InitiallyCollapsed(false);
+}
+
+EVisibility FBoardEditorDetailCustomization_NewBoard::GetVisibilityTileTemplateWarning()
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		const UBoardEditorObject* BoardSettings = BoardEdMode->GetBoardSettings();
+		return BoardSettings->bWarnOfTileDifference ? EVisibility::Visible : EVisibility::Collapsed;
+	}
+
+	return EVisibility::Collapsed;
 }
 
 FReply FBoardEditorDetailCustomization_NewBoard::OnGenerateGridClicked()
