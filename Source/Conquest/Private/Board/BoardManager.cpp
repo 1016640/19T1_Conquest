@@ -85,10 +85,11 @@ void ABoardManager::InitBoard(const FBoardInitData& InitData)
 				// Easy identifier for in editor work (TODO: Have hex be printed instead of ID)
 				Tile->SetActorLabel("BoardTile");
 
+				// Attach so tiles move when board does
 				Tile->AttachToActor(this, FAttachmentTransformRules::KeepWorldTransform);
-
-				Tile->Hex = Hex;
-				// TODO: prob more init
+				
+				// Init tile
+				Tile->SetGridHexValue(Hex);
 			}
 
 			return Tile;

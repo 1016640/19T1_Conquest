@@ -49,13 +49,15 @@ private:
 	void RegisterDetailCustomizers()
 	{
 		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
-		PropertyEditorModule.RegisterCustomClassLayout("BoardEditorObject", FOnGetDetailCustomizationInstance::CreateStatic(&FBoardEditorDetailCustomization_NewBoard::MakeInstance));
+		PropertyEditorModule.RegisterCustomClassLayout("BoardEditorObject", FOnGetDetailCustomizationInstance::CreateStatic(&FBoardEditorDetailCustomization_Board::MakeInstance));
+		PropertyEditorModule.RegisterCustomPropertyTypeLayout("BoardTileProperties", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FBoardEditorStructCustomization_BoardTileProperties::MakeInstance));
 	}
 
 	/** Unregisters any custom detail customizers */
 	void UnregisterDetailCustomizers()
 	{
 		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.UnregisterCustomPropertyTypeLayout("BoardTileProperties");
 		PropertyEditorModule.UnregisterCustomClassLayout("BoardEditorObject");
 	}
 };

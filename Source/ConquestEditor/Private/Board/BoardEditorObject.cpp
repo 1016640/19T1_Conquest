@@ -64,7 +64,7 @@ void UBoardEditorObject::SetEditorMode(FEdModeBoard* EdMode)
 
 void UBoardEditorObject::UpdateBoardEditProperties()
 {
-	if (BoardEdMode && BoardEdMode->IsEditingBoard())
+	if (BoardEdMode && BoardEdMode->GetCurrentEditingState() != EBoardEditingState::GenerateBoard)
 	{
 		ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
 		check(BoardManager);

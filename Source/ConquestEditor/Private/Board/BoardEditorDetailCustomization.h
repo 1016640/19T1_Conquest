@@ -10,6 +10,8 @@
 class FEdModeBoard;
 class IDetailLayoutBuilder;
 
+// TODO: Split up into different headers?
+
 /**
  * Detail view customization for the board editor
  */
@@ -64,15 +66,32 @@ protected:
 	}
 };
 
-// TODO: Rename to _Board
 /** 
- * Detail view for creating a new board 
+ * Detail view customization specific for struct properties
  */
-class FBoardEditorDetailCustomization_NewBoard : public FBoardEditorDetailCustomization
+class FBoardEditorStructCustomization : public IPropertyTypeCustomization
 {
 public:
 
-	/** Makes a new instance of this detail layout class for a specific detail view requesting it */
+	// Begin IPropertyTypeCustomization Interface
+	virtual void CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils) = 0;
+	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) = 0;
+	// End IPropertyTypeCustimization Interface
+
+protected:
+
+	/** Get the board editor mode */
+	static FEdModeBoard* GetEditorMode();
+};
+
+/** 
+ * Detail view for generating the board
+ */
+class FBoardEditorDetailCustomization_Board : public FBoardEditorDetailCustomization
+{
+public:
+
+	/** Makes a new instance of this detail customizer */
 	static TSharedRef<IDetailCustomization> MakeInstance();
 
 public:
@@ -90,4 +109,30 @@ protected:
 
 	/** Notify that generate grid button has been pressed */
 	FReply OnGenerateGridClicked();
+};
+
+/** 
+ * Specialized property customization for editing properties of tiles
+ */
+class FBoardEditorStructCustomization_BoardTileProperties : public FBoardEditorStructCustomization
+{
+public:
+
+	/** Makes a new instance of this property customizer */
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+
+public:
+
+	// Begin IPropertyTypeCustomization Interface
+	virtual void CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+	// End IPropertyTypeCustimization Interface
+
+private:
+
+	/** Get if tile hex value should be shown */
+	static EVisibility GetTileHexValueVisibility();
+
+	/** Get the tile hex value of the currently selected tile */
+	static FText GetTileHexValueText();
 };

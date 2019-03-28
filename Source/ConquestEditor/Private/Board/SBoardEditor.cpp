@@ -49,13 +49,32 @@ bool SBoardEditor::GetIsPropertyVisible(const FPropertyAndParent& PropertyAndPar
 	if (BoardEdMode)
 	{
 		// Only display this property is it relates to the board editing state
-		if (Property.HasMetaData("BoardState"))
+		if (Property.HasMetaData("BoardEdState"))
 		{
-			const FString RequiredState = BoardEdMode->IsEditingBoard() ? "Edit" : "New";
-			return Property.GetMetaData("BoardState").Contains(RequiredState);
+			FString RequiredState;
+			switch (BoardEdMode->GetCurrentEditingState())
+			{
+				case EBoardEditingState::GenerateBoard:
+				{
+					RequiredState = "New";
+					break;
+				}
+				case EBoardEditingState::EditBoard:
+				{
+					RequiredState = "Edit";
+					break;
+				}
+				case EBoardEditingState::TileSelected:
+				{
+					RequiredState = "Tile";
+					break;
+				}
+			}
+
+			return Property.GetMetaData("BoardEdState").Contains(RequiredState);
 		}
 
-		// If property does not specify a board state, assume it can be used with either
+		// If property does not specify a board state, assume it can be used with any
 		return true;
 	}
 

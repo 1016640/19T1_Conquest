@@ -10,12 +10,33 @@ class ABoardManager;
 class ATile;
 class FEdModeBoard;
 
+/** Properties for a tile */
 USTRUCT()
-struct FBoardTileObject
+struct FBoardTileProperties
 {
 	GENERATED_BODY()
 
 public:
+
+	FBoardTileProperties()
+		: TileType(1) // Fire
+		, bIsNullTile(false)
+	{
+
+	}
+
+public:
+
+	/** The tile we are editing */
+	TWeakObjectPtr<ATile> Tile;
+
+	/** The tiles elemental type */
+	UPROPERTY(EditAnywhere, Category = "Tile", meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	uint8 TileType;
+
+	/** If this tile is a no go zone */
+	UPROPERTY(EditAnywhere, Category = "Tile")
+	uint8 bIsNullTile : 1;
 };
 
 /** 
@@ -50,24 +71,28 @@ public:
 public:
 
 	/** The amount of rows to generate for a new board */
-	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName="Rows", BoardState="New"))
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName="Rows"))
 	int32 BoardRows;
 
 	/** The amount of columns to generate for a new board */
-	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName = "Columns", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 2, DisplayName = "Columns"))
 	int32 BoardColumns;
 
 	/** The size of each cell for a new board */
-	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DisplayName = "Hex Size", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DisplayName = "Hex Size"))
 	float BoardHexSize;
 
 	/** The origin for a new board */
-	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DislplayName = "Position", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "Board", meta = (ClampMin = 10, DislplayName = "Position"))
 	FVector BoardOrigin;
 
 	/** The type of tile to use when generating the board */
-	UPROPERTY(EditAnywhere, Category = "Board", NoClear, meta = (DisplayName = "Tile Template", BoardState = "New"))
+	UPROPERTY(EditAnywhere, Category = "Board", NoClear, meta = (DisplayName = "Tile Template"))
 	TSubclassOf<ATile> BoardTileTemplate;
+
+	/** Properties for the currently selected tile */
+	UPROPERTY(EditAnywhere, Category = "Tile", meta = (ShowOnlyInnerProperties="true", BoardEdState = "Tile"))
+	FBoardTileProperties TileProperties;
 
 public:
 

@@ -27,31 +27,28 @@ protected:
 
 public:
 
-	/** Get elemental types of this tile */
-	FORCEINLINE uint8 GetElementalTypes() const { return TileType; }
+	/** Set this tiles hex value on the board */
+	FORCEINLINE void SetGridHexValue(const FIntVector& Hex) { GridHexIndex = Hex; }
 
-	/** Get tiles that are connected to this one */
-	FORCEINLINE const TArray<ATile*>& GetConnectedTiles() const { return ConnectedTiles; }
+	/** Get this tiles hex value on the board */
+	FORCEINLINE const FIntVector& GetGridHexValue() const { return GridHexIndex; }
 
-	/** Get if this tile is blocked (a no-go zone) */
-	FORCEINLINE bool IsNullTile() const { return bIsNullTile; }
-
-
-protected:
+public:
 
 	/** The element type of this tile */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
 	uint8 TileType;
 
-private:
-
-	/** The tiles that can be reached from this tile */
-	UPROPERTY(Replicated, BlueprintReadOnly, meta = (AllowPrivateAccess="true"))
-	TArray<ATile*> ConnectedTiles;
-
 	/** If this tile is a null tyle (no go zone) */
-	UPROPERTY(Replicated, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	uint32 bIsNullTile : 1;
+
+protected:
+
+	/** This tiles hex value in the board managers grid. Is
+	used to determine this tiles position amongst all others */
+	UPROPERTY(VisibleAnywhere)
+	FIntVector GridHexIndex;
 
 public:
 
@@ -61,12 +58,4 @@ public:
 
 public:
 
-	UPROPERTY(VisibleAnywhere)
-	FIntVector Hex;
-
-	UPROPERTY(VisibleAnywhere)
-	int32 Row;
-
-	UPROPERTY(VisibleAnywhere)
-	int32 Column;
 };

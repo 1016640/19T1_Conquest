@@ -220,6 +220,11 @@ bool FEdModeBoard::InputDelta(FEditorViewportClient* InViewportClient, FViewport
 	return false;
 }
 
+void FEdModeBoard::ActorSelectionChangeNotify()
+{
+	RefreshEditorWidget();
+}
+
 void FEdModeBoard::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	FEdMode::AddReferencedObjects(Collector);
@@ -229,54 +234,51 @@ void FEdModeBoard::AddReferencedObjects(FReferenceCollector& Collector)
 
 void FEdModeBoard::GenerateBoard()
 {
-	if (!IsEditingBoard())
+	FScopedTransaction Transaction(LOCTEXT("Undo", "Generate Grid"));
+
+	// Spawn in new board if forced
+	if (!BoardManager.IsValid())
 	{
-		FScopedTransaction Transaction(LOCTEXT("Undo", "Generate Grid"));
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Name = TEXT("BoardManager");
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		// TODO: IsEditingBoard always return false, we can clear this check once it is put back to normal
-		if (!BoardManager.IsValid())
+		UWorld* World = GetWorld();
+		ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->BoardOrigin, FRotator::ZeroRotator, SpawnParams);
+		if (NewBoardManager)
 		{
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.Name = TEXT("BoardManager");
-			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-			UWorld* World = GetWorld();
-			ABoardManager* NewBoardManager = World->SpawnActor<ABoardManager>(BoardSettings->BoardOrigin, FRotator::ZeroRotator, SpawnParams);
-			if (NewBoardManager)
-			{
-				NewBoardManager->SetActorLabel("BoardManager");
-				BoardManager = NewBoardManager;
-			}
-			else
-			{
-				UE_LOG(LogConquestEditor, Warning, TEXT("Unable to spawn new board manager"));
-				Transaction.Cancel();
-			}	
-		}
-
-		if (BoardManager.IsValid())
-		{
-			FBoardInitData InitData(
-				FIntPoint(BoardSettings->BoardRows, BoardSettings->BoardColumns),
-				BoardSettings->BoardHexSize,
-				BoardSettings->BoardOrigin,
-				FRotator::ZeroRotator,
-				BoardSettings->BoardTileTemplate);
-
-			BoardManager->InitBoard(InitData);
-
-			// Post generation notifies // TODO: Use a delegate?
-			BoardSettings->NotifyBoardGenerated();
-			GetBoardToolkit()->NotifyEditingStateChanged(); // TODO: rename
-
-			// We might have a tile that did exist but is now dead selected, so default to selecting the board
-			GEditor->SelectActor(BoardManager.Get(), true, true);
+			NewBoardManager->SetActorLabel("BoardManager");
+			BoardManager = NewBoardManager;
 		}
 		else
 		{
-			UE_LOG(LogConquestEditor, Warning, TEXT("Unable to generate grid as board manager was null"));
+			UE_LOG(LogConquestEditor, Warning, TEXT("Unable to spawn new board manager"));
 			Transaction.Cancel();
 		}
+	}
+
+	if (BoardManager.IsValid())
+	{
+		FBoardInitData InitData(
+			FIntPoint(BoardSettings->BoardRows, BoardSettings->BoardColumns),
+			BoardSettings->BoardHexSize,
+			BoardSettings->BoardOrigin,
+			FRotator::ZeroRotator,
+			BoardSettings->BoardTileTemplate);
+
+		BoardManager->InitBoard(InitData);
+
+		// Post generation notifies // TODO: Use a delegate?
+		BoardSettings->NotifyBoardGenerated();
+		GetBoardToolkit()->NotifyEditingStateChanged(); // TODO: rename
+
+		// We might have a tile that did exist but is now dead selected, so default to selecting the board
+		GEditor->SelectActor(BoardManager.Get(), true, true);
+	}
+	else
+	{
+		UE_LOG(LogConquestEditor, Warning, TEXT("Unable to generate grid as board manager was null"));
+		Transaction.Cancel();
 	}
 }
 
@@ -373,6 +375,23 @@ TSharedRef<FUICommandList> FEdModeBoard::GetUICommandList() const
 	return Toolkit->GetToolkitCommands();
 }
 
+EBoardEditingState FEdModeBoard::GetCurrentEditingState() const
+{
+	if (!BoardManager.IsValid())
+	{
+		return EBoardEditingState::GenerateBoard;
+	}
+
+	// We might have a tile selected
+	EBoardEditingState CurrentState = EBoardEditingState::EditBoard;
+	if (GetNumSelectedTiles() >= 1)
+	{
+		CurrentState = EBoardEditingState::TileSelected;
+	}
+
+	return CurrentState;
+}
+
 void FEdModeBoard::RefreshEditorWidget() const
 {
 	GetBoardToolkit()->RefreshEditorWidget();
@@ -392,6 +411,26 @@ ABoardManager* FEdModeBoard::GetLevelsBoardManager() const
 TSharedPtr<FBoardToolkit> FEdModeBoard::GetBoardToolkit() const
 {
 	return StaticCastSharedPtr<FBoardToolkit>(Toolkit);
+}
+
+TArray<ATile*> FEdModeBoard::GetAllSelectedTiles() const
+{
+	TArray<ATile*> SelectedTiles;
+	for (FSelectionIterator It = GEditor->GetSelectedActorIterator(); It; ++It)
+	{
+		ATile* Tile = Cast<ATile>(*It);
+		if (Tile)
+		{
+			SelectedTiles.Add(Tile);
+		}
+	}
+
+	return SelectedTiles;
+}
+
+int32 FEdModeBoard::GetNumSelectedTiles() const
+{
+	return GetAllSelectedTiles().Num();
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -33,7 +33,4 @@ ATile::ATile()
 void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(ATile, ConnectedTiles);
-	DOREPLIFETIME(ATile, bIsNullTile);
 }

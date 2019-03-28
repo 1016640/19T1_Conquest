@@ -58,6 +58,8 @@ public:
 	virtual EAxisList::Type GetWidgetAxisToDraw(FWidget::EWidgetMode InWidgetMode) const override;
 
 	virtual bool InputDelta(FEditorViewportClient* InViewportClient, FViewport* InViewport, FVector& InDrag, FRotator& InRot, FVector& InScale) override;
+
+	virtual void ActorSelectionChangeNotify() override;
 	// End FEdMode Interface
 
 	// Begin FGCObject Interface
@@ -98,7 +100,7 @@ public:
 	FORCEINLINE ABoardManager* GetCachedBoardManager() const { return BoardManager.Get(); }
 
 	/** If we are currently editing an existing board */
-	FORCEINLINE bool IsEditingBoard() const { return false; }// BoardManager.IsValid(); }
+	EBoardEditingState GetCurrentEditingState() const;
 
 public:
 
@@ -121,7 +123,12 @@ private:
 	/** The board manager we are currently editing (if it exists) */
 	TWeakObjectPtr<ABoardManager> BoardManager;
 
-	/** Handles to bound callbacks */
+public:
 
+	/** Get all the tiles currently selected */
+	TArray<ATile*> GetAllSelectedTiles() const;
+
+	/** Get the amount of tiles selected */
+	int32 GetNumSelectedTiles() const;
 };
 
