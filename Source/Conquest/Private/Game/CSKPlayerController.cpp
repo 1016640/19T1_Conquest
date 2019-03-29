@@ -2,3 +2,7 @@
 
 #include "CSKPlayerController.h"
 
+ACSKPlayerController::ACSKPlayerController()
+{
+	bShowMouseCursor = true;
+}

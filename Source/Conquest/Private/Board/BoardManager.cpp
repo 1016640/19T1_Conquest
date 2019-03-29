@@ -22,6 +22,7 @@ ABoardManager::ABoardManager()
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
+	DummyRoot->SetMobility(EComponentMobility::Static);
 
 	#if WITH_EDITORONLY_DATA
 	UBillboardComponent* Billboard = CreateEditorOnlyDefaultSubobject<UBillboardComponent>(TEXT("Billboard"));

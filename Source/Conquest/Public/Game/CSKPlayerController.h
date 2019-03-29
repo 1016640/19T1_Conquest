@@ -15,4 +15,10 @@ class CONQUEST_API ACSKPlayerController : public APlayerController
 	GENERATED_BODY()
 	
 	// TODO: Manage spells here, since spells should only be known to the player who owns them
+
+public:
+
+	ACSKPlayerController();
+
+
 };

@@ -183,34 +183,56 @@ bool FEdModeBoard::UsesTransformWidget() const
 
 FVector FEdModeBoard::GetWidgetLocation() const
 {
-	if (BoardManager.IsValid())
+	if (BoardManager.IsValid() && BoardManager->IsSelected())
 	{
 		return BoardManager->GetActorLocation();
 	}
-	else
+	else if (GEditor->GetSelectedActorCount() == 0)
 	{
 		return BoardSettings->BoardOrigin;
 	}
+
+	return FEdMode::GetWidgetLocation();
 }
 
 EAxisList::Type FEdModeBoard::GetWidgetAxisToDraw(FWidget::EWidgetMode InWidgetMode) const
 {
-	switch (InWidgetMode)
+	if (!BoardManager.IsValid() && GEditor->GetSelectedActorCount() == 0)
 	{
-		case FWidget::WM_Translate:
-			return EAxisList::XYZ;
-		case FWidget::WM_Rotate:
-			return EAxisList::None;
-		case FWidget::WM_Scale:
-			return BoardManager.IsValid() ? EAxisList::XYZ : EAxisList::X;
-		default:
-			return EAxisList::None;
+		switch (InWidgetMode)
+		{
+			case FWidget::WM_Translate:
+				return EAxisList::XYZ;
+			case FWidget::WM_Rotate:
+				return EAxisList::None;
+			case FWidget::WM_Scale:
+				return EAxisList::X;
+			default:
+				return EAxisList::None;
+		}
 	}
+	else if (BoardManager.IsValid() && BoardManager->IsSelected())
+	{
+		switch (InWidgetMode)
+		{
+			case FWidget::WM_Translate:
+				return EAxisList::XYZ;
+			case FWidget::WM_Rotate:
+				return EAxisList::None;
+			case FWidget::WM_Scale:
+				return EAxisList::XYZ;
+			default:
+				return EAxisList::None;
+		}
+	}
+
+	return FEdMode::GetWidgetAxisToDraw(InWidgetMode);
 }
 
 bool FEdModeBoard::InputDelta(FEditorViewportClient* InViewportClient, FViewport* InViewport, FVector& InDrag, FRotator& InRot, FVector& InScale)
 {
-	if (!BoardManager.IsValid())
+	// Only apply movement if nothing else is selected
+	if (!BoardManager.IsValid() && GEditor->GetSelectedActorCount() == 0)
 	{
 		if (InViewportClient->GetCurrentWidgetAxis() != EAxisList::None)
 		{
@@ -221,7 +243,7 @@ bool FEdModeBoard::InputDelta(FEditorViewportClient* InViewportClient, FViewport
 			return true;
 		}
 	}
-	else
+	else if (BoardManager.IsValid() && BoardManager->IsSelected())
 	{
 		if (InViewportClient->GetCurrentWidgetAxis() != EAxisList::None)
 		{

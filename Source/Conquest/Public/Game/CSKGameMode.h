@@ -14,4 +14,7 @@ class CONQUEST_API ACSKGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 	
+public:
+
+	ACSKGameMode();
 };

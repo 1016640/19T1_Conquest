@@ -10,7 +10,7 @@
  * Actor for managing an individual tile on the board. Will track
  * any tower (including castles) that have been built upon it
  */
-UCLASS(notplaceable)
+UCLASS()
 class CONQUEST_API ATile : public AActor
 {
 	GENERATED_BODY()

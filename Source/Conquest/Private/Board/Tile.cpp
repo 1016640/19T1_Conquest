@@ -11,6 +11,7 @@ ATile::ATile()
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
+	DummyRoot->SetMobility(EComponentMobility::Static);
 
 	// Fire tile type
 	TileType = 1;
