@@ -10,7 +10,7 @@
  * Actor for managing an individual tile on the board. Will track
  * any tower (including castles) that have been built upon it
  */
-UCLASS()
+UCLASS(notplaceable)
 class CONQUEST_API ATile : public AActor
 {
 	GENERATED_BODY()
@@ -36,11 +36,11 @@ public:
 public:
 
 	/** The element type of this tile */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
 	uint8 TileType;
 
 	/** If this tile is a null tyle (no go zone) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	uint32 bIsNullTile : 1;
 
 protected:

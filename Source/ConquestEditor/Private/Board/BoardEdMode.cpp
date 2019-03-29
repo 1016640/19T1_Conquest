@@ -18,6 +18,27 @@ const FEditorModeID FEdModeBoard::EM_Board(TEXT("EM_BoardEdMode"));
 
 #define LOCTEXT_NAMESPACE "EdModeBoard"
 
+class HBoardTileHitProxy : public HHitProxy
+{
+	DECLARE_HIT_PROXY()
+
+public:
+
+	HBoardTileHitProxy(ATile* InTile)
+		: HHitProxy(HPP_World)
+		, Tile(InTile)
+	{
+
+	}
+
+public:
+
+	/** Tile this hit proxy represents */
+	ATile* Tile;
+};
+
+IMPLEMENT_HIT_PROXY(HBoardTileHitProxy, HHitProxy);
+
 FEdModeBoard::FEdModeBoard()
 {
 	BoardSettings = NewObject<UBoardEditorObject>(GetTransientPackage(), TEXT("BoardSettings"), RF_Transactional);
@@ -220,6 +241,28 @@ bool FEdModeBoard::InputDelta(FEditorViewportClient* InViewportClient, FViewport
 	return false;
 }
 
+bool FEdModeBoard::HandleClick(FEditorViewportClient* InViewportClient, HHitProxy* HitProxy, const FViewportClick& Click)
+{
+	bool bResult = FEdMode::HandleClick(InViewportClient, HitProxy, Click);
+	if (!bResult && HitProxy && HitProxy->IsA(HBoardTileHitProxy::StaticGetType()))
+	{
+		ATile* Tile = static_cast<HBoardTileHitProxy*>(HitProxy)->Tile;	
+
+		// Still allow control to select multiple actors
+		if (!Click.IsControlDown())
+		{
+			GEditor->SelectNone(true, true);
+		}
+
+		GEditor->SelectActor(Tile, !Tile->IsSelected(), true);
+
+		RefreshEditorWidget();
+		bResult = true;
+	}
+
+	return bResult;
+}
+
 void FEdModeBoard::ActorSelectionChangeNotify()
 {
 	RefreshEditorWidget();
@@ -304,7 +347,7 @@ void FEdModeBoard::DrawPreviewBoard(const FSceneView* View, FViewport* Viewport,
 			FHex Hex = FHexGrid::ConvertIndicesToHex(r, c);
 
 			FVector TileLocation = FHexGrid::ConvertHexToWorld(Hex, Origin, SizeVec);
-			DrawHexagon(Viewport, PDI, TileLocation, HexSize, PreviewPerimeterColor, PreviewCenterColor);
+			DrawHexagon(Viewport, PDI, nullptr, TileLocation, HexSize, PreviewPerimeterColor, PreviewCenterColor);
 		}
 	}
 }
@@ -313,21 +356,42 @@ void FEdModeBoard::DrawExistingBoard(const FSceneView* View, FViewport* Viewport
 {
 	check(BoardManager.IsValid());
 
-	const FLinearColor PerimeterColor = FLinearColor::Yellow;
-
 	// Simply draw every tile
 	const TArray<ATile*> Tiles = BoardManager->GetHexGrid().GetAllTiles();
 	for (ATile* Tile : Tiles)
 	{
 		if (Tile)
 		{
-			DrawHexagon(Viewport, PDI, Tile->GetActorLocation(), BoardManager->GetGridHexSize(), PerimeterColor);
+			float Depth = 0.f;
+			FLinearColor PerimeterColor = FLinearColor::Yellow;
+			FLinearColor CenterColor = FLinearColor::Black;
+
+			if (BoardManager->GetPlayer1SpawnTile() == Tile)
+			{
+				PerimeterColor = FLinearColor::FromSRGBColor(FColor::Magenta);
+				CenterColor = FLinearColor::FromSRGBColor(FColor::Emerald);
+				Depth = 3.f;
+			}
+			else if (BoardManager->GetPlayer2SpawnTile() == Tile)
+			{
+				PerimeterColor = FLinearColor::FromSRGBColor(FColor::Cyan);
+				CenterColor = FLinearColor::FromSRGBColor(FColor::Emerald);
+				Depth = 2.f;
+			}
+			else if (Tile->bIsNullTile)
+			{
+				PerimeterColor = FLinearColor::Black;
+				CenterColor = FLinearColor::Red;
+				Depth = 1.f;
+			}
+
+			DrawHexagon(Viewport, PDI, Tile, Tile->GetActorLocation(), BoardManager->GetGridHexSize(), PerimeterColor, CenterColor, Depth);
 		}
 	}
 }
 
-void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Position, float HexSize, 
-	const FLinearColor& PerimeterColor, const FLinearColor& CenterColor) const
+void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, ATile* Tile, const FVector& Position,
+	float HexSize, const FLinearColor& PerimeterColor, const FLinearColor& CenterColor, float Depth) const
 {
 	check(Viewport);
 	check(PDI);
@@ -356,7 +420,7 @@ void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI
 
 		if (ViewportType == LVT_Perspective)
 		{
-			PDI->DrawLine(CurrentVertex, NextVertex, PerimeterColor, SDPG_World, PerimeterSize);
+			PDI->DrawLine(CurrentVertex, NextVertex, PerimeterColor, SDPG_World, PerimeterSize, Depth);
 		}
 
 		CurrentVertex = NextVertex;
@@ -365,7 +429,28 @@ void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI
 	// Draw final point to show tiles middle location
 	if (ViewportType == LVT_Perspective)
 	{
-		PDI->DrawLine(Position, Position, CenterColor, SDPG_World, CenterSize);
+		FLinearColor PointColor = CenterColor;
+
+		if (Tile)
+		{
+			PDI->SetHitProxy(new HBoardTileHitProxy(Tile));
+
+			// Distinguish selected tiles from others
+			if (Tile->IsSelected())
+			{
+				if (CenterColor != FLinearColor::Blue)
+				{
+					PointColor = FLinearColor::Blue;
+				}
+				else
+				{
+					PointColor = FLinearColor::FromSRGBColor(FColor::Cyan);
+				}
+			}
+		}
+
+		PDI->DrawLine(Position, Position, PointColor, SDPG_World, CenterSize);
+		PDI->SetHitProxy(nullptr);	
 	}
 }
 

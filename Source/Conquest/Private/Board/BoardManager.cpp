@@ -6,6 +6,14 @@
 #include "Components/BillboardComponent.h"
 #include "Engine/World.h"
 
+#if WITH_EDITOR
+#include "MapErrors.h"
+#include "MessageLog.h"
+#include "UObjectToken.h"
+#endif
+
+#define LOCTEXT_NAMESPACE "BoardManager"
+
 ABoardManager::ABoardManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -33,7 +41,48 @@ ABoardManager::ABoardManager()
 	GridTileTemplate = nullptr;
 	#endif
 
+	Player1SpawnHex = FIntVector(-1);
+	Player2SpawnHex = FIntVector(-1);
 }
+
+#if WITH_EDITOR
+void ABoardManager::CheckForErrors()
+{
+	Super::CheckForErrors();
+
+	if (!HexGrid.bGridGenerated)
+	{
+		FFormatNamedArguments Arguments;
+		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
+		FMessageLog("MapCheck").Warning()
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoBoardGenerated", "{ActorName} : Board Manager exists but no grid has been generated."), Arguments)))
+			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+
+		return;
+	}
+	
+	if (GetPlayer1SpawnTile() == nullptr)
+	{
+		FFormatNamedArguments Arguments;
+		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
+		FMessageLog("MapCheck").Warning()
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 1."), Arguments)))
+			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+	}
+
+	if (GetPlayer2SpawnTile() == nullptr)
+	{
+		FFormatNamedArguments Arguments;
+		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
+		FMessageLog("MapCheck").Warning()
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 2."), Arguments)))
+			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+	}
+}
+#endif
 
 void ABoardManager::DestroyBoard()
 {
@@ -100,5 +149,79 @@ void ABoardManager::InitBoard(const FBoardInitData& InitData)
 
 	// Generate the grid
 	HexGrid.GenerateGrid(GridDimensions.X, GridDimensions.Y, TilePredicate);
+
+	// We can keep spawn points that still fit inside the new grid
+	{
+		if (!HexGrid.GridMap.Contains(Player1SpawnHex))
+		{
+			Player1SpawnHex = FIntVector(-1);
+		}
+
+		if (!HexGrid.GridMap.Contains(Player2SpawnHex))
+		{
+			Player2SpawnHex = FIntVector(-1);
+		}
+	}
+}
+
+void ABoardManager::SetPlayerSpawn(int32 Player, const FIntVector& TileHex)
+{
+	if (!ensure(Player >= 0 && Player <= 1))
+	{
+		UE_LOG(LogConquest, Warning, TEXT("Unable to set player spawn as player index is invalid"));
+		return;
+	}
+	
+	if (HexGrid.bGridGenerated)
+	{
+		// Make sure this tile actually belongs in our hex grid
+		ATile* TileAtSpawn = HexGrid.GetTile(TileHex);
+		if (TileAtSpawn)
+		{
+			if (Player == 0)
+			{
+				// Make sure this tile isn't already being used as a spawn point
+				if (GetPlayer2SpawnTile() == TileAtSpawn)
+				{
+					Player2SpawnHex = FIntVector(-1);
+				}
+
+				Player1SpawnHex = TileHex;
+			}
+			else
+			{
+				// Make sure this tile isn't already being used as a spawn point
+				if (GetPlayer1SpawnTile() == TileAtSpawn)
+				{
+					Player1SpawnHex = FIntVector(-1);
+				}
+
+				Player2SpawnHex = TileHex;
+			}
+
+			// Spawn points can't be null tiles
+			TileAtSpawn->Modify();
+			TileAtSpawn->bIsNullTile = false;
+		}
+	}
+}
+void ABoardManager::ResetPlayerSpawn(int32 Player)
+{
+	if (!ensure(Player >= 0 && Player <= 1))
+	{
+		UE_LOG(LogConquest, Warning, TEXT("Unable to reset player spawn as player index is invalid"));
+		return;
+	}
+
+	if (Player == 0)
+	{
+		Player1SpawnHex = FIntVector(-1);
+	}
+	else
+	{
+		Player2SpawnHex = FIntVector(-1);
+	}
 }
 #endif
+
+#undef LOCTEXT_NAMESPACE

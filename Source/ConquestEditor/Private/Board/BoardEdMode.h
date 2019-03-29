@@ -58,6 +58,7 @@ public:
 	virtual EAxisList::Type GetWidgetAxisToDraw(FWidget::EWidgetMode InWidgetMode) const override;
 
 	virtual bool InputDelta(FEditorViewportClient* InViewportClient, FViewport* InViewport, FVector& InDrag, FRotator& InRot, FVector& InScale) override;
+	virtual bool HandleClick(FEditorViewportClient* InViewportClient, HHitProxy* HitProxy, const FViewportClick& Click) override;
 
 	virtual void ActorSelectionChangeNotify() override;
 	// End FEdMode Interface
@@ -88,8 +89,8 @@ private:
 	void DrawExistingBoard(const FSceneView* View, FViewport* Viewport, FPrimitiveDrawInterface* PDI) const;
 
 	/** Draws a hexagon of given size at given location */
-	void DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, const FVector& Origin, float HexSize,
-		const FLinearColor& PerimeterColor, const FLinearColor& CenterColor = FLinearColor::Transparent) const;
+	void DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI, ATile* Tile, const FVector& Origin, float HexSize,
+		const FLinearColor& PerimeterColor, const FLinearColor& CenterColor = FLinearColor::Transparent, float Depth = 0.f) const;
 
 public:
 

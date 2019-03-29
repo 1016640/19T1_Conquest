@@ -151,11 +151,32 @@ public:
 
 public:
 
+	/** Get an individual tile */
+	FORCEINLINE ATile* GetTile(const FHex& Hex) const
+	{
+		ATile* Tile = nullptr;
+
+		if (bGridGenerated)
+		{
+			ATile* const* ValuePtr = GridMap.Find(Hex);
+			if (ValuePtr != nullptr)
+			{
+				Tile = *ValuePtr;
+			}
+		}
+
+		return Tile;
+	}
+
 	/** Get all tiles in the grid */
 	FORCEINLINE TArray<ATile*> GetAllTiles() const
 	{
 		TArray<ATile*> Tiles;
-		GridMap.GenerateValueArray(Tiles);
+		
+		if (bGridGenerated)
+		{
+			GridMap.GenerateValueArray(Tiles);
+		}
 
 		return Tiles;
 	}

@@ -27,9 +27,6 @@ public:
 
 public:
 
-	/** The tile we are editing */
-	TWeakObjectPtr<ATile> Tile;
-
 	/** The tiles elemental type */
 	UPROPERTY(EditAnywhere, Category = "Tile", meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
 	uint8 TileType;

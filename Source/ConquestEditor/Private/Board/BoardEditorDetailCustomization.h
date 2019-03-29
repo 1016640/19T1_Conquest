@@ -5,6 +5,7 @@
 #include "ConquestEditor.h"
 #include "IDetailCustomization.h"
 #include "IPropertyTypeCustomization.h"
+#include "Board/BoardTypes.h"
 #include "PropertyHandle.h"
 
 class FEdModeBoard;
@@ -135,4 +136,25 @@ private:
 
 	/** Get the tile hex value of the currently selected tile */
 	static FText GetTileHexValueText();
+
+	/** Get if given element type is set for selected tiles */
+	static ECheckBoxState GetTilesIsElementSet(ECSKElementType ElementType);
+
+	/** Set element enabled for all selected tiles */
+	static void SetTilesElement(ECheckBoxState NewCheckedState, ECSKElementType ElementType);
+
+	/** Get if selected tiles are null or not */
+	static ECheckBoxState GetTilesIsNullTile();
+
+	/** Set is null tile for all selected tiles */
+	static void SetTilesIsNull(ECheckBoxState NewCheckedState);
+
+	/** Get if player spawn buttons should be visible */
+	static EVisibility GetVisibilitySetPlayerSpawns();
+
+	/** Get if player spawn should be enabled */
+	static bool GetTileCanSetSpawn(int32 Player);
+
+	/** Set the player spawn for given player to current selected tile */
+	static FReply SetBoardSpawnPoint(int32 Player);
 };

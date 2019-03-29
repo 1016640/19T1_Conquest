@@ -9,6 +9,7 @@
 #include "EditorModeManager.h"
 #include "SlateOptMacros.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Input/SVectorInputBox.h"
@@ -273,11 +274,131 @@ void FBoardEditorStructCustomization_BoardTileProperties::CustomizeChildren(TSha
 		];
 	}
 
-	TSharedRef<IPropertyHandle> PropertyHandle_TileType = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FBoardTileProperties, TileType)).ToSharedRef();
-	ChildBuilder.AddProperty(PropertyHandle_TileType);
+	// Element type
+	{
+		TSharedRef<IPropertyHandle> PropertyHandle_TileType = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FBoardTileProperties, TileType)).ToSharedRef();
+		ChildBuilder.AddProperty(PropertyHandle_TileType)
+		.CustomWidget()
+		.NameContent()
+		[
+			PropertyHandle_TileType->CreatePropertyNameWidget()
+		]
+		.ValueContent()
+		.MinDesiredWidth(600.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.HAlign(HAlign_Fill)
+			[
+				SNew(SCheckBox)
+				.Style(FEditorStyle::Get(), "RadioButton")
+				.IsChecked_Static(&GetTilesIsElementSet, ECSKElementType::Fire)
+				.OnCheckStateChanged_Static(&SetTilesElement, ECSKElementType::Fire)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ElementFire", "Fire"))
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.HAlign(HAlign_Fill)
+			[
+				SNew(SCheckBox)
+				.Style(FEditorStyle::Get(), "RadioButton")
+				.IsChecked_Static(&GetTilesIsElementSet, ECSKElementType::Water)
+				.OnCheckStateChanged_Static(&SetTilesElement, ECSKElementType::Water)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ElementWater", "Water"))
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.HAlign(HAlign_Fill)
+			[
+				SNew(SCheckBox)
+				.Style(FEditorStyle::Get(), "RadioButton")
+				.IsChecked_Static(&GetTilesIsElementSet, ECSKElementType::Earth)
+				.OnCheckStateChanged_Static(&SetTilesElement, ECSKElementType::Earth)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ElementEarth", "Earth"))
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.HAlign(HAlign_Fill)
+			[
+				SNew(SCheckBox)
+				.Style(FEditorStyle::Get(), "RadioButton")
+				.IsChecked_Static(&GetTilesIsElementSet, ECSKElementType::Air)
+				.OnCheckStateChanged_Static(&SetTilesElement, ECSKElementType::Air)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("ElementAir", "Air"))
+				]
+			]
+		];
+	}
+	
+	// Null tile
+	{
+		TSharedRef<IPropertyHandle> PropertyHandle_IsNullTile = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FBoardTileProperties, bIsNullTile)).ToSharedRef();
+		ChildBuilder.AddProperty(PropertyHandle_IsNullTile)
+		.CustomWidget()
+		.NameContent()
+		[
+			PropertyHandle_IsNullTile->CreatePropertyNameWidget()
+		]
+		.ValueContent()
+		[
+			SNew(SCheckBox)
+			.IsChecked_Static(&GetTilesIsNullTile)
+			.OnCheckStateChanged_Static(&SetTilesIsNull)
+		];
+	}
 
-	TSharedRef<IPropertyHandle> PropertyHandle_IsNullTile = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FBoardTileProperties, bIsNullTile)).ToSharedRef();
-	ChildBuilder.AddProperty(PropertyHandle_IsNullTile);
+	// Remaining properties
+	{
+		
+	}
+
+	// Set player spawns
+	{
+		ChildBuilder.AddCustomRow(FText::GetEmpty())
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			//.AutoWidth()
+			.HAlign(HAlign_Left)
+			.Padding(FMargin(10.f, 2.f))
+			[
+				SNew(SButton)
+				.IsEnabled_Static(&GetTileCanSetSpawn, 0)
+				.OnClicked_Static(&SetBoardSpawnPoint, 0)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("SetP1Spawn", "Set as Player 1 Spawn"))
+					.Justification(ETextJustify::Center)
+				]
+			]
+			+ SHorizontalBox::Slot()
+			//.AutoWidth()
+			.HAlign(HAlign_Right)
+			.Padding(FMargin(10.f, 2.f))
+			[
+				SNew(SButton)
+				.IsEnabled_Static(&GetTileCanSetSpawn, 1)
+				.OnClicked_Static(&SetBoardSpawnPoint, 1)
+				[
+					SNew(STextBlock)
+					.Text(LOCTEXT("SetP2Spawn", "Set as Player 2 Spawn"))
+					.Justification(ETextJustify::Center)
+				]
+			]
+		];
+	}
 }
 
 EVisibility FBoardEditorStructCustomization_BoardTileProperties::GetTileHexValueVisibility()
@@ -315,6 +436,172 @@ FText FBoardEditorStructCustomization_BoardTileProperties::GetTileHexValueText()
 	}
 
 	return FText::GetEmpty();
+}
+
+ECheckBoxState FBoardEditorStructCustomization_BoardTileProperties::GetTilesIsElementSet(ECSKElementType ElementType)
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		bool bIsEnabled = false;
+		
+		// Cycling throug all selected tiles, we compare if the tile has the element set
+		// to bIsEnabled only if we are checking the 2nd or greater selected tile
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		for (int32 Index = 0; Index < Tiles.Num(); ++Index)
+		{
+			ATile* Tile = Tiles[Index];
+			bool bElementSet = (static_cast<uint8>(ElementType) & Tile->TileType) > 0;
+
+			// If result is different, it means there are conflicting arguements.
+			// We can ignore this rule for the very first tile being checked
+			if (Index > 0 && bIsEnabled != bElementSet)
+			{
+				return ECheckBoxState::Checked;
+			}
+
+			bIsEnabled = bElementSet;
+		}
+
+		return bIsEnabled ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+	}
+
+	return ECheckBoxState::Undetermined;
+}
+
+void FBoardEditorStructCustomization_BoardTileProperties::SetTilesElement(ECheckBoxState NewCheckedState, ECSKElementType ElementType)
+{
+	if (NewCheckedState == ECheckBoxState::Undetermined)
+	{
+		return;
+	}
+
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		for (ATile* Tile : Tiles)
+		{
+			if (NewCheckedState == ECheckBoxState::Checked)
+			{
+				Tile->TileType |= (static_cast<uint8>(ElementType));
+			}
+			else
+			{
+				Tile->TileType &= ~(static_cast<uint8>(ElementType));
+			}
+		}
+	}
+}
+
+ECheckBoxState FBoardEditorStructCustomization_BoardTileProperties::GetTilesIsNullTile()
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		bool bIsNull = false;
+
+		// Cycling throug all selected tiles, we compare if the tile is null
+		// to bIsEnabled only if we are checking the 2nd or greater selected tile
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		for (int32 Index = 0; Index < Tiles.Num(); ++Index)
+		{
+			ATile* Tile = Tiles[Index];
+
+			// If result is different, it means there are conflicting arguements.
+			// We can ignore this rule for the very first tile being checked
+			if (Index > 0 && bIsNull != Tile->bIsNullTile)
+			{
+				return ECheckBoxState::Checked;
+			}
+
+			bIsNull = Tile->bIsNullTile;
+		}
+
+		return bIsNull ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+	}
+
+	return ECheckBoxState::Undetermined;
+}
+
+void FBoardEditorStructCustomization_BoardTileProperties::SetTilesIsNull(ECheckBoxState NewCheckedState)
+{
+	if (NewCheckedState == ECheckBoxState::Undetermined)
+	{
+		return;
+	}
+
+	// Pre-calculate as we use this value for multiple checks
+	bool bIsNull = (NewCheckedState == ECheckBoxState::Checked);
+
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
+
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		for (ATile* Tile : Tiles)
+		{
+			Tile->bIsNullTile = bIsNull;
+
+			// Spawn tiles should not be null
+			if (bIsNull)
+			{
+				if (BoardManager->GetPlayer1SpawnTile() == Tile)
+				{
+					BoardManager->ResetPlayerSpawn(0);
+				}
+				else if (BoardManager->GetPlayer2SpawnTile() == Tile)
+				{
+					BoardManager->ResetPlayerSpawn(1);
+				}
+			}
+		}
+	}
+}
+
+EVisibility FBoardEditorStructCustomization_BoardTileProperties::GetVisibilitySetPlayerSpawns()
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode && BoardEdMode->GetCurrentEditingState() == EBoardEditingState::TileSelected)
+	{
+		return BoardEdMode->GetNumSelectedTiles() == 1 ? EVisibility::Visible : EVisibility::Collapsed;
+	}
+
+	return EVisibility::Collapsed;
+}
+
+bool FBoardEditorStructCustomization_BoardTileProperties::GetTileCanSetSpawn(int32 Player)
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		if (Tiles.Num() == 1)
+		{
+			// Compare hex value of currently selected tile to that of currently player spawn tile
+			ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
+			return BoardManager->GetTileAt(Tiles[0]->GetGridHexValue()) != BoardManager->GetPlayerSpawnTile(Player);
+		}
+	}
+
+	return false;
+}
+
+FReply FBoardEditorStructCustomization_BoardTileProperties::SetBoardSpawnPoint(int32 Player)
+{
+	FEdModeBoard* BoardEdMode = GetEditorMode();
+	if (BoardEdMode)
+	{
+		TArray<ATile*> Tiles = BoardEdMode->GetAllSelectedTiles();
+		if (Tiles.Num() == 1)
+		{
+			ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
+			BoardManager->SetPlayerSpawn(Player, Tiles[0]->GetGridHexValue());
+		}
+	}
+
+	return FReply::Handled();
 }
 
 #undef LOCTEXT_NAMESPACE
