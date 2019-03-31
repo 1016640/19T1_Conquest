@@ -1,5 +1,6 @@
 # Since UE4 can't be compiled at campus without visual studio installer
 #Binaries
+Build
 DerivedDataCache
 Intermediate
 Saved

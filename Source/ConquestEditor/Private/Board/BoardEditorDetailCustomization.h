@@ -149,12 +149,12 @@ private:
 	/** Set is null tile for all selected tiles */
 	static void SetTilesIsNull(ECheckBoxState NewCheckedState);
 
-	/** Get if player spawn buttons should be visible */
-	static EVisibility GetVisibilitySetPlayerSpawns();
+	/** Get if player portal buttons should be visible */
+	static EVisibility GetVisibilitySetPlayerPortals();
 
-	/** Get if player spawn should be enabled */
-	static bool GetTileCanSetSpawn(int32 Player);
+	/** Get if player portal button should be enabled */
+	static bool GetTileCanSetPortal(int32 Player);
 
-	/** Set the player spawn for given player to current selected tile */
-	static FReply SetBoardSpawnPoint(int32 Player);
+	/** Set the player portal for given player to current selected tile */
+	static FReply SetBoardPortalTile(int32 Player);
 };

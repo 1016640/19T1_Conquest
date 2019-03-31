@@ -375,11 +375,11 @@ void FBoardEditorStructCustomization_BoardTileProperties::CustomizeChildren(TSha
 			.Padding(FMargin(10.f, 2.f))
 			[
 				SNew(SButton)
-				.IsEnabled_Static(&GetTileCanSetSpawn, 0)
-				.OnClicked_Static(&SetBoardSpawnPoint, 0)
+				.IsEnabled_Static(&GetTileCanSetPortal, 0)
+				.OnClicked_Static(&SetBoardPortalTile, 0)
 				[
 					SNew(STextBlock)
-					.Text(LOCTEXT("SetP1Spawn", "Set as Player 1 Spawn"))
+					.Text(LOCTEXT("SetP1Portal", "Set as Player 1 Portal"))
 					.Justification(ETextJustify::Center)
 				]
 			]
@@ -389,11 +389,11 @@ void FBoardEditorStructCustomization_BoardTileProperties::CustomizeChildren(TSha
 			.Padding(FMargin(10.f, 2.f))
 			[
 				SNew(SButton)
-				.IsEnabled_Static(&GetTileCanSetSpawn, 1)
-				.OnClicked_Static(&SetBoardSpawnPoint, 1)
+				.IsEnabled_Static(&GetTileCanSetPortal, 1)
+				.OnClicked_Static(&SetBoardPortalTile, 1)
 				[
 					SNew(STextBlock)
-					.Text(LOCTEXT("SetP2Spawn", "Set as Player 2 Spawn"))
+					.Text(LOCTEXT("SetP2Portal", "Set as Player 2 Portal"))
 					.Justification(ETextJustify::Center)
 				]
 			]
@@ -547,20 +547,20 @@ void FBoardEditorStructCustomization_BoardTileProperties::SetTilesIsNull(ECheckB
 			// Spawn tiles should not be null
 			if (bIsNull)
 			{
-				if (BoardManager->GetPlayer1SpawnTile() == Tile)
+				if (BoardManager->GetPlayer1PortalTile() == Tile)
 				{
-					BoardManager->ResetPlayerSpawn(0);
+					BoardManager->ResetPlayerPortal(0);
 				}
-				else if (BoardManager->GetPlayer2SpawnTile() == Tile)
+				else if (BoardManager->GetPlayer2PortalTile() == Tile)
 				{
-					BoardManager->ResetPlayerSpawn(1);
+					BoardManager->ResetPlayerPortal(1);
 				}
 			}
 		}
 	}
 }
 
-EVisibility FBoardEditorStructCustomization_BoardTileProperties::GetVisibilitySetPlayerSpawns()
+EVisibility FBoardEditorStructCustomization_BoardTileProperties::GetVisibilitySetPlayerPortals()
 {
 	FEdModeBoard* BoardEdMode = GetEditorMode();
 	if (BoardEdMode && BoardEdMode->GetCurrentEditingState() == EBoardEditingState::TileSelected)
@@ -571,7 +571,7 @@ EVisibility FBoardEditorStructCustomization_BoardTileProperties::GetVisibilitySe
 	return EVisibility::Collapsed;
 }
 
-bool FBoardEditorStructCustomization_BoardTileProperties::GetTileCanSetSpawn(int32 Player)
+bool FBoardEditorStructCustomization_BoardTileProperties::GetTileCanSetPortal(int32 Player)
 {
 	FEdModeBoard* BoardEdMode = GetEditorMode();
 	if (BoardEdMode)
@@ -581,14 +581,14 @@ bool FBoardEditorStructCustomization_BoardTileProperties::GetTileCanSetSpawn(int
 		{
 			// Compare hex value of currently selected tile to that of currently player spawn tile
 			ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
-			return BoardManager->GetTileAt(Tiles[0]->GetGridHexValue()) != BoardManager->GetPlayerSpawnTile(Player);
+			return BoardManager->GetTileAt(Tiles[0]->GetGridHexValue()) != BoardManager->GetPlayerPortalTile(Player);
 		}
 	}
 
 	return false;
 }
 
-FReply FBoardEditorStructCustomization_BoardTileProperties::SetBoardSpawnPoint(int32 Player)
+FReply FBoardEditorStructCustomization_BoardTileProperties::SetBoardPortalTile(int32 Player)
 {
 	FEdModeBoard* BoardEdMode = GetEditorMode();
 	if (BoardEdMode)
@@ -597,7 +597,7 @@ FReply FBoardEditorStructCustomization_BoardTileProperties::SetBoardSpawnPoint(i
 		if (Tiles.Num() == 1)
 		{
 			ABoardManager* BoardManager = BoardEdMode->GetCachedBoardManager();
-			BoardManager->SetPlayerSpawn(Player, Tiles[0]->GetGridHexValue());
+			BoardManager->SetPlayerPortal(Player, Tiles[0]->GetGridHexValue());
 		}
 	}
 

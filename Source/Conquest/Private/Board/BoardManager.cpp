@@ -42,8 +42,8 @@ ABoardManager::ABoardManager()
 	GridTileTemplate = nullptr;
 	#endif
 
-	Player1SpawnHex = FIntVector(-1);
-	Player2SpawnHex = FIntVector(-1);
+	Player1PortalHex = FIntVector(-1);
+	Player2PortalHex = FIntVector(-1);
 }
 
 #if WITH_EDITOR
@@ -63,7 +63,7 @@ void ABoardManager::CheckForErrors()
 		return;
 	}
 	
-	if (GetPlayer1SpawnTile() == nullptr)
+	if (GetPlayer1PortalTile() == nullptr)
 	{
 		FFormatNamedArguments Arguments;
 		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
@@ -73,7 +73,7 @@ void ABoardManager::CheckForErrors()
 			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
 	}
 
-	if (GetPlayer2SpawnTile() == nullptr)
+	if (GetPlayer2PortalTile() == nullptr)
 	{
 		FFormatNamedArguments Arguments;
 		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
@@ -151,25 +151,25 @@ void ABoardManager::InitBoard(const FBoardInitData& InitData)
 	// Generate the grid
 	HexGrid.GenerateGrid(GridDimensions.X, GridDimensions.Y, TilePredicate);
 
-	// We can keep spawn points that still fit inside the new grid
+	// We can keep portals that still fit inside the new grid
 	{
-		if (!HexGrid.GridMap.Contains(Player1SpawnHex))
+		if (!HexGrid.GridMap.Contains(Player1PortalHex))
 		{
-			Player1SpawnHex = FIntVector(-1);
+			Player1PortalHex = FIntVector(-1);
 		}
 
-		if (!HexGrid.GridMap.Contains(Player2SpawnHex))
+		if (!HexGrid.GridMap.Contains(Player2PortalHex))
 		{
-			Player2SpawnHex = FIntVector(-1);
+			Player2PortalHex = FIntVector(-1);
 		}
 	}
 }
 
-void ABoardManager::SetPlayerSpawn(int32 Player, const FIntVector& TileHex)
+void ABoardManager::SetPlayerPortal(int32 Player, const FIntVector& TileHex)
 {
 	if (!ensure(Player >= 0 && Player <= 1))
 	{
-		UE_LOG(LogConquest, Warning, TEXT("Unable to set player spawn as player index is invalid"));
+		UE_LOG(LogConquest, Warning, TEXT("Unable to set player portal as player index is invalid"));
 		return;
 	}
 	
@@ -181,23 +181,23 @@ void ABoardManager::SetPlayerSpawn(int32 Player, const FIntVector& TileHex)
 		{
 			if (Player == 0)
 			{
-				// Make sure this tile isn't already being used as a spawn point
-				if (GetPlayer2SpawnTile() == TileAtSpawn)
+				// Make sure this tile isn't already being used as a portal
+				if (GetPlayer2PortalTile() == TileAtSpawn)
 				{
-					Player2SpawnHex = FIntVector(-1);
+					Player2PortalHex = FIntVector(-1);
 				}
 
-				Player1SpawnHex = TileHex;
+				Player1PortalHex = TileHex;
 			}
 			else
 			{
-				// Make sure this tile isn't already being used as a spawn point
-				if (GetPlayer1SpawnTile() == TileAtSpawn)
+				// Make sure this tile isn't already being used as a portal
+				if (GetPlayer1PortalTile() == TileAtSpawn)
 				{
-					Player1SpawnHex = FIntVector(-1);
+					Player1PortalHex = FIntVector(-1);
 				}
 
-				Player2SpawnHex = TileHex;
+				Player2PortalHex = TileHex;
 			}
 
 			// Spawn points can't be null tiles
@@ -206,21 +206,21 @@ void ABoardManager::SetPlayerSpawn(int32 Player, const FIntVector& TileHex)
 		}
 	}
 }
-void ABoardManager::ResetPlayerSpawn(int32 Player)
+void ABoardManager::ResetPlayerPortal(int32 Player)
 {
 	if (!ensure(Player >= 0 && Player <= 1))
 	{
-		UE_LOG(LogConquest, Warning, TEXT("Unable to reset player spawn as player index is invalid"));
+		UE_LOG(LogConquest, Warning, TEXT("Unable to reset player portal as player index is invalid"));
 		return;
 	}
 
 	if (Player == 0)
 	{
-		Player1SpawnHex = FIntVector(-1);
+		Player1PortalHex = FIntVector(-1);
 	}
 	else
 	{
-		Player2SpawnHex = FIntVector(-1);
+		Player2PortalHex = FIntVector(-1);
 	}
 }
 #endif

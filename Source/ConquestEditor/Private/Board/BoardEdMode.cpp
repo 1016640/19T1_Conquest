@@ -388,13 +388,13 @@ void FEdModeBoard::DrawExistingBoard(const FSceneView* View, FViewport* Viewport
 			FLinearColor PerimeterColor = FLinearColor::Yellow;
 			FLinearColor CenterColor = FLinearColor::Black;
 
-			if (BoardManager->GetPlayer1SpawnTile() == Tile)
+			if (BoardManager->GetPlayer1PortalTile() == Tile)
 			{
 				PerimeterColor = FLinearColor::FromSRGBColor(FColor::Magenta);
 				CenterColor = FLinearColor::FromSRGBColor(FColor::Emerald);
 				Depth = 3.f;
 			}
-			else if (BoardManager->GetPlayer2SpawnTile() == Tile)
+			else if (BoardManager->GetPlayer2PortalTile() == Tile)
 			{
 				PerimeterColor = FLinearColor::FromSRGBColor(FColor::Cyan);
 				CenterColor = FLinearColor::FromSRGBColor(FColor::Emerald);

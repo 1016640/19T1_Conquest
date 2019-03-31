@@ -116,11 +116,11 @@ public:
 	/** Initializes the board using specified info */
 	void InitBoard(const FBoardInitData& InitData);
 
-	/** Set the spawn tile for the specified player */
-	void SetPlayerSpawn(int32 Player, const FIntVector& TileHex);
+	/** Set the portal tile for the specified player */
+	void SetPlayerPortal(int32 Player, const FIntVector& TileHex);
 
-	/** Resets the player spawn tile to invalid */
-	void ResetPlayerSpawn(int32 Player);
+	/** Clears portal tile used for specified player */
+	void ResetPlayerPortal(int32 Player);
 	#endif
 
 protected:
@@ -145,26 +145,26 @@ protected:
 
 public:
 
-	/** Get the tile marked as being player 1 spawn (can return null) */
+	/** Get the tile marked as being player 1 portal (can return null) */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
-	ATile* GetPlayer1SpawnTile() const { return GetTileAt(Player1SpawnHex); }
+	ATile* GetPlayer1PortalTile() const { return GetTileAt(Player1PortalHex); }
 
-	/** Get the tile marked as being player 2 spawn (can return null) */
+	/** Get the tile marked as being player 2 portal (can return null) */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
-	ATile* GetPlayer2SpawnTile() const { return GetTileAt(Player2SpawnHex); }
+	ATile* GetPlayer2PortalTile() const { return GetTileAt(Player2PortalHex); }
 
-	/** Get the spawn tile for the specified player */
-	FORCEINLINE ATile* GetPlayerSpawnTile(int32 Player) const
+	/** Get the portal tile for the specified player */
+	FORCEINLINE ATile* GetPlayerPortalTile(int32 Player) const
 	{
 		if (ensureMsgf(Player >= 0 && Player <= 1, TEXT("Player index must be 0 for player 1 or 1 for player 2")))
 		{
 			if (Player == 0)
 			{
-				return GetPlayer1SpawnTile();
+				return GetPlayer1PortalTile();
 			}
 			else
 			{
-				return GetPlayer2SpawnTile();
+				return GetPlayer2PortalTile();
 			}
 		}
 
@@ -176,12 +176,12 @@ public:
 
 private:
 
-	/** Hex value for the first players starting tile */
+	/** Hex value for the first players portal (starting tile) */
 	UPROPERTY()
-	FIntVector Player1SpawnHex;
+	FIntVector Player1PortalHex;
 
-	/** Hex value for the second players starting tile */
+	/** Hex value for the second players portal (starting tile) */
 	UPROPERTY()
-	FIntVector Player2SpawnHex;
+	FIntVector Player2PortalHex;
 };
 
