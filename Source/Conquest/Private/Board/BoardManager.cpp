@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 
 #if WITH_EDITOR
+#include "DrawDebugHelpers.h"
 #include "MapErrors.h"
 #include "MessageLog.h"
 #include "UObjectToken.h"
@@ -16,7 +17,15 @@
 
 ABoardManager::ABoardManager()
 {
+	// We only need to tick in editor
+	#if WITH_EDITORONLY_DATA
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+	#else
 	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bStartWithTickEnabled = false;
+	#endif
+
 	bReplicates = false;
 	bNetLoadOnClient = true;
 
@@ -38,12 +47,60 @@ ABoardManager::ABoardManager()
 
 	GridDimensions = FIntPoint(0, 0);
 	GridHexSize = 0.f;
-	#if WITH_EDITORONLY_DATA
-	GridTileTemplate = nullptr;
-	#endif
-
 	Player1PortalHex = FIntVector(-1);
 	Player2PortalHex = FIntVector(-1);
+
+	#if WITH_EDITORONLY_DATA
+	GridTileTemplate = nullptr;
+	bDrawDebugBoard = true;
+	#endif
+}
+
+void ABoardManager::BeginPlay()
+{
+	Super::BeginPlay();
+
+	#if WITH_EDITORONLY_DATA
+	SetActorTickEnabled(bDrawDebugBoard);
+	#endif
+}
+
+void ABoardManager::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	#if WITH_EDITORONLY_DATA
+	if (bDrawDebugBoard && HexGrid.bGridGenerated)
+	{
+		// Draws a hexagon based on a tile (not a static lambda since we might be PIE testing with more than 1 client)
+		auto DrawHexagon = [this](ATile* Tile, const FColor& Color, uint8 Depth)->void
+		{
+			UWorld* World = this->GetWorld();
+			FVector Position = Tile->GetActorLocation();
+
+			FVector CurrentVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, this->GridHexSize, 0);
+			for (int32 i = 0; i <= 5; ++i)
+			{
+				FVector NextVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, this->GridHexSize, (i + 1) % 6);
+				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, Depth , 5.f);
+
+				CurrentVertex = NextVertex;
+			}
+		};
+
+		TArray<ATile*> Tiles = HexGrid.GetAllTiles();
+		for (ATile* Tile : Tiles)
+		{
+			if (Tile)
+			{
+				FColor Color = Tile->bHighlightTile ? FColor::Magenta : FColor::Emerald;
+				uint8 Depth = Tile->bHighlightTile ? 1 : 0;
+
+				DrawHexagon(Tile, Color, Depth);
+			}
+		}
+	}
+	#endif
 }
 
 #if WITH_EDITOR
@@ -81,6 +138,21 @@ void ABoardManager::CheckForErrors()
 			->AddToken(FUObjectToken::Create(this))
 			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 2."), Arguments)))
 			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+	}
+}
+
+void ABoardManager::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ABoardManager, bDrawDebugBoard))
+	{
+		UWorld* World = GetWorld();
+		if (World && World->IsPlayInEditor())
+		{
+			SetActorTickEnabled(bDrawDebugBoard);
+		}
 	}
 }
 #endif
@@ -224,5 +296,20 @@ void ABoardManager::ResetPlayerPortal(int32 Player)
 	}
 }
 #endif
+
+ATile* ABoardManager::TraceBoard(const FVector& Origin, const FVector& End) const
+{
+	ATile* Tile = nullptr;
+	if (HexGrid.bGridGenerated)
+	{
+		FVector PlaneOrigin = GetActorLocation();
+		FVector PlaneNormal = GetActorUpVector();
+
+		FVector HitPoint = FMath::LinePlaneIntersection(Origin, End, FPlane(PlaneOrigin, PlaneNormal));
+		Tile = HexGrid.GetTile(FHexGrid::ConvertWorldToHex(HitPoint, PlaneOrigin, FVector(GridHexSize)));
+	}
+
+	return Tile;
+}
 
 #undef LOCTEXT_NAMESPACE

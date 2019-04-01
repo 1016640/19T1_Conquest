@@ -45,5 +45,5 @@ public:
 
 	/** Get the board manager for the current match (if any) */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
-	static ABoardManager* GetMatchBoardManger(const UObject* WorldContextObject);
+	static ABoardManager* GetMatchBoardManger(const UObject* WorldContextObject, bool bWarnIfNull = true);
 };

@@ -8,23 +8,26 @@
 
 ACSKGameState::ACSKGameState()
 {
-
+	BoardManager = nullptr;
 }
 
 void ACSKGameState::HandleBeginPlay()
 {
-	UWorld* World = GetWorld();
-	for (TActorIterator<ABoardManager> It(World); It; ++It)
-	{
-		BoardManager = *It;
-	}
-
-	if (!BoardManager)
-	{
-		UE_LOG(LogConquest, Error, TEXT("Unable to obtain board manager for current session!"));
-	}
+	// Retrieve board manager before handling begin
+	// play as some classes might depend on it
+	BoardManager = FindBoardManager();
 
 	Super::HandleBeginPlay();
+}
+
+void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
+{
+	if (bReplicatedHasBegunPlay && Role != ROLE_Authority)
+	{
+		BoardManager = FindBoardManager();
+	}
+
+	Super::OnRep_ReplicatedHasBegunPlay();
 }
 
 ABoardManager* ACSKGameState::GetBoardManager(bool bErrorCheck) const
@@ -35,4 +38,15 @@ ABoardManager* ACSKGameState::GetBoardManager(bool bErrorCheck) const
 	}
 
 	return BoardManager;
+}
+
+ABoardManager* ACSKGameState::FindBoardManager() const
+{
+	UWorld* World = GetWorld();
+	for (TActorIterator<ABoardManager> It(World); It; ++It)
+	{
+		return *It;
+	}
+
+	return nullptr;
 }

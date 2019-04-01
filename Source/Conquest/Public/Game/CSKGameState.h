@@ -11,7 +11,7 @@ class ABoardManager;
 /**
  * Tracks state of game and stats about the board
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKGameState : public AGameStateBase
 {
 	GENERATED_BODY()
@@ -26,11 +26,22 @@ public:
 	virtual void HandleBeginPlay() override;
 	// End AGameStateBase Interface
 
+protected:
+
+	// Begin AGameStateBase Interface
+	virtual void OnRep_ReplicatedHasBegunPlay() override;
+	// End AGameStateBase Interface
+
 public:
 
 	/** Get the games board manager */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ABoardManager* GetBoardManager(bool bErrorCheck = true) const;
+
+private:
+
+	/** Finds the board manager in the current level */
+	ABoardManager* FindBoardManager() const;
 
 private:
 

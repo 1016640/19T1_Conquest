@@ -23,6 +23,7 @@ public class Conquest : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] 
         {
+            "AIModule",
             "OnlineSubsystem"
         });
 

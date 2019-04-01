@@ -422,23 +422,11 @@ void FEdModeBoard::DrawHexagon(FViewport* Viewport, FPrimitiveDrawInterface* PDI
 	const float CenterSize = HexSize * 0.25f;
 	const ELevelViewportType ViewportType = static_cast<FEditorViewportClient*>(Viewport->GetClient())->ViewportType;
 
-	// Get the location of a hexagons vertex based on index
-	static auto GetHexVertex = [](const FVector& Position, float Size, int32 Index)->FVector
-	{
-		float Angle = 60.f * static_cast<float>(Index) - 30.f;
-		float Radians = FMath::DegreesToRadians(Angle);
-
-		return FVector(
-			Position.X + Size * FMath::Cos(Radians),
-			Position.Y + Size * FMath::Sin(Radians),
-			Position.Z);
-	};
-
 	// Connect lines to form a hexagon
-	FVector CurrentVertex = GetHexVertex(Position, HexSize, 0);
+	FVector CurrentVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, HexSize, 0);
 	for (int32 i = 0; i <= 5; ++i)
 	{
-		FVector NextVertex = GetHexVertex(Position, HexSize, (i + 1) % 6);
+		FVector NextVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, HexSize, (i + 1) % 6);
 
 		if (ViewportType == LVT_Perspective)
 		{

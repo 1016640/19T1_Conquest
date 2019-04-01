@@ -114,3 +114,36 @@ void FHexGrid::RemoveCellsFrom(int32 Row, int32 Column)
 
 	GridMap.Shrink();
 }
+
+bool FHexGrid::GeneratePath(const FHex& Start, const FHex& Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData)
+{
+	// No grid
+	if (!bGridGenerated)
+	{
+		ResultData.Set(EHexGridPathFindResult::NoGridGenerated);
+		return false;
+	}
+
+	// Invalid hex (goal can still be treated as valid if allowing partial path)
+	if (!GridMap.Contains(Start) || (!bAllowPartial && !GridMap.Contains(Goal)))
+	{
+		ResultData.Set(EHexGridPathFindResult::InvalidTargets);
+		return false;
+	}
+
+	// TODO: Path find!
+
+	return false;
+}
+
+bool FHexGrid::GeneratePath(ATile* Start, ATile* Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData)
+{
+	// Invalid tiles
+	if (!Start || !Goal)
+	{
+		ResultData.Set(EHexGridPathFindResult::InvalidTargets);
+		return false;
+	}
+	
+	return GeneratePath(Start->GetGridHexValue(), Goal->GetGridHexValue(), bAllowPartial, ResultData);
+}

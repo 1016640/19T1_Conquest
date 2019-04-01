@@ -45,8 +45,8 @@ ACSKGameState* UConquestFunctionLibrary::GetCSKGameState(const UObject* WorldCon
 	return World ? World->GetGameState<ACSKGameState>() : nullptr;
 }
 
-ABoardManager* UConquestFunctionLibrary::GetMatchBoardManger(const UObject* WorldContextObject)
+ABoardManager* UConquestFunctionLibrary::GetMatchBoardManger(const UObject* WorldContextObject, bool bWarnIfNull)
 {
 	const ACSKGameState* GameState = GetCSKGameState(WorldContextObject);
-	return GameState ? GameState->GetBoardManager() : nullptr;
+	return GameState ? GameState->GetBoardManager(bWarnIfNull) : nullptr;
 }

@@ -19,6 +19,14 @@ public:
 	
 	ATile();
 
+public:
+
+	#if WITH_EDITORONLY_DATA
+	/** If this tile should be highlighted during PIE */
+	UPROPERTY(EditInstanceOnly, Category = Debug)
+	uint32 bHighlightTile : 1;
+	#endif
+
 protected:
 
 	// Begin UObject Interface
@@ -56,6 +64,5 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Board|Tile")
 	bool HasBuilding() const { return true; }
 
-public:
 
 };

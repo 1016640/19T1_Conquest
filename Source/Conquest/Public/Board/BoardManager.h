@@ -80,13 +80,34 @@ public:
 	
 	ABoardManager();
 
-protected:
+public:
 
-	#if WITH_EDITOR
-	// Begin AActor Interface
-	virtual void CheckForErrors() override;
-	// End AActor Interface
+	#if WITH_EDITORONLY_DATA
+	/** If board tiles should be drawn during PIE */
+	UPROPERTY(EditInstanceOnly, Category = Debug)
+	uint32 bDrawDebugBoard : 1;
 	#endif
+
+public:
+
+	// Begin AActor Interface
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
+
+protected:
+	
+	// Begin AActor Interface
+	#if WITH_EDITOR
+	virtual void CheckForErrors() override;
+	#endif
+	// End AActor Interface
+
+	// Begin UObject Interface
+	#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	#endif
+	// End UObject Interface
 
 public:
 
@@ -142,6 +163,12 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName = "Board Tile Type"))
 	TSubclassOf<ATile> GridTileTemplate;
 	#endif
+	
+public:
+
+	/** Traces the board to get a tile (can return null) */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
 
 public:
 

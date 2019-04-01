@@ -4,22 +4,20 @@
 	"Category": "",
 	"Description": "",
 	"Modules": [
-    {
-      "Name": "Conquest",
-      "Type": "Runtime",
-      "LoadingPhase": "Default",
-      "AdditionalDependencies": [
-        "Engine",
-        "CoreUObject"
-      ]
-    },
-    {
-      "Name": "ConquestEditor",
-      "Type": "Editor",
-      "LoadingPhase": "Default",
-      "AdditionalDependencies": [
-
-      ]
-    }
+		{
+			"Name": "Conquest",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"CoreUObject",
+				"AIModule"
+			]
+		},
+		{
+			"Name": "ConquestEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
 	]
 }

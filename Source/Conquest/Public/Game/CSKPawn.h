@@ -16,7 +16,7 @@ class USphereComponent;
  * Default pawn used by players to traverse around the board. This pawn does not represent
  * the players position on the board, but acts as the spectating view the player controls
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPawn : public APawn
 {
 	GENERATED_BODY()

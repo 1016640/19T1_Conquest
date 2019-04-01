@@ -17,6 +17,10 @@ ATile::ATile()
 	TileType = 1;
 	bIsNullTile = false;
 	GridHexIndex = FIntVector(-1);
+
+	#if WITH_EDITORONLY_DATA
+	bHighlightTile = false;
+	#endif
 }
 
 void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

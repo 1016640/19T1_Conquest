@@ -2,14 +2,17 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "GameFramework/PlayerController.h"
 #include "CSKPlayerController.generated.h"
+
+class ACSKPlayerState;
+class ATile;
 
 /**
  * Controller for handling communication events between players and the server
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPlayerController : public APlayerController
 {
 	GENERATED_BODY()
@@ -20,5 +23,36 @@ public:
 
 	ACSKPlayerController();
 
+public:
 
+	// Begin AActor Interface
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
+
+protected:
+
+	// Begin APlayerController Interface
+	virtual void SetupInputComponent() override;
+	// End APlayerController Interface
+
+public:
+
+	/** Get player state as CSK player state */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerState* GetCSKPlayerState() const;
+
+	/** Get the tile currently under this controllers mouse. This only works only local player controllers */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	ATile* GetTileUnderMouse() const;
+
+private:
+
+	/** Sets the current tile we are hovering over as selected */
+	void SelectTile();
+
+protected:
+
+	/** The tile we are currently hovering over */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
+	ATile* HoveredTile;
 };

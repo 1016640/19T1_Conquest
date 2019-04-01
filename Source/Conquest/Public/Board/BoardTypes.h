@@ -3,6 +3,9 @@
 #pragma once
 
 #include "Conquest.h"
+#include "BoardTypes.generated.h"
+
+class ATile;
 
 /** All elements present in CSK (bitset since some spells have 2 types) */
 UENUM(BlueprintType, meta = (DisplayName = "ElementType", Bitflags, UseEnumValuesAsMaskValuesInEditor = "true"))
@@ -18,3 +21,29 @@ enum class ECSKElementType : uint8
 };
 
 ENUM_CLASS_FLAGS(ECSKElementType);
+
+/** A path for traversing the board */
+USTRUCT()
+struct CONQUEST_API FBoardPath
+{
+	GENERATED_BODY()
+
+public:
+
+	/** Get if this path is valid */
+	FORCEINLINE bool IsValid() const
+	{
+		return Path.Num() > 0;
+	}
+
+	/** Resets this path to invalid state */
+	FORCEINLINE void Reset()
+	{
+		Path.Empty();
+	}
+
+public:
+
+	/** The tiles to follow, in order from first to last */
+	TArray<ATile*> Path;
+};

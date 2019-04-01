@@ -7,9 +7,9 @@
 #include "CSKPlayerStart.generated.h"
 
 /**
- * Player start used to track a tile to spawn and set a player on
+ * 
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPlayerStart : public APlayerStart
 {
 	GENERATED_BODY()

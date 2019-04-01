@@ -9,7 +9,7 @@
 /**
  * Tracks states and stats for a player
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPlayerState : public APlayerState
 {
 	GENERATED_BODY()

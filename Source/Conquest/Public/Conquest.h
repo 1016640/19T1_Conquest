@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ConquestFunctionLibrary.h"
 #include "EngineUtils.h"
 #include "UnrealNetwork.h"
 

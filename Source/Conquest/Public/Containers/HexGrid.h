@@ -7,6 +7,78 @@
 
 class ATile;
 
+/** Results for performing a path find using the hex grid */
+enum class EHexGridPathFindResult
+{
+	/** Result is unknown */
+	Unknown,
+
+	/** Path was found */
+	Success,
+
+	/** A partial path was found and allowed */
+	Partial,
+
+	/** No path was found */
+	Failure,
+
+	/** Start or Goal locations were invalid */
+	InvalidTargets,
+
+	/** Grid had not been generated */
+	NoGridGenerated
+};
+
+/** Data about a hex grid path generation */
+struct CONQUEST_API FHexGridPathFindResultData
+{
+public:
+
+	FHexGridPathFindResultData()
+		: Result(EHexGridPathFindResult::Unknown)
+	{
+
+	}
+
+public:
+
+	/** Set only result */
+	FORCEINLINE void Set(EHexGridPathFindResult InResult)
+	{
+		Result = InResult;
+		Path.Empty();
+	}
+
+	/** Set result and copy path */
+	FORCEINLINE void Set(EHexGridPathFindResult InResult, const TArray<ATile*>& InPath)
+	{
+		Result = InResult;
+		Path = InPath;
+	}
+
+	/** Set result and move path */
+	FORCEINLINE void Set(EHexGridPathFindResult InResult, TArray<ATile*>&& InPath)
+	{
+		Result = InResult;
+		Path = InPath;
+	}
+
+	/** Reset result */
+	FORCEINLINE void Reset()
+	{
+		Result = EHexGridPathFindResult::Unknown;
+		Path.Empty();
+	}
+
+public:
+
+	/** The result of the search */
+	EHexGridPathFindResult Result;
+
+	/** Tiles in the generated path (from start to finish) */
+	TArray<ATile*> Path;
+};
+
 /**
  * A grid genereted using hexagons. This grid uses cube coordinates
  * and is specifically designed for use in CSK. I highly recommend
@@ -136,6 +208,18 @@ public:
 		return HexRound(FFracHex(X, Y, -X - Y));
 	}
 
+	/** Converts a hex tiles vertex index to a world position */
+	FORCEINLINE static FVector ConvertHexVertexIndexToWorld(const FVector& Origin, float Size, int32 Index)
+	{
+		float Angle = 60.f * static_cast<float>(Index) - 30.f;
+		float Radians = FMath::DegreesToRadians(Angle);
+
+		return FVector(
+			Origin.X + Size * FMath::Cos(Radians),
+			Origin.Y + Size * FMath::Sin(Radians),
+			Origin.Z);
+	}
+
 public:
 
 	/** Generates a rectangular shaped map with given rows and columns.
@@ -180,6 +264,14 @@ public:
 
 		return Tiles;
 	}
+	
+public:
+
+	/** Generates a path from starting hex to ending hex tile. Get if result was successful */
+	bool GeneratePath(const FHex& Start, const FHex& Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData);
+
+	/** Generates a path using two tiles. Get if result was successful  */
+	bool GeneratePath(ATile* Start, ATile* Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData);
 
 public:
 

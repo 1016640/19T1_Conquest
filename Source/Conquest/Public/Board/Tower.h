@@ -4,13 +4,14 @@
 
 #include "Conquest.h"
 #include "GameFramework/Actor.h"
+#include "BoardPieceInterface.h"
 #include "Tower.generated.h"
 
 /** 
  * Towers are board pieces that occupy a single tile and cannot move.
  */
 UCLASS()
-class CONQUEST_API ATower : public AActor
+class CONQUEST_API ATower : public AActor, public IBoardPieceInterface
 {
 	GENERATED_BODY()
 	
