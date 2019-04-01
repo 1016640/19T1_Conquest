@@ -16,6 +16,9 @@ enum class EHexGridPathFindResult
 	/** Path was found */
 	Success,
 
+	/** Start was equal to goal */
+	AlreadyAtGoal,
+
 	/** A partial path was found and allowed */
 	Partial,
 
@@ -264,14 +267,47 @@ public:
 
 		return Tiles;
 	}
-	
+
+	/** Get all valid hex neighbors for given hex index */
+	FORCEINLINE TArray<FHex> GetNeighbors(const FHex& Hex) const
+	{
+		TArray<FHex> Neighbors;
+
+		if (bGridGenerated && GridMap.Contains(Hex))
+		{
+			// There can be a total of six neighbours (see direction table)
+			for (int32 i = 0; i < 6; ++i)
+			{
+				FHex NeighborHex = Hex + HexDirection(i);
+				if (GridMap.Contains(NeighborHex))
+				{
+					Neighbors.Add(NeighborHex);
+				}
+			}
+		}
+
+		return Neighbors;
+	}
+
 public:
 
-	/** Generates a path from starting hex to ending hex tile. Get if result was successful */
-	bool GeneratePath(const FHex& Start, const FHex& Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData);
+	/** Generates a path (AStar) from starting hex to ending hex tile. Get if result was successful. */
+	bool GeneratePath(const FHex& Start, const FHex& Goal, FHexGridPathFindResultData& OutResultData, bool bAllowPartial = false, int32 MaxDistance = INT_MAX) const;
 
-	/** Generates a path using two tiles. Get if result was successful  */
-	bool GeneratePath(ATile* Start, ATile* Goal, bool bAllowPartial, FHexGridPathFindResultData& ResultData);
+	/** Generates a path (AStar) using two tiles. Get if result was successful  */
+	bool GeneratePath(const ATile* Start, const ATile* Goal, FHexGridPathFindResultData& OutResultData, bool bAllowPartial = false, int32 MaxDistance = INT_MAX) const;
+
+private:
+
+	/** Performs pathfinding using generated grid. Will generate a path if successful.
+	This function assumes only pre-checks have already been performed */
+	bool FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindResultData& OutResultData, bool bAllowPartial, int32 MaxDistance) const;
+
+	/** Converts path edges into an actual path array of tiles */
+	void ConvertEdgesToPath(const FHex& Start, const FHex& Goal, const TMap<FHex, FHex>& Edges, TArray<ATile*>& OutPath) const;
+
+	/** Heuristic used when generating a path */
+	static float PathHeuristic(const ATile* T1, const ATile* T2);
 
 public:
 

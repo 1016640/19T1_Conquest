@@ -83,7 +83,7 @@ public:
 public:
 
 	#if WITH_EDITORONLY_DATA
-	/** If board tiles should be drawn during PIE */
+	/** If board tiles should be drawn during PIE. This is client side only */
 	UPROPERTY(EditInstanceOnly, Category = Debug)
 	uint32 bDrawDebugBoard : 1;
 	#endif
@@ -169,6 +169,10 @@ public:
 	/** Traces the board to get a tile (can return null) */
 	UFUNCTION(BlueprintCallable, Category = "Board")
 	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
+
+	/** Generates a path from the start tile to goal tile */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
 public:
 

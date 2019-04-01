@@ -23,10 +23,23 @@ enum class ECSKElementType : uint8
 ENUM_CLASS_FLAGS(ECSKElementType);
 
 /** A path for traversing the board */
-USTRUCT()
+USTRUCT(BlueprintType)
 struct CONQUEST_API FBoardPath
 {
 	GENERATED_BODY()
+
+public:
+
+	FBoardPath()
+	{
+
+	}
+
+	FBoardPath(TArray<ATile*>&& InPath)
+		: Path(InPath)
+	{
+
+	}
 
 public:
 
@@ -45,5 +58,6 @@ public:
 public:
 
 	/** The tiles to follow, in order from first to last */
+	UPROPERTY(BlueprintReadOnly)
 	TArray<ATile*> Path;
 };

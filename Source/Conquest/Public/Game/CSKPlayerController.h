@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "GameFramework/PlayerController.h"
+#include "BoardTypes.h" // temp
 #include "CSKPlayerController.generated.h"
 
 class ACSKPlayerState;
@@ -50,9 +51,21 @@ private:
 	/** Sets the current tile we are hovering over as selected */
 	void SelectTile();
 
+	void AltSelectTile();
+
 protected:
 
-	/** The tile we are currently hovering over */
+	/** The tile we are currently hovering over (only valid if client owned) */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
+
+	UPROPERTY()
+	ATile* TestTile1 = nullptr;
+
+	UPROPERTY()
+	ATile* TestTile2 = nullptr;
+
+private:
+
+	FBoardPath TestBoardPath;
 };
