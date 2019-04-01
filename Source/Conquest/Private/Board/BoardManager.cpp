@@ -82,7 +82,7 @@ void ABoardManager::Tick(float DeltaTime)
 			for (int32 i = 0; i <= 5; ++i)
 			{
 				FVector NextVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, this->GridHexSize, (i + 1) % 6);
-				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, Depth , 5.f);
+				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, Depth, 5.f);
 
 				CurrentVertex = NextVertex;
 			}
@@ -93,10 +93,18 @@ void ABoardManager::Tick(float DeltaTime)
 		{
 			if (Tile)
 			{
-				FColor Color = Tile->bHighlightTile ? FColor::Magenta : FColor::Emerald;
-				uint8 Depth = Tile->bHighlightTile ? 1 : 0;
-
-				DrawHexagon(Tile, Color, Depth);
+				if (Tile->bHighlightTile)
+				{
+					DrawHexagon(Tile, FColor::Magenta, 2);
+				}
+				else if (Tile->bIsNullTile)
+				{
+					DrawHexagon(Tile, FColor::Black, 1);
+				}
+				else
+				{
+					DrawHexagon(Tile, FColor::Emerald, 0);
+				}
 			}
 		}
 	}
@@ -310,6 +318,19 @@ ATile* ABoardManager::TraceBoard(const FVector& Origin, const FVector& End) cons
 	}
 
 	return Tile;
+}
+
+bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial, int32 MaxDistance) const
+{
+	bool bSuccess = false;
+	FHexGridPathFindResultData ResultData;
+	if (HexGrid.GeneratePath(Start, Goal, ResultData, bAllowPartial, MaxDistance))
+	{
+		OutPath.Path = ResultData.Path;
+		bSuccess = true;
+	}
+
+	return bSuccess;
 }
 
 #undef LOCTEXT_NAMESPACE

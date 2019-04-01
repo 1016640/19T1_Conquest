@@ -11,6 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 
 #include "Kismet/KismetSystemLibrary.h"
+#include "DrawDebugHelpers.h"
 
 ACSKPlayerController::ACSKPlayerController()
 {
@@ -21,21 +22,36 @@ void ACSKPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (HoveredTile)
+	if (IsLocalPlayerController())
 	{
-		HoveredTile->bHighlightTile = false;
-	}
+		if (HoveredTile)
+		{
+			HoveredTile->bHighlightTile = false;
+		}
 
-	// TODO: Should perform this only client side
-	HoveredTile = GetTileUnderMouse();
-	if (HoveredTile)
-	{
-		HoveredTile->bHighlightTile = true;
-		UKismetSystemLibrary::PrintString(this, FString("Hovering over tile with hex: ") + HoveredTile->GetGridHexValue().ToString(), true, false, FLinearColor::Green, 0.f);
-	}
-	else
-	{
-		UKismetSystemLibrary::PrintString(this, FString("No Tile hovered"), true, false, FLinearColor::Green, 0.f);
+		// TODO: Should perform this only client side
+		HoveredTile = GetTileUnderMouse();
+		if (HoveredTile)
+		{
+			HoveredTile->bHighlightTile = true;
+			UKismetSystemLibrary::PrintString(this, FString("Hovering over tile with hex: ") + HoveredTile->GetGridHexValue().ToString(), true, false, FLinearColor::Green, 0.f);
+		}
+		else
+		{
+			UKismetSystemLibrary::PrintString(this, FString("No Tile hovered"), true, false, FLinearColor::Green, 0.f);
+		}
+
+		if (TestBoardPath.IsValid())
+		{
+			const auto& t = TestBoardPath.Path;
+			for (int32 i = 0; i < t.Num() - 1;)
+			{
+				FVector Start = t[i]->GetActorLocation();
+				FVector End = t[++i]->GetActorLocation();
+
+				DrawDebugLine(GetWorld(), Start, End, FColor::White, false, -1.f, 5, 5.f);
+			}
+		}
 	}
 }
 
@@ -46,6 +62,7 @@ void ACSKPlayerController::SetupInputComponent()
 
 	// Selection
 	InputComponent->BindAction("Select", IE_Pressed, this, &ACSKPlayerController::SelectTile);
+	InputComponent->BindAction("AltSelect", IE_Pressed, this, &ACSKPlayerController::AltSelectTile);
 }
 
 ACSKPlayerState* ACSKPlayerController::GetCSKPlayerState() const
@@ -83,8 +100,34 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	if (HoveredTile)
+	TestTile1 = GetTileUnderMouse();
+	if (TestTile1 && TestTile2)
 	{
-		UKismetSystemLibrary::PrintString(this, FString("Selected tile with hex: ") + HoveredTile->GetGridHexValue().ToString(), true, false, FLinearColor::Red, 5.f);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManger(this);
+		if (BoardManager)
+		{
+			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
+		}
+	}
+	else
+	{
+		TestBoardPath.Reset();
+	}
+}
+
+void ACSKPlayerController::AltSelectTile()
+{
+	TestTile2 = GetTileUnderMouse();
+	if (TestTile1 && TestTile2)
+	{
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManger(this);
+		if (BoardManager)
+		{
+			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
+		}
+	}
+	else
+	{
+		TestBoardPath.Reset();
 	}
 }
