@@ -27,3 +27,8 @@ void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePro
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 }
+
+bool ATile::IsTileOccupied() const
+{
+	return bIsNullTile || PieceOccupant.GetInterface() != nullptr;
+}

@@ -73,7 +73,7 @@ void ABoardManager::Tick(float DeltaTime)
 	if (bDrawDebugBoard && HexGrid.bGridGenerated)
 	{
 		// Draws a hexagon based on a tile (not a static lambda since we might be PIE testing with more than 1 client)
-		auto DrawHexagon = [this](ATile* Tile, const FColor& Color, uint8 Depth)->void
+		auto DrawHexagon = [this](ATile* Tile, const FColor& Color, float Thickness)->void
 		{
 			UWorld* World = this->GetWorld();
 			FVector Position = Tile->GetActorLocation();
@@ -82,7 +82,7 @@ void ABoardManager::Tick(float DeltaTime)
 			for (int32 i = 0; i <= 5; ++i)
 			{
 				FVector NextVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, this->GridHexSize, (i + 1) % 6);
-				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, Depth, 5.f);
+				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, 0, Thickness);
 
 				CurrentVertex = NextVertex;
 			}
@@ -95,15 +95,15 @@ void ABoardManager::Tick(float DeltaTime)
 			{
 				if (Tile->bHighlightTile)
 				{
-					DrawHexagon(Tile, FColor::Magenta, 2);
+					DrawHexagon(Tile, FColor::Magenta, 10.f);
 				}
 				else if (Tile->bIsNullTile)
 				{
-					DrawHexagon(Tile, FColor::Black, 1);
+					DrawHexagon(Tile, FColor::Black, 7.5f);
 				}
 				else
 				{
-					DrawHexagon(Tile, FColor::Emerald, 0);
+					DrawHexagon(Tile, FColor::Emerald, 5.f);
 				}
 			}
 		}

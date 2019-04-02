@@ -6,6 +6,8 @@
 #include "GameFramework/Actor.h"
 #include "Tile.generated.h"
 
+class IBoardPieceInterface;
+
 /**
  * Actor for managing an individual tile on the board. Will track
  * any tower (including castles) that have been built upon it
@@ -60,9 +62,14 @@ protected:
 
 public:
 
-	/** If this tile has a building on it */
-	UFUNCTION(BlueprintPure, Category = "Board|Tile")
-	bool HasBuilding() const { return true; }
+	/** If this tile is currently occupied. Null tiles are assumed to be occupied */
+	UFUNCTION(BlueprintPure, Category = "Board")
+	virtual bool IsTileOccupied() const;
 
+private:
 
+	// TODO: Save on client via RPC
+	/** The board piece currently on this tile */
+	UPROPERTY(Transient)
+	TScriptInterface<IBoardPieceInterface> PieceOccupant;
 };

@@ -7,6 +7,8 @@
 #include "BoardPieceInterface.h"
 #include "Castle.generated.h"
 
+class USkeletalMeshComponent;
+
 /**
  * Castles are towers that have the capability of moving. Castles are indirectly
  * controlled by players, but instead controlled by the CastleAIController
@@ -19,4 +21,15 @@ class CONQUEST_API ACastle : public APawn, public IBoardPieceInterface
 public:
 	
 	ACastle();
+
+public:
+
+	/** Get skeletal mesh component */
+	FORCEINLINE USkeletalMeshComponent* GetMesh() const { return Mesh; }
+
+private:
+
+	/** Animated skeletal mesh */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* Mesh;
 };

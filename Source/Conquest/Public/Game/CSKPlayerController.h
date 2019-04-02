@@ -7,6 +7,7 @@
 #include "BoardTypes.h" // temp
 #include "CSKPlayerController.generated.h"
 
+class ACastleAIController;
 class ACSKPlayerState;
 class ATile;
 
@@ -68,4 +69,15 @@ protected:
 private:
 
 	FBoardPath TestBoardPath;
+
+public:
+
+	/** Set the castle this player manages. This only works on the server */
+	void SetCastleController(ACastleAIController* InController);
+
+protected:
+	
+	/** The castle AI controller managing this players castle. This is only valid on the server */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
+	ACastleAIController* CastleController;
 };

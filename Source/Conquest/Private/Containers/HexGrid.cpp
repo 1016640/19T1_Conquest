@@ -140,9 +140,17 @@ bool FHexGrid::GeneratePath(const FHex& Start, const FHex& Goal, FHexGridPathFin
 		return true;
 	}
 
+	// Start is blocked
+	const ATile* StartTile = GetTile(Start);
+	if (!StartTile || StartTile->bIsNullTile)
+	{
+		OutResultData.Set(EHexGridPathFindResult::InvalidTargets);
+		return false;
+	}
+
 	// Goal is blocked (goal can still be treated as valid if allowing partial path)
 	const ATile* GoalTile = GetTile(Goal);
-	if (GoalTile && (!bAllowPartial && GoalTile->bIsNullTile))
+	if (!GoalTile || (!bAllowPartial && GoalTile->bIsNullTile))
 	{
 		OutResultData.Set(EHexGridPathFindResult::InvalidTargets);
 		return false;
@@ -257,8 +265,8 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 			// Ignore visited tiles as they probaly are in the queue
 			if (!Visited.Contains(Neighbor))
 			{
-				// Don't bother processing this tile since it's null
-				if (NeighborTile->bIsNullTile)
+				// Don't bother processing this tile since it's occupied
+				if (NeighborTile->IsTileOccupied())
 				{
 					// If finding partial paths, there is a chance of the goal tile being null
 					if (NeighborTile == GoalTile)

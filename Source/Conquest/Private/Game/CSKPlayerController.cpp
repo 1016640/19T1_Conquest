@@ -5,6 +5,8 @@
 #include "CSKLocalPlayer.h"
 #include "CSKPlayerState.h"
 #include "BoardManager.h"
+#include "Castle.h"
+#include "CastleAIController.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -76,7 +78,7 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 	ULocalPlayer* LocalPlayer = GetLocalPlayer();
 	if (LocalPlayer && LocalPlayer->ViewportClient)
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManger(this);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (!BoardManager)
 		{
 			return nullptr;
@@ -103,7 +105,7 @@ void ACSKPlayerController::SelectTile()
 	TestTile1 = GetTileUnderMouse();
 	if (TestTile1 && TestTile2)
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManger(this);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
 		{
 			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
@@ -120,7 +122,7 @@ void ACSKPlayerController::AltSelectTile()
 	TestTile2 = GetTileUnderMouse();
 	if (TestTile1 && TestTile2)
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManger(this);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
 		{
 			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
@@ -129,5 +131,18 @@ void ACSKPlayerController::AltSelectTile()
 	else
 	{
 		TestBoardPath.Reset();
+	}
+}
+
+void ACSKPlayerController::SetCastleController(ACastleAIController* InController)
+{
+	if (HasAuthority())
+	{
+		if (InController && CastleController)
+		{
+			CastleController->Destroy();
+		}
+
+		CastleController = InController;
 	}
 }
