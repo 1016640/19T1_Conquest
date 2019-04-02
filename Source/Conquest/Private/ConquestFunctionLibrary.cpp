@@ -50,3 +50,22 @@ ABoardManager* UConquestFunctionLibrary::GetMatchBoardManager(const UObject* Wor
 	const ACSKGameState* GameState = GetCSKGameState(WorldContextObject);
 	return GameState ? GameState->GetBoardManager(bWarnIfNull) : nullptr;
 }
+
+ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound)
+{
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+	if (World)
+	{
+		for (TActorIterator<ABoardManager> It(World); It; ++It)
+		{
+			return *It;
+		}
+	}
+
+	if (bWarnIfNotFound)
+	{
+		UE_LOG(LogConquest, Warning, TEXT("FindMatchBoardManager: Was not able to find a board manager in world %s"), *World->GetPathName());
+	}
+
+	return nullptr;
+}

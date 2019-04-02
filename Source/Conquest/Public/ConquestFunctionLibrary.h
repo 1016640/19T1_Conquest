@@ -46,4 +46,8 @@ public:
 	/** Get the board manager for the current match (if any) */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* GetMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNull = true);
+
+	/** Get the first board manager found in the level */
+	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
+	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
 };

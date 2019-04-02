@@ -32,6 +32,15 @@ protected:
 	virtual void OnRep_ReplicatedHasBegunPlay() override;
 	// End AGameStateBase Interface
 
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
+
+public:
+
+	/** Called from game to set the board manager to be used for the match */
+	void SetMatchBoardManager(ABoardManager* InBoardManager);
+
 public:
 
 	/** Get the games board manager */
@@ -40,12 +49,53 @@ public:
 
 private:
 
-	/** Finds the board manager in the current level */
-	ABoardManager* FindBoardManager() const;
+	/** The board of this match */
+	UPROPERTY(VisibleInstanceOnly, Transient, Replicated, Category = CSK)
+	ABoardManager* BoardManager;
+
+public:
+
+	/** Sets the state of the match */
+	void SetMatchState(ECSKMatchState NewState);
+
+public:
+
+	/** Get the state of the match */
+	FORCEINLINE ECSKMatchState GetMatchState() const { return MatchState; }
+
+protected:
+
+	/** Notify that match has entered pre match waiting phase */
+	void NotifyWaitingForPlayers();
+
+	/** Notify that the match has just begun */
+	void NotifyMatchStart();
+
+	/** Notify that the match has just finished */
+	void NotifyMatchFinished();
+
+	/** Notify that the players are leaving the match */
+	void NotifyPlayersLeaving();
+
+	/** Notify that the match as been abandoned */
+	void NotifyMatchAbort();
 
 private:
 
-	/** The board of this match */
-	UPROPERTY(VisibleInstanceOnly, Transient, Category = CSK)
-	ABoardManager* BoardManager;
+	/** Notify that match state has just been replicated */
+	UFUNCTION()
+	void OnRep_MatchState();
+
+	/** Determines which state change notify to call */
+	void HandleStateChange(ECSKMatchState NewState);
+
+protected:
+
+	/** The current state of the match */
+	UPROPERTY(Transient, ReplicatedUsing=OnRep_MatchState)
+	ECSKMatchState MatchState;
+
+	/** The last state we were running (client side) */
+	UPROPERTY()
+	ECSKMatchState PreviousState;
 };

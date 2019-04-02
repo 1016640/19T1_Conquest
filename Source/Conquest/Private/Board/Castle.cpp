@@ -18,6 +18,7 @@ ACastle::ACastle()
 
 	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Mesh"));
 	SetRootComponent(Mesh);
+	Mesh->SetMobility(EComponentMobility::Movable);
 	Mesh->SetSimulatePhysics(false);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }

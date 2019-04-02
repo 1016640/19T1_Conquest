@@ -10,29 +10,6 @@ class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
 
-/** The current state of the session (not the match itself). 
-This works similar to how AGameMode works (see GameMode.h) */
-enum class ECSKSessionState : uint8
-{
-	/** We are entering the map in which to play */
-	EnteringMap,
-
-	/** We are waiting for all clients to be ready (actors are already ticking) */
-	PreMatchWait,
-
-	/** The match is in progress */
-	InProgress,
-
-	/** Match has finished via a win or lose condition. We are now waiting before exiting (actors are still ticking) */
-	PostMatchWait,
-
-	/** We are leaving the map and returning to lobby */
-	LeavingMap,
-
-	/** Match was aborted due to unseen circumstances */
-	Aborted
-};
-
 /**
  * Manages and handles events present in CSK
  */
@@ -47,16 +24,20 @@ public:
 
 public:
 
+	virtual void Tick(float DeltaTime) override;
+
 	// Begin AGameModeBase Interface
-	//virtual void InitGameState() override;
-	//virtual void StartPlay() override;
+	virtual void InitGameState() override;
+	virtual void StartPlay() override;
 	//virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
 	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
 
-	virtual bool HasMatchStarted() const override;	
+	//virtual bool HasMatchStarted() const override;	
+
+	//virtual void StartToLeaveMap() override;
 	// End AGameModeBase Interface
 
 private:
@@ -87,14 +68,88 @@ protected:
 	ACSKPlayerController* Player2PC;
 
 	/** The class to use to spawn the first players castle */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes, meta = (DisplayName = "Player 1 Castle Class"))
 	TSubclassOf<ACastle> Player1CastleClass;
 
 	/** The class to use to spawn the second players castle */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes, meta = (DisplayName = "Player 2 Castle Class"))
 	TSubclassOf<ACastle> Player2CastleClass;	
 
 	/** The castle controller to use (if none is specified, we used the default AI controller in castle class) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
 	TSubclassOf<ACastleAIController> CastleAIControllerClass;
+
+public:
+
+	/** Enters the given state */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void EnterMatchState(ECSKMatchState NewState);
+
+	/** Starts the match only if allowed */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void StartMatch();
+
+	/** Ends the match only if allowed */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void EndMatch();
+
+	/** Forcefully ends the match with no winner decided */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void AbortMatch();
+
+public:
+
+	/** Get the current state of the match */
+	FORCEINLINE ECSKMatchState GetMatchState() const { return MatchState; }
+
+	/** Get if we can start the match at this point */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
+	bool CanStartMatch() const;
+	virtual bool CanStartMatch_Implementation() const;
+
+	/** Get if we can finish the match at this point */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
+	bool CanEndMatch() const;
+	virtual bool CanEndMatch_Implementation() const;
+
+	/** Get if the match is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsMatchInProgress() const;
+
+	/** Get if the match has ended */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasMatchFinished() const;
+
+protected:
+
+	/** Notify that we are waiting for players to finish joining */
+	void OnWaitingForPlayers();
+
+	/** Notify that the match can now start */
+	void OnMatchStart();
+
+	/** Notify that the match has come to a conclusion */
+	void OnMatchFinished();
+
+	/** Notify that players are now leaving the session */
+	void OnPlayersLeaving();
+
+	/** Notify that the game has been aborted */
+	void OnMatchAbort();
+
+private:
+
+	/** Determines the state change event to call based on previous and new state */
+	void HandleStateChange(ECSKMatchState OldState, ECSKMatchState NewState);
+
+protected:
+
+	/** The current state of the session */
+	UPROPERTY(BlueprintReadOnly, Transient)
+	ECSKMatchState MatchState;
+
+protected:
+
+	/** Notify that a client has disconnected */
+	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
 };
