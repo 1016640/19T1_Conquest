@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ConquestFunctionLibrary.h"
+#include "Conquest.h"
 #include "Board/BoardManager.h"
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"

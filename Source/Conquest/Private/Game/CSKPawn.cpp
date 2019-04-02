@@ -97,3 +97,8 @@ void ACSKPawn::ZoomCamera(float Value)
 	// TODO: Replace the fixed 300.f with a User Settings option
 	CameraBoom->AddDesiredArmLength(300.f * Value);
 }
+
+void ACSKPawn::FocusOnPoint(const FVector& Location, bool bCancellable)
+{
+	PawnMovement->FocusOnPoint(Location, bCancellable);
+}

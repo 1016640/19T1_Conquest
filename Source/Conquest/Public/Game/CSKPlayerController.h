@@ -7,7 +7,9 @@
 #include "BoardTypes.h" // temp
 #include "CSKPlayerController.generated.h"
 
+class ACastle;
 class ACastleAIController;
+class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 
@@ -37,7 +39,15 @@ protected:
 	virtual void SetupInputComponent() override;
 	// End APlayerController Interface
 
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
+
 public:
+
+	/** Get possessed pawn as a CSK pawn */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPawn* GetCSKPawn() const;
 
 	/** Get player state as CSK player state */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -78,6 +88,16 @@ public:
 protected:
 	
 	/** The castle AI controller managing this players castle. This is only valid on the server */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	ACastleAIController* CastleController;
+
+	/** The castle pawn itself */
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = CSK)
+	ACastle* CastlePawn;
+
+public:
+
+	/** Notify from the server that the game has started */
+	UFUNCTION(Client, Reliable)
+	void ClientOnMatchStart();
 };

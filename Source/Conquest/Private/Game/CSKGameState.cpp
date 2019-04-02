@@ -107,24 +107,24 @@ void ACSKGameState::HandleStateChange(ECSKMatchState NewState)
 {
 	// Actions performed during the pre match phase should always be run before entering other states.
 	// Doing this helps people who joined late to correctly catch up to the action
-	if (NewState == ECSKMatchState::PreMatchWait || PreviousState == ECSKMatchState::EnteringMap)
+	if (NewState == ECSKMatchState::WaitingPreMatch || PreviousState == ECSKMatchState::EnteringGame)
 	{
 		NotifyWaitingForPlayers();
 	}
 
 	switch (NewState)
 	{
-		case ECSKMatchState::InProgress:
+		case ECSKMatchState::Running:
 		{
 			NotifyMatchStart();
 			break;
 		}
-		case ECSKMatchState::PostMatchWait:
+		case ECSKMatchState::WaitingPostMatch:
 		{
 			NotifyMatchFinished();
 			break;
 		}
-		case ECSKMatchState::LeavingMap:
+		case ECSKMatchState::LeavingGame:
 		{
 			NotifyPlayersLeaving();
 			break;

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "Conquest.h"
+#include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "ConquestFunctionLibrary.generated.h"
 

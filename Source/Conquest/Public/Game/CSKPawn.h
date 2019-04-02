@@ -75,4 +75,11 @@ private:
 	/** Movement component for traversing the board */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UCSKPawnMovement* PawnMovement;
+
+public:
+
+	/** Moves this pawn to focus on given location. The move can
+	optionally be cancellable by the player inputting movement */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void FocusOnPoint(const FVector& Location, bool bCancellable = true);
 };

@@ -35,7 +35,7 @@ public:
 	virtual void Logout(AController* Exiting) override;
 	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
 
-	//virtual bool HasMatchStarted() const override;	
+	virtual bool HasMatchStarted() const override;	
 
 	//virtual void StartToLeaveMap() override;
 	// End AGameModeBase Interface
@@ -81,7 +81,7 @@ protected:
 
 public:
 
-	/** Enters the given state */
+	/** Enters the given state if not set already */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void EnterMatchState(ECSKMatchState NewState);
 
@@ -102,15 +102,15 @@ public:
 	/** Get the current state of the match */
 	FORCEINLINE ECSKMatchState GetMatchState() const { return MatchState; }
 
-	/** Get if we can start the match at this point */
+	/** Get if we should start the match */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
-	bool CanStartMatch() const;
-	virtual bool CanStartMatch_Implementation() const;
+	bool ShouldStartMatch() const;
+	virtual bool ShouldStartMatch_Implementation() const;
 
-	/** Get if we can finish the match at this point */
+	/** Get if we should finish the match */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
-	bool CanEndMatch() const;
-	virtual bool CanEndMatch_Implementation() const;
+	bool ShouldEndMatch() const;
+	virtual bool ShouldEndMatch_Implementation() const;
 
 	/** Get if the match is in progress */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -122,20 +122,21 @@ public:
 
 protected:
 
-	/** Notify that we are waiting for players to finish joining */
-	void OnWaitingForPlayers();
+	/** Notify that we can run anything that can start before the match */
+	virtual void OnStartWaitingPreMatch();
 
 	/** Notify that the match can now start */
-	void OnMatchStart();
+	virtual void OnMatchStart();
 
-	/** Notify that the match has come to a conclusion */
-	void OnMatchFinished();
+	/** Notify that the match has come to a conclusion. We should
+	now have a small cooldown or immediately exit the game */
+	virtual void OnMatchFinished();
 
-	/** Notify that players are now leaving the session */
-	void OnPlayersLeaving();
+	/** Notify that post match stage has concluded and players can now return to lobby */
+	virtual void OnFinishedWaitingPostMatch();
 
-	/** Notify that the game has been aborted */
-	void OnMatchAbort();
+	/** Notify that the game has been abandoned */
+	virtual void OnMatchAbort();
 
 private:
 

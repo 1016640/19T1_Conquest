@@ -3,6 +3,7 @@
 #include "CSKPlayerController.h"
 #include "CSKGameState.h"
 #include "CSKLocalPlayer.h"
+#include "CSKPawn.h"
 #include "CSKPlayerState.h"
 #include "BoardManager.h"
 #include "Castle.h"
@@ -67,6 +68,18 @@ void ACSKPlayerController::SetupInputComponent()
 	InputComponent->BindAction("AltSelect", IE_Pressed, this, &ACSKPlayerController::AltSelectTile);
 }
 
+void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ACSKPlayerController, CastlePawn, COND_AutonomousOnly);
+}
+
+ACSKPawn* ACSKPlayerController::GetCSKPawn() const
+{
+	return Cast<ACSKPawn>(GetPawn());
+}
+
 ACSKPlayerState* ACSKPlayerController::GetCSKPlayerState() const
 {
 	return GetPlayerState<ACSKPlayerState>();
@@ -120,6 +133,18 @@ void ACSKPlayerController::SelectTile()
 void ACSKPlayerController::AltSelectTile()
 {
 	TestTile2 = GetTileUnderMouse();
+	if (TestTile2)
+	{
+		ACSKPawn* Pawn = GetCSKPawn();
+		if (Pawn)
+		{
+			if (CastlePawn)
+			{
+				Pawn->FocusOnPoint(TestTile2->GetActorLocation());
+			}
+		}
+	}
+
 	if (TestTile1 && TestTile2)
 	{
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
@@ -144,5 +169,18 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 		}
 
 		CastleController = InController;
+		CastlePawn = InController->GetCastle();
+	}
+}
+
+void ACSKPlayerController::ClientOnMatchStart_Implementation()
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		if (CastlePawn)
+		{
+			Pawn->FocusOnPoint(CastlePawn->GetActorLocation());
+		}
 	}
 }

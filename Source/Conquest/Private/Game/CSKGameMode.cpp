@@ -22,6 +22,7 @@
 ACSKGameMode::ACSKGameMode()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 
 	DefaultPawnClass = ACSKPawn::StaticClass();
 	GameStateClass = ACSKGameState::StaticClass();
@@ -42,7 +43,8 @@ void ACSKGameMode::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (CanStartMatch())
+	// Keep checking till we can start the match
+	if (GameState->GetServerWorldTimeSeconds() > 1.f && ShouldStartMatch())
 	{
 		StartMatch();
 	}
@@ -59,7 +61,7 @@ void ACSKGameMode::InitGameState()
 		CSKGameState->SetMatchBoardManager(UConquestFunctionLibrary::FindMatchBoardManager(this));
 	}
 
-	EnterMatchState(ECSKMatchState::EnteringMap);
+	EnterMatchState(ECSKMatchState::EnteringGame);
 
 	// Callbacks required
 	FGameDelegates& GameDelegates = FGameDelegates::Get();
@@ -68,14 +70,19 @@ void ACSKGameMode::InitGameState()
 
 void ACSKGameMode::StartPlay()
 {
-	if (MatchState == ECSKMatchState::EnteringMap)
+	if (MatchState == ECSKMatchState::EnteringGame)
 	{
-		EnterMatchState(ECSKMatchState::PreMatchWait);
+		EnterMatchState(ECSKMatchState::WaitingPreMatch);
 	}
 
-	if (MatchState == ECSKMatchState::PreMatchWait)
+	if (ShouldStartMatch())
 	{
 		StartMatch();
+	}
+	else
+	{
+		// Keep manually checking
+		SetActorTickEnabled(true);
 	}
 }
 
@@ -133,6 +140,11 @@ APawn* ACSKGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, 
 	}
 
 	return Pawn;
+}
+
+bool ACSKGameMode::HasMatchStarted() const
+{
+	return !(MatchState == ECSKMatchState::EnteringGame || MatchState == ECSKMatchState::WaitingPreMatch);
 }
 
 ACastleAIController* ACSKGameMode::SpawnDefaultCastleFor(ACSKPlayerController* NewPlayer) const
@@ -255,8 +267,11 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 {
 	if (NewState != MatchState)
 	{
-		//UE_LOG(LogConquest, Log, TEXT("Entering Match State: %s"), *UEnum::GetValueAsString<ECSKMatchState>(TEXT("ECSKMatchState"), NewState));
-
+		#if WITH_EDITOR
+		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKMatchState"));
+		UE_LOG(LogConquest, Log, TEXT("Entering Match State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
+		#endif
+	
 		ECSKMatchState OldState = MatchState;
 		MatchState = NewState;
 
@@ -269,31 +284,36 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 		{
 			CSKGameState->SetMatchState(NewState);
 		}
+
+		SetActorTickEnabled(false);
 	}
 }
 
 void ACSKGameMode::StartMatch()
 {
-	if (CanStartMatch())
+	if (ShouldStartMatch())
 	{
-		EnterMatchState(ECSKMatchState::InProgress);
+		// Start the match
+		EnterMatchState(ECSKMatchState::Running);
 	}
 }
 
 void ACSKGameMode::EndMatch()
 {
-	if (CanEndMatch())
+	if (ShouldEndMatch())
 	{
-		EnterMatchState(ECSKMatchState::PostMatchWait);
+		// End the match
+		EnterMatchState(ECSKMatchState::WaitingPostMatch);
 	}
 }
 
 void ACSKGameMode::AbortMatch()
 {
+	// Abandon the match
 	EnterMatchState(ECSKMatchState::Aborted);
 }
 
-bool ACSKGameMode::CanStartMatch_Implementation() const
+bool ACSKGameMode::ShouldStartMatch_Implementation() const
 {
 	// The match has already started
 	if (IsMatchInProgress() || HasMatchFinished())
@@ -310,7 +330,7 @@ bool ACSKGameMode::CanStartMatch_Implementation() const
 	return false;
 }
 
-bool ACSKGameMode::CanEndMatch_Implementation() const
+bool ACSKGameMode::ShouldEndMatch_Implementation() const
 {
 	// TODO: Check match state
 	return false;
@@ -318,18 +338,18 @@ bool ACSKGameMode::CanEndMatch_Implementation() const
 
 bool ACSKGameMode::IsMatchInProgress() const
 {
-	return MatchState == ECSKMatchState::InProgress;
+	return MatchState == ECSKMatchState::Running;
 }
 
 bool ACSKGameMode::HasMatchFinished() const
 {
 	return 
-		MatchState == ECSKMatchState::PostMatchWait	||
-		MatchState == ECSKMatchState::LeavingMap	||
+		MatchState == ECSKMatchState::WaitingPostMatch	||
+		MatchState == ECSKMatchState::LeavingGame		||
 		MatchState == ECSKMatchState::Aborted;
 }
 
-void ACSKGameMode::OnWaitingForPlayers()
+void ACSKGameMode::OnStartWaitingPreMatch()
 {
 	// Allow actors in the world to start ticking while we wait
 	AWorldSettings* WorldSettings = GetWorldSettings();
@@ -355,13 +375,16 @@ void ACSKGameMode::OnMatchStart()
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
+
+	Player1PC->ClientOnMatchStart();
+	Player2PC->ClientOnMatchStart();
 }
 
 void ACSKGameMode::OnMatchFinished()
 {
 }
 
-void ACSKGameMode::OnPlayersLeaving()
+void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
 }
 
@@ -373,28 +396,28 @@ void ACSKGameMode::HandleStateChange(ECSKMatchState OldState, ECSKMatchState New
 {
 	switch (NewState)
 	{
-		case ECSKMatchState::EnteringMap:
+		case ECSKMatchState::EnteringGame:
 		{
 			break;
 		}
-		case ECSKMatchState::PreMatchWait:
+		case ECSKMatchState::WaitingPreMatch:
 		{
-			OnWaitingForPlayers();
+			OnStartWaitingPreMatch();
 			break;
 		}
-		case ECSKMatchState::InProgress:
+		case ECSKMatchState::Running:
 		{
 			OnMatchStart();
 			break;
 		}
-		case ECSKMatchState::PostMatchWait:
+		case ECSKMatchState::WaitingPostMatch:
 		{
 			OnMatchFinished();
 			break;
 		}
-		case ECSKMatchState::LeavingMap:
+		case ECSKMatchState::LeavingGame:
 		{
-			OnPlayersLeaving();
+			OnFinishedWaitingPostMatch();
 			break;
 		}
 		case ECSKMatchState::Aborted:

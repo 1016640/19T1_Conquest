@@ -13,26 +13,29 @@ DECLARE_STATS_GROUP(TEXT("Conquest"), STATGROUP_Conquest, STATCAT_Advanced);
 /** The max number of clients allowed in a session (including local host) */
 #define CSK_MAX_NUM_PLAYERS 2
 
+/** The max number of spectators that can watch the game */
+#define CSK_MAX_NUM_SPECTATORS 4
+
 /** The current state of the match taking place. This
 works similar to how AGameMode works (see GameMode.h) */
 UENUM(BlueprintType)
 enum class ECSKMatchState : uint8
 {
-	/** We are entering the map in which to play */
-	EnteringMap,
+	/** Players are joining the game */
+	EnteringGame,
 
 	/** We are waiting for all clients to be ready (actors are already ticking) */
-	PreMatchWait,
+	WaitingPreMatch,
 
 	/** The match is in progress */
-	InProgress,
+	Running,
 
-	/** Match has finished via a win or lose condition. We are now waiting before exiting (actors are still ticking) */
-	PostMatchWait,
+	/** Match has finished via a win or lose condition. We are now having a small cooldown (actors are still ticking) */
+	WaitingPostMatch,
 
-	/** We are leaving the map and returning to lobby */
-	LeavingMap,
+	/** We are leaving the game and returning to lobby */
+	LeavingGame,
 
-	/** Match was aborted due to unseen circumstances */
+	/** Match was abandoned due to unseen circumstances */
 	Aborted
 };

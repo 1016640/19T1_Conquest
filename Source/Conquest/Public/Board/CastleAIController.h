@@ -6,7 +6,7 @@
 #include "AIController.h"
 #include "CastleAIController.generated.h"
 
-class APawn;
+class ACastle;
 
 /**
  * AI controller that will handle movement for the castle pawn.
@@ -17,5 +17,9 @@ class CONQUEST_API ACastleAIController : public AAIController
 {
 	GENERATED_BODY()
 	
+public:
 
+	/** Get possessed pawn as a castle */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACastle* GetCastle() const;
 };
