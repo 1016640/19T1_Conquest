@@ -7,6 +7,7 @@
 #include "BoardPieceInterface.h"
 #include "Castle.generated.h"
 
+class UFloatingPawnMovement;
 class USkeletalMeshComponent;
 
 /**
@@ -19,7 +20,7 @@ class CONQUEST_API ACastle : public APawn, public IBoardPieceInterface
 	GENERATED_BODY()
 
 public:
-	
+
 	ACastle();
 
 public:
@@ -27,9 +28,16 @@ public:
 	/** Get skeletal mesh component */
 	FORCEINLINE USkeletalMeshComponent* GetMesh() const { return Mesh; }
 
+	/** Get pawn movement component */
+	FORCEINLINE UFloatingPawnMovement* GetPawnMovement() const { return PawnMovement; }
+
 private:
 
 	/** Animated skeletal mesh */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* Mesh;
+
+	/** Basic Movement component */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UFloatingPawnMovement* PawnMovement;
 };

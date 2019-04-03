@@ -205,6 +205,9 @@ public:
 	/** Get the tile at given hex value */
 	FORCEINLINE ATile* GetTileAt(const FIntVector& Hex) const { return HexGrid.GetTile(Hex); }
 
+	/** Get the tile at given location */
+	FORCEINLINE ATile* GetTileAtLocation(const FVector& Location) const;
+
 private:
 
 	/** Hex value for the first players portal (starting tile) */

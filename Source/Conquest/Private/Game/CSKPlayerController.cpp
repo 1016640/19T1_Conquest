@@ -140,7 +140,7 @@ void ACSKPlayerController::AltSelectTile()
 		{
 			if (CastlePawn)
 			{
-				Pawn->TravelToLocation(TestTile2->GetActorLocation());
+				//Pawn->TravelToLocation(TestTile2->GetActorLocation());
 			}
 		}
 	}
@@ -150,7 +150,8 @@ void ACSKPlayerController::AltSelectTile()
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
 		{
-			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
+			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath, false);
+			ServerMoveCastleTo(TestTile2);
 		}
 	}
 	else
@@ -173,6 +174,30 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 	}
 }
 
+bool ACSKPlayerController::ServerMoveCastleTo_Validate(ATile* Tile)
+{
+	return true;
+}
+
+void ACSKPlayerController::ServerMoveCastleTo_Implementation(ATile* Tile)
+{
+	if (Tile)
+	{
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		if (BoardManager)
+		{
+			BoardManager->FindPath(BoardManager->GetTileAtLocation(CastlePawn->GetActorLocation()), Tile, TestBoardPath, false);
+			if (TestBoardPath.IsValid())
+			{
+				if (CastleController)
+				{
+					CastleController->FollowPath(TestBoardPath);
+				}
+			}
+		}
+	}
+}
+
 void ACSKPlayerController::ClientOnMatchStart_Implementation()
 {
 	ACSKPawn* Pawn = GetCSKPawn();
@@ -180,7 +205,7 @@ void ACSKPlayerController::ClientOnMatchStart_Implementation()
 	{
 		if (CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation());
+			Pawn->SetActorLocation(CastlePawn->GetActorLocation());
 		}
 	}
 }

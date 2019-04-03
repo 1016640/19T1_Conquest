@@ -66,7 +66,7 @@ private:
 
 protected:
 
-	/** The tile we are currently hovering over (only valid if client owned) */
+	/** The tile we are currently hovering over (only valid on the client) */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
 
@@ -100,4 +100,9 @@ public:
 	/** Notify from the server that the game has started */
 	UFUNCTION(Client, Reliable)
 	void ClientOnMatchStart();
+
+private:
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerMoveCastleTo(ATile* Tile);
 };

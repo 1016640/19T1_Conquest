@@ -333,4 +333,12 @@ bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& 
 	return bSuccess;
 }
 
+ATile* ABoardManager::GetTileAtLocation(const FVector& Location) const
+{
+	const FVector Origin = GetActorLocation();
+	const FVector Size = FVector(GridHexSize);
+
+	return HexGrid.GetTile(FHexGrid::ConvertWorldToHex(Location, Origin, Size));
+}
+
 #undef LOCTEXT_NAMESPACE

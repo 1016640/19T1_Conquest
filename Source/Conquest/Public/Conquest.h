@@ -27,6 +27,9 @@ enum class ECSKMatchState : uint8
 	/** We are waiting for all clients to be ready (actors are already ticking) */
 	WaitingPreMatch,
 
+	/** Performing a coin flip to decide who gets to go first */
+	CoinFlip,
+
 	/** The match is in progress */
 	Running,
 
@@ -38,4 +41,38 @@ enum class ECSKMatchState : uint8
 
 	/** Match was abandoned due to unseen circumstances */
 	Aborted
+};
+
+/** The current phase of a round */
+UENUM(BlueprintType)
+enum class ECSKRoundState : uint8
+{
+	/** Players are collecting resources */
+	CollectionPhase,
+
+	/** The player who won the dice roll is performing their action phase */
+	FirstActionPhase,
+
+	/** The player who lost the dice roll is performing their action phase */
+	SecondActionPhase,
+
+	/** Any tiles with actions can now perform them */
+	EndRoundPhase
+};
+
+/** The state a player is in duing their action phase */
+UENUM(BlueprintType)
+enum class ECSKPlayerActionState : uint8
+{
+	/** Player isn't in any state */
+	None,
+
+	/** Player is currently selecting a tile to move to */
+	MoveCastle,
+
+	/** Player is currently selecting a tile to build a tower on */
+	BuildTowers,
+
+	/** Player is currently selecting a spell to cast */
+	CastSpell
 };
