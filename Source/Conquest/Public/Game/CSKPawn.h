@@ -78,8 +78,7 @@ private:
 
 public:
 
-	/** Moves this pawn to focus on given location. The move can
-	optionally be cancellable by the player inputting movement */
+	/** Moves this pawn over to the desired location overtime */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void FocusOnPoint(const FVector& Location, bool bCancellable = true);
+	void TravelToLocation(const FVector& Location, bool bCancellable = true);
 };

@@ -33,25 +33,29 @@ protected:
 
 public:
 
-	/** Set a point to move to over time. If not cancellable, 
-	calling this function again will be ignored until finished */
+	/** Travels to the given point overtime from our owners current location */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void FocusOnPoint(const FVector& Location, bool bCancellable = true);
+	void TravelToLocation(const FVector& Location, bool bCancellable = true);
 
-public:
+private:
 
-	/** The radius at which to start slowing down when moving to focused point */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = CSKPawnMovement, meta = (ClampMin = 0))
-	float FocusSlowingRadius;
+	/** Updates velocity to travel towards target destination */
+	void UpdateTravelTaskVelocity(float DeltaTime);
 
-protected:
+private:
 
-	/** If we are currently moving to a focused position */
-	uint32 bIsTravellingToFocusedPoint : 1;
+	/** If we are currently transitioning to a designated point */
+	uint32 bIsTravelling : 1;
 
-	/** The focused point to move to */
-	FVector FocusedPoint;
+	/** If the transition can be cancelled */
+	uint32 bCanCacelTravel : 1;
 
-	/** If the focus transition can be cancelled */
-	uint32 bCanCancelFocusTransition : 1;
+	/** The location to transitioning from */
+	FVector TravelFrom;
+
+	/** The location to transition to */
+	FVector TravelGoal;
+
+	/** The time we have been travelling for */
+	float TravelElapsedTime;
 };

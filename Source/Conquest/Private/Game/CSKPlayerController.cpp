@@ -140,7 +140,7 @@ void ACSKPlayerController::AltSelectTile()
 		{
 			if (CastlePawn)
 			{
-				Pawn->FocusOnPoint(TestTile2->GetActorLocation());
+				Pawn->TravelToLocation(TestTile2->GetActorLocation());
 			}
 		}
 	}
@@ -180,7 +180,7 @@ void ACSKPlayerController::ClientOnMatchStart_Implementation()
 	{
 		if (CastlePawn)
 		{
-			Pawn->FocusOnPoint(CastlePawn->GetActorLocation());
+			Pawn->TravelToLocation(CastlePawn->GetActorLocation());
 		}
 	}
 }

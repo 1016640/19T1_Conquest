@@ -98,7 +98,7 @@ void ACSKPawn::ZoomCamera(float Value)
 	CameraBoom->AddDesiredArmLength(300.f * Value);
 }
 
-void ACSKPawn::FocusOnPoint(const FVector& Location, bool bCancellable)
+void ACSKPawn::TravelToLocation(const FVector& Location, bool bCancellable)
 {
-	PawnMovement->FocusOnPoint(Location, bCancellable);
+	PawnMovement->TravelToLocation(Location, bCancellable);
 }
