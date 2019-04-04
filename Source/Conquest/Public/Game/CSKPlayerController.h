@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "GameFramework/PlayerController.h"
+#include "BoardTypes.h"
 #include "CSKPlayerController.generated.h"
 
 class ACastle;
@@ -117,19 +118,14 @@ private:
 	UFUNCTION(Client, Reliable)
 	void Client_OnTransitionToBoard();
 
-private:
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerMoveCastleTo(ATile* Tile);
-
 public:
 
 	/** Starts this players action phase */
 	void StartActionPhase();
 
 	/** Enters the given action mode */
-	UFUNCTION(BlueprintCallable, Category = CSK)
-	void SetActionMode(ECSKActionPhaseMode NewMode);
+	//UFUNCTION(BlueprintCallable, Category = CSK)
+	//void SetActionMode(ECSKActionPhaseMode NewMode);
 
 public:
 
@@ -149,7 +145,7 @@ private:
 protected:
 
 	/** If it is our action phase */
-	UPROPERTY(BlueprintReadOnly Category = CSK)
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	uint32 bIsActionPhase : 1;
 
 	/** The current action mode we are in */
@@ -160,8 +156,22 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
+public:
+
+	/** Notify from the game mode that our move request was accepted */
+	void ConfirmedTravelToTile(const FBoardPath& BoardPath);
+
+	/** Notify from the game state to track castle in motion */
+	UFUNCTION(Client, Reliable)
+	void Client_FocusCastleDuringMovement(ACastle* MovingCastle);
+
+	/** Notify from the game state that we can stop focusing castle */
+	UFUNCTION(Client, Reliable)
+	void Client_StopFocusingCastle();
+
 protected:
 
 	/** Attempts to move our castle to given tile */
-	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestTravelToTile(ATile* Tile);
 };

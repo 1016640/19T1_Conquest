@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "GameFramework/GameModeBase.h"
+#include "BoardTypes.h"
 #include "CSKGameMode.generated.h"
 
 class ACastle;
@@ -77,6 +78,10 @@ public:
 	/** Get if controller is either player 1 or player 2 (-1 if niether) */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	int32 GetControllerAsPlayerID(AController* Controller) const;
+
+	/** Get both players in an array */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	TArray<ACSKPlayerController*> GetCSKPlayerArray() const;
 
 protected:
 
@@ -265,11 +270,14 @@ protected:
 
 public:
 
-	/** Will have the given controllers castle travel to requested tile */
-	void MovePlayersCastleTo(ACSKPlayerController* Controller, ATile* Tile) const;
+	/** Checks if player can move their castle to requested tile. Will do so if allowed */
+	void RequestPlayerMoveTo(ACSKPlayerController* Controller, ATile* Tile) const;
 
 private:
 
 	/** Get if player is allowed to travel from starting tile to goal tile */
 	bool CanPlayerMoveToTile(ACSKPlayerController* Controller, ATile* From, ATile* To) const;
+
+	/** Finilazes players request to move their castle */
+	void ConfirmedPlayerMoveRequest(ACSKPlayerController* Controller, const FBoardPath& Path) const;
 };

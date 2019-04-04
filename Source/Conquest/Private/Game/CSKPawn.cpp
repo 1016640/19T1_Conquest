@@ -102,3 +102,8 @@ void ACSKPawn::TravelToLocation(const FVector& Location, bool bCancellable)
 {
 	PawnMovement->TravelToLocation(Location, bCancellable);
 }
+
+void ACSKPawn::TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic)
+{
+	PawnMovement->TrackActor(ActorToTrack, bIgnoreIfStatic);
+}

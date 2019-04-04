@@ -2,6 +2,9 @@
 
 #include "CSKPawnMovement.h"
 
+#include "Components/SceneComponent.h"
+#include "GameFramework/Actor.h"
+
 UCSKPawnMovement::UCSKPawnMovement()
 {
 	bIsTravelling = false;
@@ -27,7 +30,7 @@ bool UCSKPawnMovement::IsMoveInputIgnored() const
 	if (!bResult)
 	{
 		// If executing travel task that can't be cancelled
-		bResult = (bIsTravelling && !bCanCacelTravel);
+		bResult = IsTrackingActor() || (bIsTravelling && !bCanCacelTravel);
 	}
 
 	return bResult;
@@ -35,7 +38,11 @@ bool UCSKPawnMovement::IsMoveInputIgnored() const
 
 void UCSKPawnMovement::ApplyControlInputToVelocity(float DeltaTime)
 {
-	if (bIsTravelling)
+	if (IsTrackingActor())
+	{
+		UpdateTrackTaskVelocity(DeltaTime);
+	}
+	else if (bIsTravelling)
 	{
 		UpdateTravelTaskVelocity(DeltaTime);
 	}
@@ -47,6 +54,11 @@ void UCSKPawnMovement::ApplyControlInputToVelocity(float DeltaTime)
 
 void UCSKPawnMovement::TravelToLocation(const FVector& Location, bool bCancellable)
 {
+	if (IsTrackingActor())
+	{
+		return;
+	}
+
 	if (!bIsTravelling || bCanCacelTravel)
 	{
 		bIsTravelling = true;
@@ -58,7 +70,52 @@ void UCSKPawnMovement::TravelToLocation(const FVector& Location, bool bCancellab
 	}
 }
 
-// TODO: Moves this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
+void UCSKPawnMovement::TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic)
+{
+	if (TrackedActor != ActorToTrack)
+	{
+		// Need to remove prerequisite tick
+		if (TrackedActor)
+		{
+			RemoveTickPrerequisiteActor(TrackedActor);
+		}
+	}
+
+	// There is one more thing to check, set it to null
+	// as actor may exist but not be valid for us to use
+	TrackedActor = nullptr;
+
+	if (ActorToTrack)
+	{
+		// Can track an actor that doesn't have a transform
+		USceneComponent* Root = ActorToTrack->GetRootComponent();
+		if (!Root)
+		{
+			return;
+		}
+
+		// We might not want to track actors that don't move
+		if (bIgnoreIfStatic && Root->Mobility == EComponentMobility::Static)
+		{
+			return;
+		}
+
+		TrackedActor = ActorToTrack;
+
+		// We want to tick after the actor has, so we can use it's latest position
+		AddTickPrerequisiteActor(TrackedActor);
+
+		// Override travelling task
+		bIsTravelling = false;
+	}
+}
+
+void UCSKPawnMovement::StopTrackingActor()
+{
+	TrackActor(nullptr);
+}
+
+// TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 {
 	// Estimated time (in seconds) in would take to reach goal if travelling constant velocity of max speed
@@ -83,5 +140,21 @@ void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 	}
 
 	// Consume input for this frame. This could also cancel out this transition (if cancellable)
+	ConsumeInputVector();
+}
+
+void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
+{
+	check(TrackedActor);
+
+	FVector TargetLocation = TrackedActor->GetActorLocation();
+	FVector ComponentLocation = UpdatedComponent->GetComponentLocation();
+
+	FVector Displacement = TargetLocation - ComponentLocation;
+	
+	// Dividing by delta time here as later in TickComponent, velocity will get multiplied by it (which we want to negate)
+	Velocity = Displacement.GetClampedToMaxSize(GetMaxSpeed()) / DeltaTime;
+
+	// Consume input for this frame
 	ConsumeInputVector();
 }

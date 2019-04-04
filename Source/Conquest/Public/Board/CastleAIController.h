@@ -37,6 +37,10 @@ public:
 
 private:
 
+	/** Notify that we have finished a segment of the current path */
+	UFUNCTION()
+	void OnBoardPathSegmentCompleted(ATile* SegmentTile);
+
 	/** Notify that we have finished following current path */
 	UFUNCTION()
 	void OnBoardPathCompleted(ATile* DestinationTile);

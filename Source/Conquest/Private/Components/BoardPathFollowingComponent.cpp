@@ -10,11 +10,11 @@ UBoardPathFollowingComponent::UBoardPathFollowingComponent()
 
 void UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
 {
-	BoardPath = InPath;
-
-	if (BoardPath.IsValid())
+	if (InPath.IsValid())
 	{
-		CurrentTileIndex = 0;
+		Reset();
+
+		BoardPath = InPath;
 		Status = EPathFollowingStatus::Moving;
 	}
 }
@@ -117,6 +117,8 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				UpdateMoveFocus();
 
 				OnSegmentFinished();
+
+				OnBoardSegmentCompleted.Broadcast(NextTargetTile);
 			}
 		}
 	}

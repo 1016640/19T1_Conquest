@@ -301,6 +301,18 @@ int32 ACSKGameMode::GetControllerAsPlayerID(AController* Controller) const
 	return -1;
 }
 
+TArray<ACSKPlayerController*> ACSKGameMode::GetCSKPlayerArray() const
+{
+	if (Player1PC != nullptr && Player2PC != nullptr)
+	{
+		return TArray<ACSKPlayerController*>{ Player1PC, Player2PC };
+	}
+	else
+	{
+		return TArray<ACSKPlayerController*>();
+	}
+}
+
 void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 {
 	if (NewState != MatchState)
@@ -475,7 +487,7 @@ void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 	AbortMatch();
 }
 
-bool ACSKGameMode::CoinFlip() const
+bool ACSKGameMode::CoinFlip_Implementation() const
 {
 	return UConquestFunctionLibrary::CoinFlip();
 }
@@ -535,7 +547,7 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 	}
 }
 
-void ACSKGameMode::MovePlayersCastleTo(ACSKPlayerController* Controller, ATile* Tile) const
+void ACSKGameMode::RequestPlayerMoveTo(ACSKPlayerController* Controller, ATile* Tile) const
 {
 	if (!Tile)
 	{
@@ -557,7 +569,7 @@ void ACSKGameMode::MovePlayersCastleTo(ACSKPlayerController* Controller, ATile* 
 			FBoardPath OutBoardPath;
 			if (BoardManager->FindPath(Origin, Tile, OutBoardPath, false, MaxTileMovements))
 			{
-
+				ConfirmedPlayerMoveRequest(Controller, OutBoardPath);
 			}
 		}
 	}
@@ -583,6 +595,17 @@ bool ACSKGameMode::CanPlayerMoveToTile(ACSKPlayerController* Controller, ATile* 
 	}
 
 	return false;
+}
+
+void ACSKGameMode::ConfirmedPlayerMoveRequest(ACSKPlayerController* Controller, const FBoardPath& Path) const
+{
+	Controller->ConfirmedTravelToTile(Path);
+
+	ACSKGameState* CSKGameState = GetGameState<ACSKGameState>();
+	if (CSKGameState)
+	{
+		CSKGameState->OnPlayerTravellingToTile(Controller, Path.Goal());
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -12,7 +12,7 @@
 // AI controllers already have a member variable for path following components, so it would feel iffy to have two different
 // components that do the same thing
 
-/** Event for when we have finished following a board path */
+/** Event for when we have reached new segment of the path */
 DECLARE_MULTICAST_DELEGATE_OneParam(FBoardMoveComplete, ATile* /** DestinationTile */);
 
 /**
@@ -42,6 +42,9 @@ protected:
 	// End UPathFollowingComponent Interface
 
 public:
+
+	/** Event for board segment completed */
+	FBoardMoveComplete OnBoardSegmentCompleted;
 
 	/** Event for board path completed */
 	FBoardMoveComplete OnBoardPathFinished;

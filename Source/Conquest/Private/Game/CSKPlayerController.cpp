@@ -1,7 +1,9 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKPlayerController.h"
+#include "CSKGameMode.h"
 #include "CSKGameState.h"
+#include "CSKHUD.h"
 #include "CSKLocalPlayer.h"
 #include "CSKPawn.h"
 #include "CSKPlayerState.h"
@@ -13,13 +15,18 @@
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
 
-// TODO: Remove
-#include "Kismet/KismetSystemLibrary.h"
-#include "DrawDebugHelpers.h"
-
 ACSKPlayerController::ACSKPlayerController()
 {
 	bShowMouseCursor = true;
+
+	CachedCSKHUD = nullptr;
+	CastleController = nullptr;
+	CastlePawn = nullptr;
+	HoveredTile = nullptr;
+
+	{
+	
+	}
 }
 
 void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
@@ -61,10 +68,9 @@ void ACSKPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 	check(InputComponent);
-
+	
 	// Selection
 	InputComponent->BindAction("Select", IE_Pressed, this, &ACSKPlayerController::SelectTile);
-	InputComponent->BindAction("AltSelect", IE_Pressed, this, &ACSKPlayerController::AltSelectTile);
 }
 
 void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -125,11 +131,6 @@ void ACSKPlayerController::SelectTile()
 	}
 }
 
-void ACSKPlayerController::AltSelectTile()
-{
-
-}
-
 void ACSKPlayerController::SetCastleController(ACastleAIController* InController)
 {
 	if (HasAuthority())
@@ -177,7 +178,7 @@ void ACSKPlayerController::StartActionPhase()
 		bIsActionPhase = true;
 		
 		RemainingActions = ECSKActionPhaseMode::All;
-		SetActionMode(ECSKActionPhaseMode::MoveCastle);		
+		//SetActionMode(ECSKActionPhaseMode::MoveCastle);		
 	}
 }
 
@@ -189,6 +190,46 @@ bool ACSKPlayerController::CanRequestMoveAction() const
 	}
 
 	return false;
+}
+
+void ACSKPlayerController::ConfirmedTravelToTile(const FBoardPath& BoardPath)
+{
+	check(BoardPath.IsValid());
+
+	CastleController->FollowPath(BoardPath);
+}
+
+void ACSKPlayerController::Client_FocusCastleDuringMovement_Implementation(ACastle* MovingCastle)
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		Pawn->TrackActor(MovingCastle);
+	}
+}
+
+void ACSKPlayerController::Client_StopFocusingCastle_Implementation()
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		Pawn->TrackActor(nullptr);
+	}
+}
+
+bool ACSKPlayerController::Server_RequestTravelToTile_Validate(ATile* Tile)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestTravelToTile_Implementation(ATile* Tile)
+{
+	// Gamemode only exists on the server
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		GameMode->RequestPlayerMoveTo(this, Tile);
+	}
 }
 
 void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
@@ -206,14 +247,4 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 	{
 		UE_LOG(LogConquest, Warning, TEXT("Client was unable to travel to castle as pawn was null! (Probaly not replicated yet)"));
 	}
-}
-
-bool ACSKPlayerController::ServerMoveCastleTo_Validate(ATile* Tile)
-{
-	return true;
-}
-
-void ACSKPlayerController::ServerMoveCastleTo_Implementation(ATile* Tile)
-{
-	
 }

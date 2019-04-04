@@ -61,6 +61,17 @@ public:
 		return Path.Num();
 	}
 
+	/** Get the last tile in the path */
+	FORCEINLINE ATile* Goal() const
+	{
+		if (IsValid())
+		{
+			return Path.Last();
+		}
+
+		return nullptr;
+	}
+
 public:
 
 	FORCEINLINE ATile* operator [] (int32 Index)

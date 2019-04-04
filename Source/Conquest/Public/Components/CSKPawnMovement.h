@@ -37,10 +37,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void TravelToLocation(const FVector& Location, bool bCancellable = true);
 
+	/** Set the actor to track, setting this to null means to track no actor.
+	Tracking actors takes priority over all other forms of movement, so to restore
+	free movement, this function should be called with a null actor */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic = false);
+
+	/** Stops tracking our current actor */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void StopTrackingActor();
+
+public:
+
+	/** If we are currently following an actor move around */
+	FORCEINLINE bool IsTrackingActor() const { return TrackedActor != nullptr; }
+
 private:
 
 	/** Updates velocity to travel towards target destination */
 	void UpdateTravelTaskVelocity(float DeltaTime);
+
+	/** Updates velocity to move with tracked actor */
+	void UpdateTrackTaskVelocity(float DeltaTime);
 
 private:
 
@@ -58,4 +76,8 @@ private:
 
 	/** The time we have been travelling for */
 	float TravelElapsedTime;
+	
+	/** The actor we are tracking */
+	UPROPERTY(Transient, DuplicateTransient)
+	AActor* TrackedActor;
 };

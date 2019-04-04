@@ -7,6 +7,8 @@
 #include "CSKGameState.generated.h"
 
 class ABoardManager;
+class ACSKPlayerController;
+class ATile;
 
 /**
  * Tracks state of game and stats about the board
@@ -129,12 +131,35 @@ protected:
 protected:
 
 	/** ID of the player who goes first. This will be the player who won the coin flip */
-	UPROPERTY(BlueprintReadOnly Category = CSK)
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	int32 StartingPlayerID;
+
+	/** Cached pointer to player whose turn it is (only valid on server) */
+	UPROPERTY()
+	ACSKPlayerController* CurrentActionPhasePlayer;
 
 protected:
 
 	/** How many rounds have been played */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = "CSK|Stats")
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Stats)
 	int32 RoundsPlayed;
+
+public:
+
+	/** Notify from the server that a players castle is now moving */
+	void OnPlayerTravellingToTile(ACSKPlayerController* Controller, ATile* Goal);
+
+private:
+
+	/** Event for when the players castle has reached it's destination */
+	UFUNCTION()
+	void OnPlayerTravelFinished(ATile* DestinationTile);
+
+private:
+
+	/** If we are waiting for a castle to finish moving */
+	uint32 bWaitingForCastleMove : 1;
+
+	/** Handle to the player travel finished event */
+	FDelegateHandle Handle_PlayerTravelFinished;
 };
