@@ -7,6 +7,7 @@
 #include "CastleAIController.generated.h"
 
 class ACastle;
+class ACSKPlayerController;
 class UBoardPathFollowingComponent;
 struct FBoardPath;
 
@@ -22,6 +23,12 @@ class CONQUEST_API ACastleAIController : public AAIController
 public:
 
 	ACastleAIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+public:
+
+	/** The player that owns this castle */
+	UPROPERTY(Transient, DuplicateTransient)
+	ACSKPlayerController* PlayerOwner;
 
 public:
 

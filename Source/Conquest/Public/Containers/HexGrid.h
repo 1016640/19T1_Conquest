@@ -128,16 +128,6 @@ private:
 		return DirectionTable[Index];
 	}
 
-	FORCEINLINE static int32 HexLength(const FHex& Hex)
-	{
-		return Hex.GetMax();
-	}
-
-	FORCEINLINE static int32 HexDisplacement(const FHex& H1, const FHex& H2)
-	{
-		return HexLength(H1 - H2);
-	}
-
 	FORCEINLINE static FHex HexRound(const FFracHex& FracHex)
 	{
 		float X = FMath::RoundToFloat(FracHex.X);
@@ -166,6 +156,18 @@ private:
 		check(IsValidHex(HexValue));
 
 		return HexValue;
+	}
+
+public:
+
+	FORCEINLINE static int32 HexLength(const FHex& Hex)
+	{
+		return Hex.GetMax();
+	}
+
+	FORCEINLINE static int32 HexDisplacement(const FHex& H1, const FHex& H2)
+	{
+		return HexLength(H1 - H2);
 	}
 
 public:

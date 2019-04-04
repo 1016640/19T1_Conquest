@@ -29,5 +29,16 @@ ACastle::ACastle()
 	PawnMovement->Acceleration = 2000.f;
 	PawnMovement->Deceleration = 2000.f;
 	PawnMovement->TurningBoost = 0.f;
+
+	CachedTile = nullptr;
 }
 
+void ACastle::PlacedOnTile(ATile* Tile)
+{
+	CachedTile = Tile;
+}
+
+void ACastle::RemovedOffTile()
+{
+	CachedTile = nullptr;
+}

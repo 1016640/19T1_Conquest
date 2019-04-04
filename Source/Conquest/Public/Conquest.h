@@ -47,6 +47,9 @@ enum class ECSKMatchState : uint8
 UENUM(BlueprintType)
 enum class ECSKRoundState : uint8
 {
+	/** No phase (used internally) */
+	Invalid	UMETA(Hidden="true"),
+
 	/** Players are collecting resources */
 	CollectionPhase,
 
@@ -60,19 +63,24 @@ enum class ECSKRoundState : uint8
 	EndRoundPhase
 };
 
-/** The state a player is in duing their action phase */
+/** The current mode the player is in during their action phase */
 UENUM(BlueprintType)
-enum class ECSKPlayerActionState : uint8
+enum class ECSKActionPhaseMode : uint8
 {
-	/** Player isn't in any state */
-	None,
+	/** No action */
+	None			= 0 UMETA(Hidden="true"),
 
 	/** Player is currently selecting a tile to move to */
-	MoveCastle,
+	MoveCastle		= 1,
 
 	/** Player is currently selecting a tile to build a tower on */
-	BuildTowers,
+	BuildTowers		= 2,
 
 	/** Player is currently selecting a spell to cast */
-	CastSpell
+	CastSpell		= 4,
+
+	/** All actions */
+	All				= 7 UMETA(Hidden="true")
 };
+
+ENUM_CLASS_FLAGS(ECSKActionPhaseMode);

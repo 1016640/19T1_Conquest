@@ -37,6 +37,17 @@ ACSKGameMode::ACSKGameMode()
 	Player1CastleClass = ACastle::StaticClass();
 	Player2CastleClass = ACastle::StaticClass();
 	CastleAIControllerClass = ACastleAIController::StaticClass();
+
+	StartingGold = 5;
+	StartingMana = 3;
+	CollectionPhaseGold = 3;
+	CollectionPhaseMana = 2;
+	MaxGold = 30;
+	MaxMana = 30;
+
+	ActionPhaseTime = 90.f;
+	MinTileMovements = 1;
+	MaxTileMovements = 2;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -44,7 +55,7 @@ void ACSKGameMode::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	// Keep checking till we can start the match
-	if (GameState->GetServerWorldTimeSeconds() > 1.f && ShouldStartMatch())
+	if (GameState->GetServerWorldTimeSeconds() > 2.f && ShouldStartMatch())
 	{
 		StartMatch();
 	}
@@ -147,6 +158,33 @@ bool ACSKGameMode::HasMatchStarted() const
 	return !(MatchState == ECSKMatchState::EnteringGame || MatchState == ECSKMatchState::WaitingPreMatch);
 }
 
+#if WITH_EDITOR
+void ACSKGameMode::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACSKGameMode, MinTileMovements))
+	{
+		MaxTileMovements = FMath::Max(MinTileMovements, MaxTileMovements);
+	}
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(ACSKGameMode, MaxTileMovements))
+	{
+		MinTileMovements = FMath::Min(MinTileMovements, MaxTileMovements);
+	}
+}
+#endif
+
+bool ACSKGameMode::IsMatchValid() const
+{
+	if (HasMatchStarted())
+	{
+		return (Player1PC != nullptr && Player2PC != nullptr);
+	}
+
+	return true;
+}
+
 ACastleAIController* ACSKGameMode::SpawnDefaultCastleFor(ACSKPlayerController* NewPlayer) const
 {
 	int32 PlayerID = GetControllerAsPlayerID(NewPlayer);
@@ -177,7 +215,7 @@ ACastle* ACSKGameMode::SpawnCastleAtPortal(int32 PlayerID, TSubclassOf<ACastle> 
 	const ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 	if (BoardManager)
 	{
-		const ATile* PortalTile = BoardManager->GetPlayerPortalTile(PlayerID);
+		ATile* PortalTile = BoardManager->GetPlayerPortalTile(PlayerID);
 		if (PortalTile)
 		{
 			FTransform TileTransform = PortalTile->GetTransform();
@@ -284,8 +322,6 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 		{
 			CSKGameState->SetMatchState(NewState);
 		}
-
-		SetActorTickEnabled(false);
 	}
 }
 
@@ -372,12 +408,18 @@ void ACSKGameMode::OnMatchStart()
 	// Wait for level streaming to finish loading
 	GEngine->BlockTillLevelStreamingCompleted(GetWorld());
 
+	// Give players the default resources
+	ResetResourcesForPlayers();
+
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
 
-	Player1PC->ClientOnMatchStart();
-	Player2PC->ClientOnMatchStart();
+	// Have each player transition to their board
+	Player1PC->OnTransitionToBoard(0);
+	Player2PC->OnTransitionToBoard(1);
+
+	SetActorTickEnabled(false);
 }
 
 void ACSKGameMode::OnMatchFinished()
@@ -431,6 +473,116 @@ void ACSKGameMode::HandleStateChange(ECSKMatchState OldState, ECSKMatchState New
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 {
 	AbortMatch();
+}
+
+bool ACSKGameMode::CoinFlip() const
+{
+	return UConquestFunctionLibrary::CoinFlip();
+}
+
+void ACSKGameMode::ResetResourcesForPlayers()
+{
+	ResetPlayerResources(Player1PC, 1);
+	ResetPlayerResources(Player2PC, 2);
+}
+
+void ACSKGameMode::CollectResourcesForPlayers()
+{
+	UpdatePlayerResources(Player1PC, 1);
+	UpdatePlayerResources(Player2PC, 2);
+}
+
+void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
+{
+	if (ensure(Controller))
+	{
+		ACSKPlayerState* State = Controller->GetCSKPlayerState();
+		if (!ensure(State))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Unable to reset resources for player %i as player state is invalid"), PlayerID);
+			return;
+		}
+
+		State->GiveResources(StartingGold, StartingMana);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Error, TEXT("Unable to reset resources for player %i as controller was null!"), PlayerID);
+	}
+}
+
+void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
+{
+	if (ensure(Controller))
+	{
+		ACSKPlayerState* State = Controller->GetCSKPlayerState();
+		if (!ensure(State))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Unable to update resources for player %i as player state is invalid"), PlayerID);
+			return;
+		}
+
+		int32 GoldToGive = CollectionPhaseGold;
+		int32 ManaToGive = CollectionPhaseMana;
+
+		// TODO: Cycle through players owned buildings to collect additional resources
+
+		State->GiveResources(GoldToGive, ManaToGive);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Error, TEXT("Unable to update resources for player %i as controller was null!"), PlayerID);
+	}
+}
+
+void ACSKGameMode::MovePlayersCastleTo(ACSKPlayerController* Controller, ATile* Tile) const
+{
+	if (!Tile)
+	{
+		return;
+	}
+
+	// Make sure the controller can actually request a move
+	if (Controller && Controller->CanRequestMoveAction())
+	{
+		ACastle* Castle = Controller->GetCastlePawn();
+		check(Castle);
+
+		ATile* Origin = Castle->GetCachedTile();
+		if (ensure(Origin) && CanPlayerMoveToTile(Controller, Origin, Tile))
+		{
+			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+			check(BoardManager);
+
+			FBoardPath OutBoardPath;
+			if (BoardManager->FindPath(Origin, Tile, OutBoardPath, false, MaxTileMovements))
+			{
+
+			}
+		}
+	}
+}
+
+bool ACSKGameMode::CanPlayerMoveToTile(ACSKPlayerController* Controller, ATile* From, ATile* To) const
+{
+	check(Controller);
+	check(From != nullptr);
+	check(To != nullptr);
+
+	ACSKPlayerState* State = Controller->GetCSKPlayerState();
+	if (ensure(State))
+	{
+		// Get the amount of tiles between both the castle and the requested tile
+		int32 Distance = FHexGrid::HexDisplacement(From->GetGridHexValue(), To->GetGridHexValue());
+
+		// Player might have already travelled this turn already
+		if (IsCountWithinTileTravelLimits(Distance) && Distance <= State->GetTilesTraversedThisRound())
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -13,6 +13,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
 
+// TODO: Remove
 #include "Kismet/KismetSystemLibrary.h"
 #include "DrawDebugHelpers.h"
 
@@ -21,17 +22,19 @@ ACSKPlayerController::ACSKPlayerController()
 	bShowMouseCursor = true;
 }
 
+void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
+{
+	Super::ClientSetHUD_Implementation(NewHUDClass);
+
+	CachedCSKHUD = Cast<ACSKHUD>(MyHUD);
+}
+
 void ACSKPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 	if (IsLocalPlayerController())
 	{
-		if (HoveredTile)
-		{
-			HoveredTile->bHighlightTile = false;
-		}
-
 		// TODO: Should perform this only client side
 		HoveredTile = GetTileUnderMouse();
 		if (HoveredTile)
@@ -44,17 +47,13 @@ void ACSKPlayerController::Tick(float DeltaTime)
 			UKismetSystemLibrary::PrintString(this, FString("No Tile hovered"), true, false, FLinearColor::Green, 0.f);
 		}
 
-		if (TestBoardPath.IsValid())
+		#if WITH_EDITORONLY_DATA
+		// Help with debugging while in editor. This change is local to client
+		if (HoveredTile)
 		{
-			const auto& t = TestBoardPath.Path;
-			for (int32 i = 0; i < t.Num() - 1;)
-			{
-				FVector Start = t[i]->GetActorLocation();
-				FVector End = t[++i]->GetActorLocation();
-
-				DrawDebugLine(GetWorld(), Start, End, FColor::White, false, -1.f, 5, 5.f);
-			}
+			HoveredTile->bHighlightTile = false;
 		}
+		#endif
 	}
 }
 
@@ -83,6 +82,11 @@ ACSKPawn* ACSKPlayerController::GetCSKPawn() const
 ACSKPlayerState* ACSKPlayerController::GetCSKPlayerState() const
 {
 	return GetPlayerState<ACSKPlayerState>();
+}
+
+ACSKHUD* ACSKPlayerController::GetCSKHUD() const
+{
+	return CachedCSKHUD;
 }
 
 ATile* ACSKPlayerController::GetTileUnderMouse() const
@@ -115,49 +119,15 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	TestTile1 = GetTileUnderMouse();
-	if (TestTile1 && TestTile2)
+	if (bIsActionPhase)
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (BoardManager)
-		{
-			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath);
-		}
-	}
-	else
-	{
-		TestBoardPath.Reset();
+
 	}
 }
 
 void ACSKPlayerController::AltSelectTile()
 {
-	TestTile2 = GetTileUnderMouse();
-	if (TestTile2)
-	{
-		ACSKPawn* Pawn = GetCSKPawn();
-		if (Pawn)
-		{
-			if (CastlePawn)
-			{
-				//Pawn->TravelToLocation(TestTile2->GetActorLocation());
-			}
-		}
-	}
 
-	if (TestTile1 && TestTile2)
-	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (BoardManager)
-		{
-			BoardManager->FindPath(TestTile1, TestTile2, TestBoardPath, false);
-			ServerMoveCastleTo(TestTile2);
-		}
-	}
-	else
-	{
-		TestBoardPath.Reset();
-	}
 }
 
 void ACSKPlayerController::SetCastleController(ACastleAIController* InController)
@@ -169,8 +139,72 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 			CastleController->Destroy();
 		}
 
+		// Our link to our castle
 		CastleController = InController;
 		CastlePawn = InController->GetCastle();
+
+		// Link back to us
+		CastleController->PlayerOwner = this;
+	}
+}
+
+void ACSKPlayerController::OnTransitionToBoard(int32 PlayerID)
+{
+	if (ensure(HasAuthority()))
+	{
+		// Occupy the space we are on
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		if (BoardManager)
+		{
+			ATile* PortalTile = BoardManager->GetPlayerPortalTile(PlayerID);
+			check(PortalTile);
+
+			if (!BoardManager->PlaceBoardPieceOnTile(CastlePawn, PortalTile))
+			{
+				UE_LOG(LogConquest, Warning, TEXT("Unable to set player %i castle on portal tile as it's already occupied!"), PlayerID);
+			}
+		}
+
+		// Have client handle any local transition requirements
+		Client_OnTransitionToBoard();
+	}
+}
+
+void ACSKPlayerController::StartActionPhase()
+{
+	if (HasAuthority())
+	{
+		bIsActionPhase = true;
+		
+		RemainingActions = ECSKActionPhaseMode::All;
+		SetActionMode(ECSKActionPhaseMode::MoveCastle);		
+	}
+}
+
+bool ACSKPlayerController::CanRequestMoveAction() const
+{
+	if (bIsActionPhase && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::MoveCastle))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
+{
+	// Move the camera over to our castle (where our portal should be)
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		if (CastlePawn)
+		{
+			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+		}
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("Client was unable to travel to castle as pawn was null! (Probaly not replicated yet)"));
 	}
 }
 
@@ -181,31 +215,5 @@ bool ACSKPlayerController::ServerMoveCastleTo_Validate(ATile* Tile)
 
 void ACSKPlayerController::ServerMoveCastleTo_Implementation(ATile* Tile)
 {
-	if (Tile)
-	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (BoardManager)
-		{
-			BoardManager->FindPath(BoardManager->GetTileAtLocation(CastlePawn->GetActorLocation()), Tile, TestBoardPath, false);
-			if (TestBoardPath.IsValid())
-			{
-				if (CastleController)
-				{
-					CastleController->FollowPath(TestBoardPath);
-				}
-			}
-		}
-	}
-}
-
-void ACSKPlayerController::ClientOnMatchStart_Implementation()
-{
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
-	{
-		if (CastlePawn)
-		{
-			Pawn->SetActorLocation(CastlePawn->GetActorLocation());
-		}
-	}
+	
 }

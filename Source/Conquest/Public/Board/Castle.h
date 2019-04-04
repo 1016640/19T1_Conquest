@@ -25,6 +25,13 @@ public:
 
 public:
 
+	// Begin IBoardPiece Interface
+	virtual void PlacedOnTile(ATile* Tile) override;
+	virtual void RemovedOffTile() override;
+	// End IBoardPiece Interface
+
+public:
+
 	/** Get skeletal mesh component */
 	FORCEINLINE USkeletalMeshComponent* GetMesh() const { return Mesh; }
 
@@ -40,4 +47,15 @@ private:
 	/** Basic Movement component */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UFloatingPawnMovement* PawnMovement;
+
+public:
+
+	/** Get the tile we are currently on */
+	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
+
+private:
+
+	/** The tile we are currently on, this is cached for quick access to it */
+	UPROPERTY(Transient, DuplicateTransient)
+	ATile* CachedTile;
 };

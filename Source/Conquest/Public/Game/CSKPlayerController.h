@@ -4,11 +4,11 @@
 
 #include "Conquest.h"
 #include "GameFramework/PlayerController.h"
-#include "BoardTypes.h" // temp
 #include "CSKPlayerController.generated.h"
 
 class ACastle;
 class ACastleAIController;
+class ACSKHUD;
 class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
@@ -21,13 +21,15 @@ class CONQUEST_API ACSKPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 	
-	// TODO: Manage spells here, since spells should only be known to the player who owns them
-
 public:
 
 	ACSKPlayerController();
 
 public:
+
+	// Begin APlayerController Interface
+	virtual void ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass) override;
+	// End APlayerController Interface
 
 	// Begin AActor Interface
 	virtual void Tick(float DeltaTime) override;
@@ -53,16 +55,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetCSKPlayerState() const;
 
+	/** Get cached CSK HUD (only valid on clients) */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKHUD* GetCSKHUD() const;
+
 	/** Get the tile currently under this controllers mouse. This only works only local player controllers */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	ATile* GetTileUnderMouse() const;
+
+protected:
+
+	/** Our HUD class as a CSK HUD */
+	UPROPERTY()
+	ACSKHUD* CachedCSKHUD;
 
 private:
 
 	/** Sets the current tile we are hovering over as selected */
 	void SelectTile();
-
-	void AltSelectTile();
 
 protected:
 
@@ -70,20 +80,18 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
 
-	UPROPERTY()
-	ATile* TestTile1 = nullptr;
-
-	UPROPERTY()
-	ATile* TestTile2 = nullptr;
-
-private:
-
-	FBoardPath TestBoardPath;
-
 public:
 
 	/** Set the castle this player manages. This only works on the server */
 	void SetCastleController(ACastleAIController* InController);
+
+public:
+
+	/** Get the castle controller managing our castle */
+	FORCEINLINE ACastleAIController* GetCastleController() const { return CastleController; }
+
+	/** Get the castle we own */
+	FORCEINLINE ACastle* GetCastlePawn() const { return CastlePawn; }
 
 protected:
 	
@@ -97,12 +105,63 @@ protected:
 
 public:
 
-	/** Notify from the server that the game has started */
+	/** Called to inform player that coin flip is taking place */
+	void OnReadyForCoinFlip();
+
+	/** Called by the game mode when transitioning to the board */
+	void OnTransitionToBoard(int32 PlayerID);
+
+private:
+
+	/** Handle transition to board client side */
 	UFUNCTION(Client, Reliable)
-	void ClientOnMatchStart();
+	void Client_OnTransitionToBoard();
 
 private:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerMoveCastleTo(ATile* Tile);
+
+public:
+
+	/** Starts this players action phase */
+	void StartActionPhase();
+
+	/** Enters the given action mode */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetActionMode(ECSKActionPhaseMode NewMode);
+
+public:
+
+	/** If this castle is allowed to request a castle move */
+	bool CanRequestMoveAction() const;
+
+	/** Get if this player cen enter given action phase state */
+	//UFUNCTION(BlueprintPure, Category = CSK)
+	//bool CanEnterActionState(ECSKPlayerActionPhaseState ActionState) const;
+
+private:
+
+	/** Notify that remaining actions has been replicated */
+	UFUNCTION()
+	void OnRep_RemainingActions() { }
+
+protected:
+
+	/** If it is our action phase */
+	UPROPERTY(BlueprintReadOnly Category = CSK)
+	uint32 bIsActionPhase : 1;
+
+	/** The current action mode we are in */
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
+	ECSKActionPhaseMode SelectedAction;
+
+	/** The actions we can still during our action phase */
+	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
+	ECSKActionPhaseMode RemainingActions;
+
+protected:
+
+	/** Attempts to move our castle to given tile */
+	
 };

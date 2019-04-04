@@ -20,12 +20,6 @@ public:
 
 	ACSKGameState();
 
-public:
-
-	// Begin AGameStateBase Interface
-	virtual void HandleBeginPlay() override;
-	// End AGameStateBase Interface
-
 protected:
 
 	// Begin AGameStateBase Interface
@@ -44,7 +38,7 @@ public:
 public:
 
 	/** Get the games board manager */
-	UFUNCTION(BlueprintPure, Category = CSK)
+	UFUNCTION(BlueprintPure, Category = "Board")
 	ABoardManager* GetBoardManager(bool bErrorCheck = true) const;
 
 private:
@@ -63,10 +57,16 @@ public:
 	/** Get the state of the match */
 	FORCEINLINE ECSKMatchState GetMatchState() const { return MatchState; }
 
+	/** Get the state of the round */
+	FORCEINLINE ECSKRoundState GetRoundState() const { return RoundState; }
+
 protected:
 
 	/** Notify that match has entered pre match waiting phase */
 	void NotifyWaitingForPlayers();
+
+	/** Notify that we should prepare to flip a coin to decide who goes first */
+	void NotifyPerformCoinFlip();
 
 	/** Notify that the match has just begun */
 	void NotifyMatchStart();
@@ -80,14 +80,33 @@ protected:
 	/** Notify that the match as been abandoned */
 	void NotifyMatchAbort();
 
+	/** Notify that collection phase has started */
+	void NotifyCollectionPhaseStart();
+
+	/** Notify that first action phase has started */
+	void NotifyFirstCollectionPhaseStart();
+
+	/** Notify that first action phase has started */
+	void NotifySecondCollectionPhaseStart();
+
+	/** Notify that end round phase has started */
+	void NotifyEndRoundPhaseStart();
+
 private:
 
 	/** Notify that match state has just been replicated */
 	UFUNCTION()
 	void OnRep_MatchState();
 
-	/** Determines which state change notify to call */
-	void HandleStateChange(ECSKMatchState NewState);
+	/** Determines which match state change notify to call */
+	void HandleMatchStateChange(ECSKMatchState NewState);
+
+	/** Notify that round state has just been replicated */
+	UFUNCTION()
+	void OnRep_RoundState();
+
+	/** Determines which round state change notify to call */
+	void HandleRoundStateChange(ECSKRoundState NewState);
 
 protected:
 
@@ -95,7 +114,27 @@ protected:
 	UPROPERTY(Transient, ReplicatedUsing=OnRep_MatchState)
 	ECSKMatchState MatchState;
 
-	/** The last state we were running (client side) */
+	/** The last match state we were running (client side) */
 	UPROPERTY()
-	ECSKMatchState PreviousState;
+	ECSKMatchState PreviousMatchState;
+
+	/** During match, what phase of the round we are up to */
+	UPROPERTY(Transient, ReplicatedUsing=OnRep_RoundState)
+	ECSKRoundState RoundState;
+
+	/** The last round phase we were running (client side) */
+	UPROPERTY()
+	ECSKRoundState PreviousRoundState;
+
+protected:
+
+	/** ID of the player who goes first. This will be the player who won the coin flip */
+	UPROPERTY(BlueprintReadOnly Category = CSK)
+	int32 StartingPlayerID;
+
+protected:
+
+	/** How many rounds have been played */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = "CSK|Stats")
+	int32 RoundsPlayed;
 };

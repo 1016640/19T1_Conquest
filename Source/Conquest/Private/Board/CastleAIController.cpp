@@ -20,6 +20,8 @@ void ACastleAIController::FollowPath(const FBoardPath& InPath)
 	UBoardPathFollowingComponent* BoardFollowComponent = GetBoardPathFollowingComponent();
 	if (BoardFollowComponent && BoardFollowComponent->GetStatus() != EPathFollowingStatus::Moving)
 	{
+		// TODO: Have follow path return true or false (for if path follow started successfully
+		// if started, we want to notify the first tile that it is un-occupied
 		BoardFollowComponent->FollowPath(InPath);
 	}
 }

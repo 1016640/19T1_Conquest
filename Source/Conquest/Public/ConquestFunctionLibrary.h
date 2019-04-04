@@ -50,4 +50,10 @@ public:
 	/** Get the first board manager found in the level */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
+
+public:
+
+	/** Randomly generated bool to simulate a coin flip */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	static bool CoinFlip();
 };

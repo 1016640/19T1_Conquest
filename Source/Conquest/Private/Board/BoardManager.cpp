@@ -26,8 +26,11 @@ ABoardManager::ABoardManager()
 	PrimaryActorTick.bStartWithTickEnabled = false;
 	#endif
 
-	bReplicates = false;
+	bReplicates = true;
 	bNetLoadOnClient = true;
+	bAlwaysRelevant = true;
+	bOnlyRelevantToOwner = false;
+	bReplicateMovement = false;
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
@@ -333,12 +336,61 @@ bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& 
 	return bSuccess;
 }
 
+int32 ABoardManager::IsPlayerPortalTile(const ATile* Tile) const
+{
+	if (Tile)
+	{
+		const FIntVector& TileHex = Tile->GetGridHexValue();
+
+		if (TileHex == Player1PortalHex)
+		{
+			return 0;
+		}
+		else if (TileHex == Player2PortalHex)
+		{
+			return 1;
+		}
+	}
+
+	return -1;
+}
+
 ATile* ABoardManager::GetTileAtLocation(const FVector& Location) const
 {
 	const FVector Origin = GetActorLocation();
 	const FVector Size = FVector(GridHexSize);
 
 	return HexGrid.GetTile(FHexGrid::ConvertWorldToHex(Location, Origin, Size));
+}
+
+bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const
+{
+	if (HasAuthority())
+	{
+		if (Tile && Tile->SetBoardPiece(BoardPiece))
+		{
+			// TODO: Add delegate call here (could potentially call a multicasetfunction that fires off a delegate)
+			
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool ABoardManager::ClearBoardPieceOnTile(ATile* Tile) const
+{
+	if (HasAuthority())
+	{
+		if (Tile && Tile->ClearBoardPiece())
+		{
+			// TODO: Add delegate call here (could potentially call a multicasetfunction that fires off a delegate)
+
+			return true;
+		}
+	}
+
+	return false;
 }
 
 #undef LOCTEXT_NAMESPACE

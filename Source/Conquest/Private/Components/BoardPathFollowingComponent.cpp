@@ -104,7 +104,9 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				ATile* NextTargetTile = BoardPath[CurrentTileIndex];
 				if (!NextTargetTile)
 				{
-					AbortMove("Next tile segment was null");
+					OnPathFinished(EPathFollowingResult::Aborted, FPathFollowingResultFlags::InvalidPath);
+
+					OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
 					return;
 				}
 

@@ -70,3 +70,9 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 
 	return nullptr;
 }
+
+bool UConquestFunctionLibrary::CoinFlip()
+{
+	int32 RandomValue = FMath::Rand();
+	return (RandomValue % 2) == 1;
+}
