@@ -126,6 +126,13 @@ bool FHexGrid::GeneratePath(const FHex& Start, const FHex& Goal, FHexGridPathFin
 		return false;
 	}
 
+	// Invalid distance
+	if (MaxDistance <= 0)
+	{
+		OutResultData.Set(EHexGridPathFindResult::InvalidDistance);
+		return false;
+	}
+
 	// Invalid hex (goal can still be treated as valid if allowing partial path)
 	if (!GridMap.Contains(Start) || (!bAllowPartial && !GridMap.Contains(Goal)))
 	{
@@ -140,9 +147,17 @@ bool FHexGrid::GeneratePath(const FHex& Start, const FHex& Goal, FHexGridPathFin
 		return true;
 	}
 
+	// Start is blocked
+	const ATile* StartTile = GetTile(Start);
+	if (!StartTile || StartTile->bIsNullTile)
+	{
+		OutResultData.Set(EHexGridPathFindResult::InvalidTargets);
+		return false;
+	}
+
 	// Goal is blocked (goal can still be treated as valid if allowing partial path)
 	const ATile* GoalTile = GetTile(Goal);
-	if (GoalTile && (!bAllowPartial && GoalTile->bIsNullTile))
+	if (!GoalTile || (!bAllowPartial && GoalTile->bIsNullTile))
 	{
 		OutResultData.Set(EHexGridPathFindResult::InvalidTargets);
 		return false;
@@ -171,13 +186,15 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 		FPathSegment()
 			: Hex(0)
 			, Cost(FLT_MAX)
+			, Distance(0)
 		{
 
 		}
 
-		FPathSegment(const FHex& InHex, float InCost)
+		FPathSegment(const FHex& InHex, float InCost, int32 InDistance)
 			: Hex(InHex)
 			, Cost(InCost)
+			, Distance(InDistance)
 		{
 
 		}
@@ -187,6 +204,9 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 
 		// Cost for reaching this segment
 		float Cost;
+
+		// Amount of tiles since origin
+		int32 Distance;
 	};
 
 	// Predicate for sorting queue
@@ -215,7 +235,7 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 
 	// Queue with cheapest hex tiles placed in the front
 	TArray<FPathSegment> Queue;
-	Queue.HeapPush(FPathSegment(Start, 0), FPathPredicate());
+	Queue.HeapPush(FPathSegment(Start, 0.f, 0), FPathPredicate());
 
 	while (true)
 	{
@@ -257,8 +277,8 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 			// Ignore visited tiles as they probaly are in the queue
 			if (!Visited.Contains(Neighbor))
 			{
-				// Don't bother processing this tile since it's null
-				if (NeighborTile->bIsNullTile)
+				// Don't bother processing this tile since it's occupied
+				if (NeighborTile->IsTileOccupied())
 				{
 					// If finding partial paths, there is a chance of the goal tile being null
 					if (NeighborTile == GoalTile)
@@ -292,11 +312,15 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 		// Can we still continue down this path?
 		if (BestNeighborIndex != -1)
 		{
-			// Establish new path edge
-			Queue.HeapPush(FPathSegment(BestNeighborHex, BestNeighborCost), FPathPredicate());
-			PathEdges[Segment.Hex] = BestNeighborHex;
+			int32 NewDistance = Segment.Distance + 1;
+			if (NewDistance <= MaxDistance)
+			{
+				// Establish new path edge (increment distance)
+				Queue.HeapPush(FPathSegment(BestNeighborHex, BestNeighborCost, Segment.Distance + 1), FPathPredicate());
+				PathEdges[Segment.Hex] = BestNeighborHex;
 
-			PathEdges.Add(BestNeighborHex, BestNeighborHex);
+				PathEdges.Add(BestNeighborHex, BestNeighborHex);
+			}
 		}
 	}
 

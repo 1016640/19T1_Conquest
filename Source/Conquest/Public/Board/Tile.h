@@ -6,6 +6,8 @@
 #include "GameFramework/Actor.h"
 #include "Tile.generated.h"
 
+class IBoardPieceInterface;
+
 /**
  * Actor for managing an individual tile on the board. Will track
  * any tower (including castles) that have been built upon it
@@ -60,9 +62,44 @@ protected:
 
 public:
 
-	/** If this tile has a building on it */
-	UFUNCTION(BlueprintPure, Category = "Board|Tile")
-	bool HasBuilding() const { return true; }
+	/** Set a new board piece to occupy this tile. Get if setting piece was successful */
+	bool SetBoardPiece(AActor* BoardPiece);
 
+	/** Clears the board piece currently occupying this tile. Get if a board piece was cleared */
+	bool ClearBoardPiece();
 
+protected:
+
+	/** Event for when a new board piece has been placed on this tile */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName="On Board Piece Set"))
+	void BP_OnBoardPieceSet(AActor* NewBoardPiece);
+
+	/** Event for when the occupant board piece has been cleared */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName = "On Board Piece Cleared"))
+	void BP_OnBoardPieceCleared(AActor* OldBoardPiece);
+
+	/** Sets the board piece to occupy this tile */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_SetBoardPiece(AActor* BoardPiece);
+
+	/** Clears the board piece occupying this tile */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_ClearBoardPiece();
+
+public:
+
+	/** If this tile is currently occupied. Null tiles are assumed to be occupied */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	virtual bool IsTileOccupied() const;
+
+	/** If towers can be constructed on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	bool CanPlaceTowersOn() const;
+
+private:
+
+	// TODO: Save on client via RPC
+	/** The board piece currently on this tile */
+	UPROPERTY(Transient)
+	TScriptInterface<IBoardPieceInterface> PieceOccupant;
 };

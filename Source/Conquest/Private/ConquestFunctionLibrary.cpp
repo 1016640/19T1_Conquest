@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ConquestFunctionLibrary.h"
+#include "Conquest.h"
 #include "Board/BoardManager.h"
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
@@ -45,8 +46,27 @@ ACSKGameState* UConquestFunctionLibrary::GetCSKGameState(const UObject* WorldCon
 	return World ? World->GetGameState<ACSKGameState>() : nullptr;
 }
 
-ABoardManager* UConquestFunctionLibrary::GetMatchBoardManger(const UObject* WorldContextObject, bool bWarnIfNull)
+ABoardManager* UConquestFunctionLibrary::GetMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNull)
 {
 	const ACSKGameState* GameState = GetCSKGameState(WorldContextObject);
 	return GameState ? GameState->GetBoardManager(bWarnIfNull) : nullptr;
+}
+
+ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound)
+{
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+	if (World)
+	{
+		for (TActorIterator<ABoardManager> It(World); It; ++It)
+		{
+			return *It;
+		}
+	}
+
+	if (bWarnIfNotFound)
+	{
+		UE_LOG(LogConquest, Warning, TEXT("FindMatchBoardManager: Was not able to find a board manager in world %s"), *World->GetPathName());
+	}
+
+	return nullptr;
 }

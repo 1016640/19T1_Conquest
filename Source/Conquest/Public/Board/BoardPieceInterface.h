@@ -6,6 +6,8 @@
 #include "UObject/Interface.h"
 #include "BoardPieceInterface.generated.h"
 
+class ATile;
+
 UINTERFACE(MinimalAPI)
 class UBoardPieceInterface : public UInterface
 {
@@ -19,4 +21,11 @@ class CONQUEST_API IBoardPieceInterface
 {
 	GENERATED_BODY()
 
+public:
+
+	/** Event for when this board piece has been placed on given tile (called on clients) */
+	virtual void PlacedOnTile(ATile* Tile) { check(Tile != nullptr); }
+
+	/** Event for when this board piece has been removed from the tile it once occupied (called on clients) */
+	virtual void RemovedOffTile() {  }
 };

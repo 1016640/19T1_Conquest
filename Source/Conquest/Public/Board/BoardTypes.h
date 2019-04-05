@@ -55,6 +55,35 @@ public:
 		Path.Empty();
 	}
 
+	/** Get the number of tiles in this path */
+	FORCEINLINE int32 Num() const
+	{
+		return Path.Num();
+	}
+
+	/** Get the last tile in the path */
+	FORCEINLINE ATile* Goal() const
+	{
+		if (IsValid())
+		{
+			return Path.Last();
+		}
+
+		return nullptr;
+	}
+
+public:
+
+	FORCEINLINE ATile* operator [] (int32 Index)
+	{
+		return Path[Index];
+	}
+
+	FORCEINLINE ATile* operator [] (int32 Index) const
+	{
+		return Path[Index];
+	}
+
 public:
 
 	/** The tiles to follow, in order from first to last */

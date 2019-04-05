@@ -176,6 +176,10 @@ public:
 
 public:
 
+	/** If the given tile is a portal tile. Returns index of player if portal tile, else -1 */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	int32 IsPlayerPortalTile(const ATile* Tile) const;
+
 	/** Get the tile marked as being player 1 portal (can return null) */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	ATile* GetPlayer1PortalTile() const { return GetTileAt(Player1PortalHex); }
@@ -205,6 +209,9 @@ public:
 	/** Get the tile at given hex value */
 	FORCEINLINE ATile* GetTileAt(const FIntVector& Hex) const { return HexGrid.GetTile(Hex); }
 
+	/** Get the tile at given location */
+	FORCEINLINE ATile* GetTileAtLocation(const FVector& Location) const;
+
 private:
 
 	/** Hex value for the first players portal (starting tile) */
@@ -214,5 +221,15 @@ private:
 	/** Hex value for the second players portal (starting tile) */
 	UPROPERTY()
 	FIntVector Player2PortalHex;
+
+public:
+
+	/** Attempts to place the board piece on given tile. This only runs on the server */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
+	bool PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const;
+
+	/** Clears the board piece set on given tile. This only runs on the server */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
+	bool ClearBoardPieceOnTile(ATile* Tile) const;
 };
 
