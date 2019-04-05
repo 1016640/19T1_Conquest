@@ -28,6 +28,9 @@ enum class EHexGridPathFindResult
 	/** Start or Goal locations were invalid */
 	InvalidTargets,
 
+	/** Max distance was invalid */
+	InvalidDistance,
+
 	/** Grid had not been generated */
 	NoGridGenerated
 };

@@ -8,7 +8,7 @@ UBoardPathFollowingComponent::UBoardPathFollowingComponent()
 	CurrentTileIndex = 0;
 }
 
-void UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
+bool UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
 {
 	if (InPath.IsValid())
 	{
@@ -16,7 +16,11 @@ void UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
 
 		BoardPath = InPath;
 		Status = EPathFollowingStatus::Moving;
+
+		return true;
 	}
+
+	return false;
 }
 
 void UBoardPathFollowingComponent::Reset()

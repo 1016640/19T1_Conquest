@@ -33,7 +33,7 @@ public:
 public:
 
 	/** Will follow the given path (only if not already following one) */
-	void FollowPath(const FBoardPath& InPath);
+	bool FollowPath(const FBoardPath& InPath);
 
 private:
 

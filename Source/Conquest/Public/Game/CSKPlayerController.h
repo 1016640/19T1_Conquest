@@ -48,6 +48,12 @@ protected:
 
 public:
 
+	/** This controllers player ID, this should never be altered */
+	UPROPERTY(Transient, DuplicateTransient, Replicated)
+	int32 CSKPlayerID;
+
+public:
+
 	/** Get possessed pawn as a CSK pawn */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPawn* GetCSKPawn() const;
@@ -81,6 +87,10 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
 
+	/** If we are accepting input via select tile (only valid on the client) */
+	UPROPERTY(Transient)
+	uint32 bCanSelectTile : 1;
+
 public:
 
 	/** Set the castle this player manages. This only works on the server */
@@ -110,7 +120,7 @@ public:
 	void OnReadyForCoinFlip();
 
 	/** Called by the game mode when transitioning to the board */
-	void OnTransitionToBoard(int32 PlayerID);
+	void OnTransitionToBoard();
 
 private:
 
@@ -120,32 +130,54 @@ private:
 
 public:
 
-	/** Starts this players action phase */
-	void StartActionPhase();
+	/** Enables/Disables this players action phase */
+	void SetActionPhaseEnabled(bool bEnabled);
+
+	/** Sets the action mode for this player */
+	void SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly = false);
 
 	/** Enters the given action mode */
-	//UFUNCTION(BlueprintCallable, Category = CSK)
-	//void SetActionMode(ECSKActionPhaseMode NewMode);
-
-public:
-
-	/** If this castle is allowed to request a castle move */
-	bool CanRequestMoveAction() const;
-
-	/** Get if this player cen enter given action phase state */
-	//UFUNCTION(BlueprintPure, Category = CSK)
-	//bool CanEnterActionState(ECSKPlayerActionPhaseState ActionState) const;
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
 private:
 
+	/** Set action mode on the server */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SetActionMode(ECSKActionPhaseMode NewMode);
+
+public:
+
+	/** If this player is currently performing their action phase */
+	FORCEINLINE bool IsPerformingActionPhase() const { return bIsActionPhase; }
+
+	/** Get if this player cen enter given action mode */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanEnterActionMode(ECSKActionPhaseMode ActionMode) const;
+
+	/** If this castle is allowed to request a castle move */
+	bool CanRequestCastleMoveAction() const;
+
+protected:
+
+	/** Event for when the action phase mode has changed */
+	UFUNCTION(BlueprintImplementableEvent, Category = CSK)
+	void OnSelectionModeChanged(ECSKActionPhaseMode NewMode);
+
+private:
+
+	/** Notify the is action phase has been replicated */
+	UFUNCTION()
+	void OnRep_bIsActionPhase();
+
 	/** Notify that remaining actions has been replicated */
 	UFUNCTION()
-	void OnRep_RemainingActions() { }
+	void OnRep_RemainingActions();
 
 protected:
 
 	/** If it is our action phase */
-	UPROPERTY(BlueprintReadOnly, Category = CSK)
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_bIsActionPhase, Category = CSK)
 	uint32 bIsActionPhase : 1;
 
 	/** The current action mode we are in */
@@ -156,22 +188,19 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
+
+
+
 public:
 
-	/** Notify from the game mode that our move request was accepted */
-	void ConfirmedTravelToTile(const FBoardPath& BoardPath);
-
-	/** Notify from the game state to track castle in motion */
+	/** Notify that an action phase move request has been confirmed */
 	UFUNCTION(Client, Reliable)
-	void Client_FocusCastleDuringMovement(ACastle* MovingCastle);
+	void Client_OnCastleMoveRequestConfirmed(ACastle* MovingCastle);
 
-	/** Notify from the game state that we can stop focusing castle */
+	/** Notify that an action phase move request has finished */
 	UFUNCTION(Client, Reliable)
-	void Client_StopFocusingCastle();
+	void Client_OnCastleMoveRequestFinished();
 
-protected:
-
-	/** Attempts to move our castle to given tile */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestTravelToTile(ATile* Tile);
+	/** Notify that our move request has finished */
+	void OnMoveActionFinished();
 };

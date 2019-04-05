@@ -31,7 +31,7 @@ public:
 public:
 
 	/** Follows the given path */
-	void FollowPath(const FBoardPath& InPath);
+	bool FollowPath(const FBoardPath& InPath);
 
 protected:
 

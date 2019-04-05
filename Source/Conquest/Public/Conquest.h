@@ -68,7 +68,7 @@ UENUM(BlueprintType)
 enum class ECSKActionPhaseMode : uint8
 {
 	/** No action */
-	None			= 0 UMETA(Hidden="true"),
+	None			= 0,
 
 	/** Player is currently selecting a tile to move to */
 	MoveCastle		= 1,

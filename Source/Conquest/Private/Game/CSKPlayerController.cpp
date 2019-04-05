@@ -18,15 +18,15 @@
 ACSKPlayerController::ACSKPlayerController()
 {
 	bShowMouseCursor = true;
-
 	CachedCSKHUD = nullptr;
 	CastleController = nullptr;
 	CastlePawn = nullptr;
+	CSKPlayerID = -1;
 	HoveredTile = nullptr;
-
-	{
-	
-	}
+	bCanSelectTile = false;
+	bIsActionPhase = false;
+	SelectedAction = ECSKActionPhaseMode::None;
+	RemainingActions = ECSKActionPhaseMode::All;
 }
 
 void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
@@ -42,16 +42,12 @@ void ACSKPlayerController::Tick(float DeltaTime)
 
 	if (IsLocalPlayerController())
 	{
-		// TODO: Should perform this only client side
-		HoveredTile = GetTileUnderMouse();
-		if (HoveredTile)
+		// Update the tile under the mouse
+		ATile* TileUnderMouse = GetTileUnderMouse();
+		if (TileUnderMouse)
 		{
-			HoveredTile->bHighlightTile = true;
-			UKismetSystemLibrary::PrintString(this, FString("Hovering over tile with hex: ") + HoveredTile->GetGridHexValue().ToString(), true, false, FLinearColor::Green, 0.f);
-		}
-		else
-		{
-			UKismetSystemLibrary::PrintString(this, FString("No Tile hovered"), true, false, FLinearColor::Green, 0.f);
+			// TODO: want to tell tile we are not hovering
+			// want to tell new tile we are hovering
 		}
 
 		#if WITH_EDITORONLY_DATA
@@ -76,8 +72,11 @@ void ACSKPlayerController::SetupInputComponent()
 void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME_CONDITION(ACSKPlayerController, CastlePawn, COND_AutonomousOnly);
+	
+	DOREPLIFETIME(ACSKPlayerController, CSKPlayerID);
+	DOREPLIFETIME(ACSKPlayerController, CastlePawn);
+	DOREPLIFETIME(ACSKPlayerController, bIsActionPhase);
+	DOREPLIFETIME(ACSKPlayerController, RemainingActions);
 }
 
 ACSKPawn* ACSKPlayerController::GetCSKPawn() const
@@ -125,9 +124,29 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
+	if (!bCanSelectTile)
+	{
+		return;
+	}
+
+	// Are we allowed to perform actions
 	if (bIsActionPhase)
 	{
-
+		switch (SelectedAction)
+		{
+			case ECSKActionPhaseMode::MoveCastle:
+			{
+				break;
+			}
+			case ECSKActionPhaseMode::BuildTowers:
+			{
+				break;
+			}
+			case ECSKActionPhaseMode::CastSpell:
+			{
+				break;
+			}
+		}
 	}
 }
 
@@ -149,7 +168,7 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 	}
 }
 
-void ACSKPlayerController::OnTransitionToBoard(int32 PlayerID)
+void ACSKPlayerController::OnTransitionToBoard()
 {
 	if (ensure(HasAuthority()))
 	{
@@ -157,12 +176,12 @@ void ACSKPlayerController::OnTransitionToBoard(int32 PlayerID)
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
 		{
-			ATile* PortalTile = BoardManager->GetPlayerPortalTile(PlayerID);
+			ATile* PortalTile = BoardManager->GetPlayerPortalTile(CSKPlayerID);
 			check(PortalTile);
 
 			if (!BoardManager->PlaceBoardPieceOnTile(CastlePawn, PortalTile))
 			{
-				UE_LOG(LogConquest, Warning, TEXT("Unable to set player %i castle on portal tile as it's already occupied!"), PlayerID);
+				UE_LOG(LogConquest, Warning, TEXT("Unable to set player %i castle on portal tile as it's already occupied!"), CSKPlayerID);
 			}
 		}
 
@@ -171,64 +190,96 @@ void ACSKPlayerController::OnTransitionToBoard(int32 PlayerID)
 	}
 }
 
-void ACSKPlayerController::StartActionPhase()
+void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 {
 	if (HasAuthority())
 	{
-		bIsActionPhase = true;
-		
-		RemainingActions = ECSKActionPhaseMode::All;
-		//SetActionMode(ECSKActionPhaseMode::MoveCastle);		
+		if (bIsActionPhase != bEnabled)
+		{
+			bIsActionPhase = bEnabled;
+			RemainingActions = bEnabled ? ECSKActionPhaseMode::All : ECSKActionPhaseMode::None;
+
+			// Default to no action selected
+			if (IsLocalPlayerController())
+			{
+				SetActionMode(ECSKActionPhaseMode::None);
+			}
+		}
 	}
 }
 
-bool ACSKPlayerController::CanRequestMoveAction() const
+void ACSKPlayerController::SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly)
 {
-	if (bIsActionPhase && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::MoveCastle))
+	if (NewMode == ECSKActionPhaseMode::All)
 	{
-		return true;
+		UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController::SetActionMode: PhaseMode::All is not accepted"));
+		return;
+	}
+
+	if (NewMode != SelectedAction && CanEnterActionMode(NewMode))
+	{
+		SelectedAction = NewMode;
+
+		// Only call event on the client
+		if (IsLocalPlayerController())
+		{
+			OnSelectionModeChanged(NewMode);
+		}
+
+		// We may be setting client side, we should also inform the server
+		if (!bClientOnly && !HasAuthority())
+		{
+			Server_SetActionMode(NewMode);
+		}
+	}
+}
+
+void ACSKPlayerController::BP_SetActionMode(ECSKActionPhaseMode NewMode)
+{
+	SetActionMode(NewMode);
+}
+
+bool ACSKPlayerController::Server_SetActionMode_Validate(ECSKActionPhaseMode NewMode)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_SetActionMode_Implementation(ECSKActionPhaseMode NewMode)
+{
+	SetActionMode(NewMode);
+}
+
+bool ACSKPlayerController::CanEnterActionMode(ECSKActionPhaseMode ActionMode) const
+{
+	if (IsPerformingActionPhase())
+	{
+		return ActionMode == ECSKActionPhaseMode::None ? true : EnumHasAllFlags(RemainingActions, ActionMode);
 	}
 
 	return false;
 }
 
-void ACSKPlayerController::ConfirmedTravelToTile(const FBoardPath& BoardPath)
+bool ACSKPlayerController::CanRequestCastleMoveAction() const
 {
-	check(BoardPath.IsValid());
-
-	CastleController->FollowPath(BoardPath);
-}
-
-void ACSKPlayerController::Client_FocusCastleDuringMovement_Implementation(ACastle* MovingCastle)
-{
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::MoveCastle))
 	{
-		Pawn->TrackActor(MovingCastle);
+		// We can only move if we have a castle to move
+		return CastlePawn != nullptr && CastleController != nullptr;
 	}
+
+	return false;
 }
 
-void ACSKPlayerController::Client_StopFocusingCastle_Implementation()
+void ACSKPlayerController::OnRep_bIsActionPhase()
 {
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	SetActionMode(ECSKActionPhaseMode::None, true);
+}
+
+void ACSKPlayerController::OnRep_RemainingActions()
+{
+	if (!EnumHasAllFlags(RemainingActions, SelectedAction))
 	{
-		Pawn->TrackActor(nullptr);
-	}
-}
-
-bool ACSKPlayerController::Server_RequestTravelToTile_Validate(ATile* Tile)
-{
-	return true;
-}
-
-void ACSKPlayerController::Server_RequestTravelToTile_Implementation(ATile* Tile)
-{
-	// Gamemode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		GameMode->RequestPlayerMoveTo(this, Tile);
+		SetActionMode(ECSKActionPhaseMode::None, true);
 	}
 }
 
@@ -246,5 +297,35 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 	else
 	{
 		UE_LOG(LogConquest, Warning, TEXT("Client was unable to travel to castle as pawn was null! (Probaly not replicated yet)"));
+	}
+}
+
+void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(ACastle* MovingCastle)
+{
+	bCanSelectTile = false;
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		Pawn->TrackActor(MovingCastle);
+	}
+}
+
+void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
+{
+	bCanSelectTile = true;
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		Pawn->TrackActor(nullptr);
+	}
+}
+
+void ACSKPlayerController::OnMoveActionFinished()
+{
+	if (HasAuthority() && IsPerformingActionPhase())
+	{
+		RemainingActions &= ~ECSKActionPhaseMode::MoveCastle;
 	}
 }

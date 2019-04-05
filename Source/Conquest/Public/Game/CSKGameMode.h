@@ -12,6 +12,8 @@ class ACastleAIController;
 class ACSKPlayerController;
 class ATile;
 
+using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
+
 /**
  * Manages and handles events present in CSK
  */
@@ -70,28 +72,30 @@ private:
 public:
 
 	/** Get player ones controller */
-	FORCEINLINE ACSKPlayerController* GetPlayer1Controller() const { return Player1PC; }
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerController* GetPlayer1Controller() const { return Players[0]; }
 
 	/** Get player twos controller */
-	FORCEINLINE ACSKPlayerController* GetPlayer2Controller() const { return Player2PC; }
-
-	/** Get if controller is either player 1 or player 2 (-1 if niether) */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	int32 GetControllerAsPlayerID(AController* Controller) const;
+	ACSKPlayerController* GetPlayer2Controller() const { return Players[1]; }
 
-	/** Get both players in an array */
+	/** Get both players in the array*/
+	const FCSKPlayerControllerArray& GetPlayers() const { return Players; }
+
+	/** Based on given player ID, get the opposing players controller.
+	E.G. Passing ID for player 1 (0) will return player 2s controller */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	TArray<ACSKPlayerController*> GetCSKPlayerArray() const;
+	ACSKPlayerController* GetOpposingPlayersController(int32 PlayerID) const;
+
+private:
+
+	/** Helper function for setting a player to ID */
+	void SetPlayerWithID(ACSKPlayerController* Controller, int32 PlayerID);
 
 protected:
 
-	/** The first player that joined the game (should be server player is listen server) */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = CSK)
-	ACSKPlayerController* Player1PC;
-
-	/** The second player that joined (should always be a remote client) */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = CSK)
-	ACSKPlayerController* Player2PC;
+	/** Array containing both players in order */
+	FCSKPlayerControllerArray Players;
 
 	/** The class to use to spawn the first players castle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes, meta = (DisplayName = "Player 1 Castle Class"))
@@ -107,9 +111,13 @@ protected:
 
 public:
 
-	/** Enters the given state if not set already */
+	/** Enters the given match state if not set already */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void EnterMatchState(ECSKMatchState NewState);
+
+	/** Enters the given round state if not set already */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void EnterRoundState(ECSKRoundState NewState);
 
 	/** Starts the match only if allowed */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -128,15 +136,16 @@ public:
 	/** Get the current state of the match */
 	FORCEINLINE ECSKMatchState GetMatchState() const { return MatchState; }
 
+	/** Get the current state of the round */
+	FORCEINLINE ECSKRoundState GetRoundState() const { return IsMatchInProgress() ? RoundState : ECSKRoundState::Invalid; }
+
 	/** Get if we should start the match */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
 	bool ShouldStartMatch() const;
-	virtual bool ShouldStartMatch_Implementation() const;
 
 	/** Get if we should finish the match */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
 	bool ShouldEndMatch() const;
-	virtual bool ShouldEndMatch_Implementation() const;
 
 	/** Get if the match is in progress */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -146,28 +155,32 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool HasMatchFinished() const;
 
+	/** Get if an action phase is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsActionPhaseInProgress() const;
+
 protected:
 
-	/** Notify that we can run anything that can start before the match */
+	/** Match state notifies */
 	virtual void OnStartWaitingPreMatch();
-
-	/** Notify that the match can now start */
 	virtual void OnMatchStart();
-
-	/** Notify that the match has come to a conclusion. We should
-	now have a small cooldown or immediately exit the game */
 	virtual void OnMatchFinished();
-
-	/** Notify that post match stage has concluded and players can now return to lobby */
 	virtual void OnFinishedWaitingPostMatch();
-
-	/** Notify that the game has been abandoned */
 	virtual void OnMatchAbort();
+
+	/** Round state notifies */
+	virtual void OnCollectionPhaseStart();
+	virtual void OnFirstActionPhaseFinished();
+	virtual void OnSecondActionPhaseFinished();
+	virtual void OnEndRoundPhaseFinished();
 
 private:
 
-	/** Determines the state change event to call based on previous and new state */
-	void HandleStateChange(ECSKMatchState OldState, ECSKMatchState NewState);
+	/** Determines the match state change event to call based on previous and new match state */
+	void HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState);
+
+	/** Determines the round state change event to called based on previous and new round state */
+	void HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundState NewState);
 
 protected:
 
@@ -175,15 +188,68 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient)
 	ECSKMatchState MatchState;
 
-protected:
-
-	/** Notify that a client has disconnected */
-	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
+	/** The current state of the round */
+	UPROPERTY(BlueprintReadOnly, Transient)
+	ECSKRoundState RoundState;
 
 public:
 
-	/** Performs a coin flip function, should return true if heads, false if tails */
-	UFUNCTION(BlueprintPure, BlueprintNativeEvent, Category = CSK)
+	/** Will attempt to move active players castle towards given tile. Doing this will
+	lock the ability for any other action to be made until castle reaches it's destination */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	bool RequestCastleMove(ATile* Goal);
+
+private:
+
+	/** Starts movement request for active player. The request still has the chance of failing */
+	bool ConfirmCastleMove(const FBoardPath& BoardPath);
+
+	/** Finishes movement request for active player. This is after the castle has reached its destination */
+	void FinishCastleMove(ATile* DestinationTile);
+
+	/** Notify from active players castle that it has reached a new tile */
+	UFUNCTION()
+	void OnActivePlayersPathSegmentComplete(ATile* SegmentTile);
+
+	/** Notify from the active players castle that is has reached its destination */
+	UFUNCTION()
+	void OnActivePlayersPathFollowComplete(ATile* DestinationTile);
+
+	/** Helper function for checking if active player has moved onto the enemies portal tile.
+	Will return true if the win condition has been met, false otherwise */
+	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
+
+public:
+
+	/** If we are waiting on a move request to finsih */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsPendingCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
+
+protected:
+
+	/** The controller for the player performing their action phase */
+	UPROPERTY(Transient)
+	ACSKPlayerController* ActionPhaseActiveController;
+
+private:
+
+	/** If we are waiting for active players move action to complete */
+	uint32 bWaitingOnActivePlayerMoveAction : 1;
+
+	/** Delegate handle for when active players castle completes a segment of its path following */
+	FDelegateHandle Handle_ActivePlayerPathSegment;
+
+	/** Delegate handle for when active players castle reaches its destination tile */
+	FDelegateHandle Handle_ActivePlayerPathComplete;
+
+
+
+
+public:
+
+	/** Called by game state when performing the coin flip. This will decide
+	which players goes first-*/
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	bool CoinFlip() const;
 
 public:
@@ -226,7 +292,7 @@ protected:
 	int32 CollectionPhaseGold;
 
 	/** The max amount of gold a player can hold at a time */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources, meta = (ClampMin = 0))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxGold;
 
 	/** The amount of mana each player starts with */
@@ -238,8 +304,20 @@ protected:
 	int32 CollectionPhaseMana;
 
 	/** The max amount of mana a player can hold at a time */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources, meta = (ClampMin = 0))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxMana;
+
+	/** The max amount of NORMAL towers a player can have constructed at once (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxNumTowers;
+
+	/** The max amount of duplicates of the same NORMAL tower a player can construct (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxNumDuplicatedTowers;
+
+	/** The max amount of LEGENDARY towers a player can have constructed at once (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxNumLegendaryTowers;
 
 public:
 
@@ -260,6 +338,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	float ActionPhaseTime;
 
+	/** Additional time to give players after having finished an action during their action phase */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	float BonusActionPhaseTime;
+
 	/** The min amount of tiles a player can move per action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
 	int32 MinTileMovements;
@@ -268,16 +350,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
 	int32 MaxTileMovements;
 
-public:
+	/** The limit to how many buildings can be constructed per action phase (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxTowerConstructs;
 
-	/** Checks if player can move their castle to requested tile. Will do so if allowed */
-	void RequestPlayerMoveTo(ACSKPlayerController* Controller, ATile* Tile) const;
+protected:
 
-private:
+	/** Notify that a client has disconnected */
+	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
 
-	/** Get if player is allowed to travel from starting tile to goal tile */
-	bool CanPlayerMoveToTile(ACSKPlayerController* Controller, ATile* From, ATile* To) const;
-
-	/** Finilazes players request to move their castle */
-	void ConfirmedPlayerMoveRequest(ACSKPlayerController* Controller, const FBoardPath& Path) const;
 };

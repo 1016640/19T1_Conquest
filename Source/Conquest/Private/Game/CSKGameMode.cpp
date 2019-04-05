@@ -10,12 +10,16 @@
 #include "CSKPlayerState.h"
 
 #include "BoardManager.h"
+#include "BoardPathFollowingComponent.h"
 #include "Castle.h"
 #include "CastleAIController.h"
 #include "GameDelegates.h"
 #include "Tile.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+
+// temp
+#include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "CSKGameMode"
 
@@ -32,8 +36,6 @@ ACSKGameMode::ACSKGameMode()
 
 	DefaultPlayerName = LOCTEXT("DefaultPlayerName", "Sorcerer");
 
-	Player1PC = nullptr;
-	Player2PC = nullptr;
 	Player1CastleClass = ACastle::StaticClass();
 	Player2CastleClass = ACastle::StaticClass();
 	CastleAIControllerClass = ACastleAIController::StaticClass();
@@ -45,9 +47,15 @@ ACSKGameMode::ACSKGameMode()
 	MaxGold = 30;
 	MaxMana = 30;
 
+	MaxNumTowers = 7;
+	MaxNumLegendaryTowers = 1;
+	MaxNumDuplicatedTowers = 2;
+
 	ActionPhaseTime = 90.f;
+	BonusActionPhaseTime = 20.f;
 	MinTileMovements = 1;
 	MaxTileMovements = 2;
+	MaxTowerConstructs = 0;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -86,6 +94,7 @@ void ACSKGameMode::StartPlay()
 		EnterMatchState(ECSKMatchState::WaitingPreMatch);
 	}
 
+	// We might be able to start immediately
 	if (ShouldStartMatch())
 	{
 		StartMatch();
@@ -101,21 +110,21 @@ void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	// We need to set which player this is before continuing the login
 	{
-		if (Player1PC)
+		if (GetPlayer1Controller() != nullptr)
 		{		
 			// We should only ever have two players
-			if (!ensure(!Player2PC))
+			if (!ensure(!GetPlayer2Controller()))
 			{
 				UE_LOG(LogConquest, Error, TEXT("More than 2 people of joined a CSK match even though only 2 max are allowed"));
 			}
 			else
 			{
-				Player2PC = CastChecked<ACSKPlayerController>(NewPlayer);
+				SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
 			}
 		}
 		else
 		{
-			Player1PC = CastChecked<ACSKPlayerController>(NewPlayer);
+			SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 0);
 		}
 
 	}
@@ -125,7 +134,7 @@ void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 
 void ACSKGameMode::Logout(AController* Exiting)
 {
-	if (GetControllerAsPlayerID(Exiting))
+	if (MatchState != ECSKMatchState::LeavingGame)
 	{
 		// TODO: Would want to have the exit option inform the server to end the game instead of abort like this
 		AbortMatch();
@@ -179,7 +188,7 @@ bool ACSKGameMode::IsMatchValid() const
 {
 	if (HasMatchStarted())
 	{
-		return (Player1PC != nullptr && Player2PC != nullptr);
+		return (Players[0] != nullptr && Players[1] != nullptr);
 	}
 
 	return true;
@@ -187,7 +196,7 @@ bool ACSKGameMode::IsMatchValid() const
 
 ACastleAIController* ACSKGameMode::SpawnDefaultCastleFor(ACSKPlayerController* NewPlayer) const
 {
-	int32 PlayerID = GetControllerAsPlayerID(NewPlayer);
+	int32 PlayerID = NewPlayer ? NewPlayer->CSKPlayerID : -1;
 	if (PlayerID != -1)
 	{
 		TSubclassOf<ACastle> CastleTemplate = PlayerID == 0 ? Player1CastleClass : Player2CastleClass;
@@ -283,33 +292,27 @@ ACastleAIController* ACSKGameMode::SpawnCastleControllerFor(ACastle* Castle) con
 	return NewController;
 }
 
-int32 ACSKGameMode::GetControllerAsPlayerID(AController* Controller) const
+ACSKPlayerController* ACSKGameMode::GetOpposingPlayersController(int32 PlayerID) const
 {
-	if (Controller)
+	if (PlayerID == 0 || PlayerID == 1)
 	{
-		if (Controller == Player1PC)
-		{
-			return 0;
-		}
-
-		if (Controller == Player2PC)
-		{
-			return 1;
-		}
+		return Players[FMath::Abs(PlayerID - 1)];
 	}
 
-	return -1;
+	return nullptr;
 }
 
-TArray<ACSKPlayerController*> ACSKGameMode::GetCSKPlayerArray() const
+void ACSKGameMode::SetPlayerWithID(ACSKPlayerController* Controller, int32 PlayerID)
 {
-	if (Player1PC != nullptr && Player2PC != nullptr)
+	if (!Controller || Controller->CSKPlayerID >= 0)
 	{
-		return TArray<ACSKPlayerController*>{ Player1PC, Player2PC };
+		return;
 	}
-	else
+
+	if (Players.IsValidIndex(PlayerID))
 	{
-		return TArray<ACSKPlayerController*>();
+		Players[PlayerID] = Controller;
+		Controller->CSKPlayerID = PlayerID;
 	}
 }
 
@@ -326,13 +329,38 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 		MatchState = NewState;
 
 		// Handle any changes required due to new state
-		HandleStateChange(OldState, NewState);
+		HandleMatchStateChange(OldState, NewState);
 
 		// Inform clients of change
 		ACSKGameState* CSKGameState = GetGameState<ACSKGameState>();
 		if (CSKGameState)
 		{
 			CSKGameState->SetMatchState(NewState);
+		}
+	}
+}
+
+void ACSKGameMode::EnterRoundState(ECSKRoundState NewState)
+{
+	// Only enter new states once we have begun the game
+	if (NewState != RoundState && IsMatchInProgress())
+	{
+		#if WITH_EDITOR
+		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKRoundState"));
+		UE_LOG(LogConquest, Log, TEXT("Entering Round State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
+		#endif
+
+		ECSKRoundState OldState = RoundState;
+		RoundState = NewState;
+
+		// Handle any changes required due to new state
+		HandleRoundStateChange(OldState, NewState);
+
+		// Inform clients of change
+		ACSKGameState* CSKGameState = GetGameState<ACSKGameState>();
+		if (CSKGameState)
+		{
+			CSKGameState->SetRoundState(NewState);
 		}
 	}
 }
@@ -370,12 +398,15 @@ bool ACSKGameMode::ShouldStartMatch_Implementation() const
 	}
 
 	// Both players need to be ready
-	if (Player1PC && Player2PC)
+	for (ACSKPlayerController* Controller : Players)
 	{
-		return Player1PC->HasClientLoadedCurrentWorld() && Player2PC->HasClientLoadedCurrentWorld();
+		if (!Controller || !Controller->HasClientLoadedCurrentWorld())
+		{
+			return false;
+		}
 	}
 
-	return false;
+	return true;
 }
 
 bool ACSKGameMode::ShouldEndMatch_Implementation() const
@@ -397,6 +428,16 @@ bool ACSKGameMode::HasMatchFinished() const
 		MatchState == ECSKMatchState::Aborted;
 }
 
+bool ACSKGameMode::IsActionPhaseInProgress() const
+{
+	if (IsMatchInProgress())
+	{
+		return RoundState == ECSKRoundState::FirstActionPhase || RoundState == ECSKRoundState::SecondActionPhase;
+	}
+
+	return false;
+}
+
 void ACSKGameMode::OnStartWaitingPreMatch()
 {
 	// Allow actors in the world to start ticking while we wait
@@ -407,7 +448,7 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 // TODO: Fixup this process once I get a better understanding
 void ACSKGameMode::OnMatchStart()
 {
-	// Restart all players
+	// Restart all players (even those that aren't participating
 	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
 	{
 		APlayerController* PlayerController = Iterator->Get();
@@ -428,10 +469,14 @@ void ACSKGameMode::OnMatchStart()
 	WorldSettings->NotifyMatchStarted();
 
 	// Have each player transition to their board
-	Player1PC->OnTransitionToBoard(0);
-	Player2PC->OnTransitionToBoard(1);
+	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	{
+		Players[i]->OnTransitionToBoard();
+	}
 
 	SetActorTickEnabled(false);
+
+	EnterRoundState(ECSKRoundState::CollectionPhase);
 }
 
 void ACSKGameMode::OnMatchFinished()
@@ -446,7 +491,24 @@ void ACSKGameMode::OnMatchAbort()
 {
 }
 
-void ACSKGameMode::HandleStateChange(ECSKMatchState OldState, ECSKMatchState NewState)
+void ACSKGameMode::OnCollectionPhaseStart()
+{
+	CollectResourcesForPlayers();
+}
+
+void ACSKGameMode::OnFirstActionPhaseFinished()
+{
+}
+
+void ACSKGameMode::OnSecondActionPhaseFinished()
+{
+}
+
+void ACSKGameMode::OnEndRoundPhaseFinished()
+{
+}
+
+void ACSKGameMode::HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState)
 {
 	switch (NewState)
 	{
@@ -482,10 +544,257 @@ void ACSKGameMode::HandleStateChange(ECSKMatchState OldState, ECSKMatchState New
 	}
 }
 
-void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
+void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundState NewState)
 {
-	AbortMatch();
+	switch (NewState)
+	{
+		case ECSKRoundState::CollectionPhase:
+		{
+			OnCollectionPhaseStart();
+			break;
+		}
+		case ECSKRoundState::FirstActionPhase:
+		{
+			OnFirstActionPhaseFinished();
+			break;
+		}
+		case ECSKRoundState::SecondActionPhase:
+		{
+			OnSecondActionPhaseFinished();
+			break;
+		}
+		case ECSKRoundState::EndRoundPhase:
+		{
+			OnEndRoundPhaseFinished();
+			break;
+		}
+	}
 }
+
+
+
+
+bool ACSKGameMode::RequestCastleMove(ATile* Goal)
+{
+	if (!Goal)
+	{
+		return false;
+	}
+
+	// Player is not the active player
+	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
+	{
+		return false;
+	}
+
+	// TODO: Add check if round state is right and move action is allowed
+	// for now
+	if (bWaitingOnActivePlayerMoveAction)
+	{
+		return false;
+	}
+
+	// This player might have already used all their moves
+	if (ActionPhaseActiveController->CanRequestCastleMoveAction())
+	{
+		ACastle* Castle = ActionPhaseActiveController->GetCastlePawn();
+		ATile* Origin = Castle->GetCachedTile();
+
+		if (!Origin || Origin == Goal)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestCastleMove: Move request "
+				"denied as castle tile is either invalid or the move goal"));
+
+			return false;
+		}
+
+		// The max amount of tiles this player is allowed to move, a path exceeding this amount will result in being denied
+		int32 TileSegments = MaxTileMovements;
+
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (ensure(PlayerState))
+		{
+			TileSegments -= PlayerState->GetTilesTraversedThisRound();
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestCastleMove: Player may exceed "
+				"max tile movements per turn as player state is not of CSKPlayerState"));
+		}
+
+		if (IsCountWithinTileTravelLimits(TileSegments))
+		{
+			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+			check(BoardManager);
+
+			// Confirm request if path is successfully found
+			FBoardPath OutBoardPath;
+			if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
+			{
+				ConfirmCastleMove(OutBoardPath);
+			}
+		}
+	}
+
+	return false;
+}
+
+bool ACSKGameMode::ConfirmCastleMove(const FBoardPath& BoardPath)
+{
+	check(IsActionPhaseInProgress());
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	ACastle* Castle = ActionPhaseActiveController->GetCastlePawn();
+	check(Castle);
+
+	// Move castle off of tile
+	{
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
+
+		BoardManager->ClearBoardPieceOnTile(Castle->GetCachedTile());
+	}
+
+	// Inform castle AI to follow path
+	{
+		ACastleAIController* CastleController = ActionPhaseActiveController->GetCastleController();
+		check(CastleController);
+
+		if (CastleController->FollowPath(BoardPath))
+		{
+			// Hook callbacks
+			UBoardPathFollowingComponent* FollowComp = CastleController->GetBoardPathFollowingComponent();
+			Handle_ActivePlayerPathSegment = FollowComp->OnBoardSegmentCompleted.AddUObject(this, &ACSKGameMode::OnActivePlayersPathSegmentComplete);
+			Handle_ActivePlayerPathComplete = FollowComp->OnBoardPathFinished.AddUObject(this, &ACSKGameMode::OnActivePlayersPathFollowComplete);
+
+			bWaitingOnActivePlayerMoveAction = true;
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::ConfirmCastleMove: FollowPath for castle controller failed!"));
+			return false;
+		}
+	}
+
+	// Inform game state
+	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			CSKGameState->HandleMoveRequestConfirmed();
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnCastleMoveRequestConfirmed(Castle);
+		}
+	}
+
+	return true;
+}
+
+void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
+{
+	check(bWaitingOnActivePlayerMoveAction);
+	check(IsActionPhaseInProgress());
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	// Set castle on tile
+	{
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
+
+		BoardManager->PlaceBoardPieceOnTile(ActionPhaseActiveController->GetCastlePawn(), DestinationTile);
+	}
+
+	// Unhook callbacks
+	{
+		ACastleAIController* CastleController = ActionPhaseActiveController->GetCastleController();
+		check(CastleController);
+
+		UBoardPathFollowingComponent* FollowComp = CastleController->GetBoardPathFollowingComponent();
+		FollowComp->OnBoardSegmentCompleted.Remove(Handle_ActivePlayerPathSegment);
+		FollowComp->OnBoardPathFinished.Remove(Handle_ActivePlayerPathComplete);
+
+		bWaitingOnActivePlayerMoveAction = false;
+		Handle_ActivePlayerPathSegment.Reset();
+		Handle_ActivePlayerPathComplete.Reset();
+	}
+
+	// Inform game state
+	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			CSKGameState->HandleMoveRequestFinished();
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnCastleMoveRequestFinished();
+		}
+	}
+
+	ActionPhaseActiveController->OnMoveActionFinished();
+}
+
+void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
+{
+	// Check if active player has won
+	if (!PostCastleMoveCheckWinCondition(SegmentTile))
+	{
+		// We prob don't need to do anything here (PostCastleMove should handle it)
+	}
+}
+
+void ACSKGameMode::OnActivePlayersPathFollowComplete(ATile* DestinationTile)
+{
+	// Check if activer player has won
+	if (!PostCastleMoveCheckWinCondition(DestinationTile))
+	{
+		FinishCastleMove(DestinationTile);
+	}
+}
+
+bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
+{
+	// Can't win post move outside of an action phase
+	if (IsActionPhaseInProgress())
+	{
+		return false;
+	}
+
+	check(ActionPhaseActiveController);
+
+	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	if (BoardManager)
+	{
+		ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		check(OpposingController);
+
+		// Using opposing player ID, get their portal tile to compare
+		int32 PlayerID = OpposingController->CSKPlayerID;
+		if (BoardManager->GetPlayerPortalTile(PlayerID) == SegmentTile)
+		{
+			// TODO: End game with winner (we would also want to stop movement for the castle)
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+
+
+
+
 
 bool ACSKGameMode::CoinFlip_Implementation() const
 {
@@ -494,14 +803,18 @@ bool ACSKGameMode::CoinFlip_Implementation() const
 
 void ACSKGameMode::ResetResourcesForPlayers()
 {
-	ResetPlayerResources(Player1PC, 1);
-	ResetPlayerResources(Player2PC, 2);
+	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	{
+		ResetPlayerResources(Players[i], i + 1);
+	}
 }
 
 void ACSKGameMode::CollectResourcesForPlayers()
 {
-	UpdatePlayerResources(Player1PC, 1);
-	UpdatePlayerResources(Player2PC, 2);
+	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	{
+		UpdatePlayerResources(Players[i], i + 1);
+	}
 }
 
 void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
@@ -547,65 +860,9 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 	}
 }
 
-void ACSKGameMode::RequestPlayerMoveTo(ACSKPlayerController* Controller, ATile* Tile) const
+void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 {
-	if (!Tile)
-	{
-		return;
-	}
-
-	// Make sure the controller can actually request a move
-	if (Controller && Controller->CanRequestMoveAction())
-	{
-		ACastle* Castle = Controller->GetCastlePawn();
-		check(Castle);
-
-		ATile* Origin = Castle->GetCachedTile();
-		if (ensure(Origin) && CanPlayerMoveToTile(Controller, Origin, Tile))
-		{
-			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-			check(BoardManager);
-
-			FBoardPath OutBoardPath;
-			if (BoardManager->FindPath(Origin, Tile, OutBoardPath, false, MaxTileMovements))
-			{
-				ConfirmedPlayerMoveRequest(Controller, OutBoardPath);
-			}
-		}
-	}
-}
-
-bool ACSKGameMode::CanPlayerMoveToTile(ACSKPlayerController* Controller, ATile* From, ATile* To) const
-{
-	check(Controller);
-	check(From != nullptr);
-	check(To != nullptr);
-
-	ACSKPlayerState* State = Controller->GetCSKPlayerState();
-	if (ensure(State))
-	{
-		// Get the amount of tiles between both the castle and the requested tile
-		int32 Distance = FHexGrid::HexDisplacement(From->GetGridHexValue(), To->GetGridHexValue());
-
-		// Player might have already travelled this turn already
-		if (IsCountWithinTileTravelLimits(Distance) && Distance <= State->GetTilesTraversedThisRound())
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-void ACSKGameMode::ConfirmedPlayerMoveRequest(ACSKPlayerController* Controller, const FBoardPath& Path) const
-{
-	Controller->ConfirmedTravelToTile(Path);
-
-	ACSKGameState* CSKGameState = GetGameState<ACSKGameState>();
-	if (CSKGameState)
-	{
-		CSKGameState->OnPlayerTravellingToTile(Controller, Path.Goal());
-	}
+	AbortMatch();
 }
 
 #undef LOCTEXT_NAMESPACE

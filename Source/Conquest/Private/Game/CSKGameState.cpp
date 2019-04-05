@@ -20,11 +20,8 @@ ACSKGameState::ACSKGameState()
 	PreviousRoundState = RoundState;
 
 	StartingPlayerID = 0;
-	CurrentActionPhasePlayer = nullptr;
 
 	RoundsPlayed = 0;
-
-	bWaitingForCastleMove = false;
 }
 
 void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
@@ -79,10 +76,19 @@ void ACSKGameState::SetMatchState(ECSKMatchState NewState)
 	}
 }
 
+void ACSKGameState::SetRoundState(ECSKRoundState NewState)
+{
+	if (HasAuthority())
+	{
+		RoundState = NewState;
+		HandleRoundStateChange(NewState);
+	}
+}
+
 void ACSKGameState::NotifyWaitingForPlayers()
 {
-	UWorld* World = GetWorld();
-	World->GetWorldSettings()->NotifyBeginPlay();
+	AWorldSettings* WorldSettings = GetWorldSettings();
+	WorldSettings->NotifyBeginPlay();
 }
 
 void ACSKGameState::NotifyPerformCoinFlip()
@@ -91,22 +97,11 @@ void ACSKGameState::NotifyPerformCoinFlip()
 
 void ACSKGameState::NotifyMatchStart()
 {
-	UWorld* World = GetWorld();
-	World->GetWorldSettings()->NotifyMatchStarted();
+	AWorldSettings* WorldSettings = GetWorldSettings();
+	WorldSettings->NotifyMatchStarted();
 
 	if (HasAuthority())
 	{
-		// For now (Will move to perform coin flip)
-		ACSKGameMode* CSKGameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-		if (CSKGameMode)
-		{
-			StartingPlayerID = CSKGameMode->CoinFlip() ? 0 : 1;
-		}
-		else
-		{
-			StartingPlayerID = UConquestFunctionLibrary::CoinFlip() ? 0 : 1;
-		}
-
 		bReplicatedHasBegunPlay = true;
 	}
 }
@@ -219,62 +214,4 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	// Setting it same as new state, as previous state will be valid
 	// after being replicated from the server (or before this call)
 	PreviousRoundState = NewState;
-}
-
-void ACSKGameState::OnPlayerTravellingToTile(ACSKPlayerController* Controller, ATile* Goal)
-{
-	if (HasAuthority() && !ensure(Controller == CurrentActionPhasePlayer))
-	{
-		UE_LOG(LogConquest, Warning, TEXT("Game state was notified of player travelling but the player travelling "
-			"is different from current action phase player"));
-		return;
-	}
-
-	// Game mode is only exists on server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		// Get both players to focus on the castle as it moves
-		TArray<ACSKPlayerController*> PlayerPCs = GameMode->GetCSKPlayerArray();
-		for (ACSKPlayerController* PlayerPC : PlayerPCs)
-		{
-			PlayerPC->Client_FocusCastleDuringMovement(Controller->GetCastlePawn());
-		}
-
-		// Listen out for when castle finishes moving
-		ACastleAIController* CastleController = Controller->GetCastleController();
-		check(CastleController);
-		
-		UBoardPathFollowingComponent* FollowComp = CastleController->GetBoardPathFollowingComponent();
-		Handle_PlayerTravelFinished = FollowComp->OnBoardPathFinished.AddUObject(this, &ACSKGameState::OnPlayerTravelFinished);
-
-		bWaitingForCastleMove = true;
-	}
-}
-
-void ACSKGameState::OnPlayerTravelFinished(ATile* DestinationTile)
-{
-	// Game mode is only exists on server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		// Revert both players to freely move their camera
-		TArray<ACSKPlayerController*> PlayerPCs = GameMode->GetCSKPlayerArray();
-		for (ACSKPlayerController* PlayerPC : PlayerPCs)
-		{
-			PlayerPC->Client_StopFocusingCastle();
-		}
-
-		check(CurrentActionPhasePlayer);
-
-		// We no longer need to listen for path events
-		ACastleAIController* CastleController = CurrentActionPhasePlayer->GetCastleController();
-		check(CastleController);
-
-		UBoardPathFollowingComponent* FollowComp = CastleController->GetBoardPathFollowingComponent();
-		FollowComp->OnBoardPathFinished.Remove(Handle_PlayerTravelFinished);
-
-		bWaitingForCastleMove = false;
-		Handle_PlayerTravelFinished.Reset();
-	}
 }

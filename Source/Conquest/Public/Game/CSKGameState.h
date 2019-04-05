@@ -54,6 +54,9 @@ public:
 	/** Sets the state of the match */
 	void SetMatchState(ECSKMatchState NewState);
 
+	/** Sets the state of the round */
+	void SetRoundState(ECSKRoundState NewState);
+
 public:
 
 	/** Get the state of the match */
@@ -64,34 +67,18 @@ public:
 
 protected:
 
-	/** Notify that match has entered pre match waiting phase */
+	/** Match state notifies */
 	void NotifyWaitingForPlayers();
-
-	/** Notify that we should prepare to flip a coin to decide who goes first */
 	void NotifyPerformCoinFlip();
-
-	/** Notify that the match has just begun */
 	void NotifyMatchStart();
-
-	/** Notify that the match has just finished */
 	void NotifyMatchFinished();
-
-	/** Notify that the players are leaving the match */
 	void NotifyPlayersLeaving();
-
-	/** Notify that the match as been abandoned */
 	void NotifyMatchAbort();
 
-	/** Notify that collection phase has started */
+	/** Round state notifies */
 	void NotifyCollectionPhaseStart();
-
-	/** Notify that first action phase has started */
 	void NotifyFirstCollectionPhaseStart();
-
-	/** Notify that first action phase has started */
 	void NotifySecondCollectionPhaseStart();
-
-	/** Notify that end round phase has started */
 	void NotifyEndRoundPhaseStart();
 
 private:
@@ -134,10 +121,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	int32 StartingPlayerID;
 
-	/** Cached pointer to player whose turn it is (only valid on server) */
-	UPROPERTY()
-	ACSKPlayerController* CurrentActionPhasePlayer;
-
 protected:
 
 	/** How many rounds have been played */
@@ -146,20 +129,9 @@ protected:
 
 public:
 
-	/** Notify from the server that a players castle is now moving */
-	void OnPlayerTravellingToTile(ACSKPlayerController* Controller, ATile* Goal);
+	/** Notify that a move request has been confirmed and is starting */
+	void HandleMoveRequestConfirmed() { }
 
-private:
-
-	/** Event for when the players castle has reached it's destination */
-	UFUNCTION()
-	void OnPlayerTravelFinished(ATile* DestinationTile);
-
-private:
-
-	/** If we are waiting for a castle to finish moving */
-	uint32 bWaitingForCastleMove : 1;
-
-	/** Handle to the player travel finished event */
-	FDelegateHandle Handle_PlayerTravelFinished;
+	/** Notify that the current move request has finished */
+	void HandleMoveRequestFinished() { }
 };

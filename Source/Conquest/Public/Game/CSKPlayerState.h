@@ -89,11 +89,11 @@ public:
 
 protected:
 
-	/** The amount of tiles this player has travelled this turn */
+	/** The amount of tiles this player has moved this turn */
 	UPROPERTY(Transient, Replicated)
 	int32 TilesTraversedThisRound;
 
-	/** The amount of tiles this player has travelled in total */
+	/** The amount of tiles this player has moved in total */
 	UPROPERTY(Transient)
 	int32 TotalTilesTraversed;
 };

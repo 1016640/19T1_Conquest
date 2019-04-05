@@ -18,15 +18,15 @@ ACastleAIController::ACastleAIController(const FObjectInitializer& ObjectInitial
 	}
 }
 
-void ACastleAIController::FollowPath(const FBoardPath& InPath)
+bool ACastleAIController::FollowPath(const FBoardPath& InPath)
 {
 	UBoardPathFollowingComponent* BoardFollowComponent = GetBoardPathFollowingComponent();
 	if (BoardFollowComponent && BoardFollowComponent->GetStatus() != EPathFollowingStatus::Moving)
 	{
-		// TODO: Have follow path return true or false (for if path follow started successfully
-		// if started, we want to notify the first tile that it is un-occupied
-		BoardFollowComponent->FollowPath(InPath);
+		return BoardFollowComponent->FollowPath(InPath);
 	}
+
+	return false;
 }
 
 void ACastleAIController::OnBoardPathSegmentCompleted(ATile* SegmentTile)
@@ -60,7 +60,7 @@ ACastle* ACastleAIController::GetCastle() const
 	return Cast<ACastle>(GetPawn());
 }
 
-UBoardPathFollowingComponent * ACastleAIController::GetBoardPathFollowingComponent() const
+UBoardPathFollowingComponent* ACastleAIController::GetBoardPathFollowingComponent() const
 {
 	return Cast<UBoardPathFollowingComponent>(GetPathFollowingComponent());
 }
