@@ -31,6 +31,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// Begin AGameModeBase Interface
+	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void InitGameState() override;
 	virtual void StartPlay() override;
 	//virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
@@ -170,9 +171,9 @@ protected:
 
 	/** Round state notifies */
 	virtual void OnCollectionPhaseStart();
-	virtual void OnFirstActionPhaseFinished();
-	virtual void OnSecondActionPhaseFinished();
-	virtual void OnEndRoundPhaseFinished();
+	virtual void OnFirstActionPhaseStart();
+	virtual void OnSecondActionPhaseStart();
+	virtual void OnEndRoundPhaseStart();
 
 private:
 
@@ -221,6 +222,9 @@ private:
 
 public:
 
+	/** Get the controller for player whose action phase it is */
+	FORCEINLINE ACSKPlayerController* GetActionPhaseActiveController() const { return ActionPhaseActiveController; }
+
 	/** If we are waiting on a move request to finsih */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsPendingCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
@@ -247,10 +251,19 @@ private:
 
 public:
 
-	/** Called by game state when performing the coin flip. This will decide
-	which players goes first-*/
+	/** Function called when deciding which player gets to go first.
+	True will result in Player 1 going first, false for player 2 */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	bool CoinFlip() const;
+
+	/** Helper function for getting the player whose action phase it is based on starting player ID */
+	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
+
+protected:
+
+	/** The ID of the player who goes first */
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
+	int32 StartingPlayerID;
 
 public:
 
@@ -328,6 +341,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetActionPhaseTime() const { return ActionPhaseTime; }
 
+	/** Get the bonus time to add to action phase time after finishing an action */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
+
 	/** Get the max amount of tiles that can be traversed per action phase */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
@@ -359,4 +376,11 @@ protected:
 	/** Notify that a client has disconnected */
 	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
 
+private:
+
+	UFUNCTION()
+	void GotoActionPhase1();
+
+	UFUNCTION()
+	void GototCollectPhase();
 };

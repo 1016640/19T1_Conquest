@@ -7,6 +7,7 @@
 #include "CSKGameState.generated.h"
 
 class ABoardManager;
+class ACastle;
 class ACSKPlayerController;
 class ATile;
 
@@ -22,6 +23,12 @@ public:
 
 	ACSKGameState();
 
+public:
+
+	// Begin AActor Interface
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
+
 protected:
 
 	// Begin AGameStateBase Interface
@@ -34,7 +41,7 @@ protected:
 
 public:
 
-	/** Called from game to set the board manager to be used for the match */
+	/** Do not call this externally. This is used by the game mode to set the board to use */
 	void SetMatchBoardManager(ABoardManager* InBoardManager);
 
 public:
@@ -46,7 +53,7 @@ public:
 private:
 
 	/** The board of this match */
-	UPROPERTY(VisibleInstanceOnly, Transient, Replicated, Category = CSK)
+	UPROPERTY(Transient, Replicated)
 	ABoardManager* BoardManager;
 
 public:
@@ -64,6 +71,14 @@ public:
 
 	/** Get the state of the round */
 	FORCEINLINE ECSKRoundState GetRoundState() const { return RoundState; }
+
+	/** Get if the match is active */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsMatchInProgress() const;
+
+	/** Get if an action phase is active */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsActionPhaseActive() const;
 
 protected:
 
@@ -115,23 +130,67 @@ protected:
 	UPROPERTY()
 	ECSKRoundState PreviousRoundState;
 
+public:
+
+	/** Get if action phase is timed */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsActionPhaseTimed() const { return ActionPhaseTimeRemaining != -1.f; }
+
 protected:
 
-	/** ID of the player who goes first. This will be the player who won the coin flip */
-	UPROPERTY(BlueprintReadOnly, Category = CSK)
-	int32 StartingPlayerID;
+	/** Helper function for checking if action phase timer should count down */
+	FORCEINLINE bool ShouldCountdownActionPhase() const
+	{
+		if (IsActionPhaseActive() && IsActionPhaseTimed())
+		{
+			return !bFreezeActionPhaseTimer;
+		}
+
+		return false;
+	}
+
+	/** Helper function for enabling/disabling action phase timer */
+	FORCEINLINE void SetFreezeActionPhaseTimer(bool bEnable)
+	{
+		bFreezeActionPhaseTimer = bEnable;
+		SetActorTickEnabled(!bEnable);
+	}
 
 protected:
 
-	/** How many rounds have been played */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Stats)
-	int32 RoundsPlayed;
+	/** ID of the player whose action phase it is */
+	UPROPERTY(Transient, Replicated)
+	int32 ActivePhasePlayerID;
+
+	/** Time remaining in this action phase */
+	UPROPERTY(Transient, Replicated)
+	float ActionPhaseTimeRemaining;
+
+	/** If action phase timer has been frozen */
+	UPROPERTY(Transient)
+	uint32 bFreezeActionPhaseTimer : 1;
 
 public:
 
 	/** Notify that a move request has been confirmed and is starting */
-	void HandleMoveRequestConfirmed() { }
+	void HandleMoveRequestConfirmed();
 
 	/** Notify that the current move request has finished */
-	void HandleMoveRequestFinished() { }
+	void HandleMoveRequestFinished();
+
+private:
+
+	/** Handle movement request confirmation on every clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleMoveRequestConfirmed();
+
+	/** Handle movement request confirmation on every clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleMoveRequestFinished();
+
+protected:
+
+	/** How many rounds have been played */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Stats)
+	int32 RoundsPlayed;
 };

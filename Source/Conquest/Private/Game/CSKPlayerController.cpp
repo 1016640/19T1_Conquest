@@ -46,6 +46,8 @@ void ACSKPlayerController::Tick(float DeltaTime)
 		ATile* TileUnderMouse = GetTileUnderMouse();
 		if (TileUnderMouse)
 		{
+			// for now
+			///HoveredTile = TileUnderMouse;
 			// TODO: want to tell tile we are not hovering
 			// want to tell new tile we are hovering
 		}
@@ -56,7 +58,13 @@ void ACSKPlayerController::Tick(float DeltaTime)
 		{
 			HoveredTile->bHighlightTile = false;
 		}
+		if (TileUnderMouse)
+		{
+			TileUnderMouse->bHighlightTile = true;
+		}
 		#endif
+
+		HoveredTile = TileUnderMouse;
 	}
 }
 
@@ -124,18 +132,23 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	if (!bCanSelectTile)
+	/*if (!bCanSelectTile)
 	{
 		return;
-	}
+	}*/
 
 	// Are we allowed to perform actions
-	if (bIsActionPhase)
+	if (IsPerformingActionPhase())
 	{
 		switch (SelectedAction)
 		{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
+				// TODO: Move this to a function
+				if (HoveredTile)
+				{
+					Server_RequestCastleMoveAction(HoveredTile);
+				}
 				break;
 			}
 			case ECSKActionPhaseMode::BuildTowers:
@@ -165,12 +178,18 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 
 		// Link back to us
 		CastleController->PlayerOwner = this;
+
+		ACSKPlayerState* PlayerState = GetCSKPlayerState();
+		if (PlayerState)
+		{
+			PlayerState->SetCastle(CastlePawn);
+		}
 	}
 }
 
 void ACSKPlayerController::OnTransitionToBoard()
 {
-	if (ensure(HasAuthority()))
+	if (HasAuthority())
 	{
 		// Occupy the space we are on
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
@@ -199,10 +218,24 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 			bIsActionPhase = bEnabled;
 			RemainingActions = bEnabled ? ECSKActionPhaseMode::All : ECSKActionPhaseMode::None;
 
-			// Default to no action selected
+			// Purposely calling on rep here to have pawn move back
 			if (IsLocalPlayerController())
 			{
-				SetActionMode(ECSKActionPhaseMode::None);
+				OnRep_bIsActionPhase();
+			}
+			else
+			{
+				SetActionMode(ECSKActionPhaseMode::None, true);
+			}
+
+			// Reset any variables associated with the last round
+			if (bEnabled)
+			{
+				ACSKPlayerState* PlayerState = GetCSKPlayerState();
+				if (PlayerState)
+				{
+					PlayerState->ResetTilesTraversed();
+				}
 			}
 		}
 	}
@@ -273,6 +306,16 @@ bool ACSKPlayerController::CanRequestCastleMoveAction() const
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
+
+	// Move our camera to our castle when it's our turn to make actions
+	if (bIsActionPhase)
+	{
+		ACSKPawn* Pawn = GetCSKPawn();
+		if (Pawn && CastlePawn)
+		{
+			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+		}
+	}
 }
 
 void ACSKPlayerController::OnRep_RemainingActions()
@@ -327,5 +370,30 @@ void ACSKPlayerController::OnMoveActionFinished()
 	if (HasAuthority() && IsPerformingActionPhase())
 	{
 		RemainingActions &= ~ECSKActionPhaseMode::MoveCastle;
+	}
+}
+
+bool ACSKPlayerController::Server_RequestCastleMoveAction_Validate(ATile* Goal)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestCastleMoveAction_Implementation(ATile* Goal)
+{
+	bool bSuccess = false;
+
+	if (CanRequestCastleMoveAction())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestCastleMove(Goal);
+		}		
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
 	}
 }

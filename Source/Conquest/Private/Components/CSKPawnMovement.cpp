@@ -78,6 +78,9 @@ void UCSKPawnMovement::TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic)
 		if (TrackedActor)
 		{
 			RemoveTickPrerequisiteActor(TrackedActor);
+			
+			// Also reset velocity we were gained while tracking it
+			Velocity = FVector::ZeroVector;
 		}
 	}
 

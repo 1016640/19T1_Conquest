@@ -15,6 +15,7 @@ bool UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
 		Reset();
 
 		BoardPath = InPath;
+		CurrentTileIndex = 1;
 		Status = EPathFollowingStatus::Moving;
 
 		return true;
@@ -95,10 +96,12 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 		{
 			if (CurrentTileIndex == LastSegment)
 			{
+				OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
+
 				OnSegmentFinished();
 				OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);
 
-				OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
+				
 			}
 			else
 			{
@@ -108,9 +111,9 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				ATile* NextTargetTile = BoardPath[CurrentTileIndex];
 				if (!NextTargetTile)
 				{
-					OnPathFinished(EPathFollowingResult::Aborted, FPathFollowingResultFlags::InvalidPath);
+					OnBoardPathFinished.Broadcast(BoardPath[CurrentTileIndex]);
 
-					OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
+					OnPathFinished(EPathFollowingResult::Aborted, FPathFollowingResultFlags::InvalidPath);
 					return;
 				}
 

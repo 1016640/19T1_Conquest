@@ -5,22 +5,45 @@
 
 ACSKPlayerState::ACSKPlayerState()
 {
+	CSKPlayerID = -1;
+	Castle = nullptr;
+
 	Gold = 0;
 	Mana = 0;
+	AssignedColor = FColor(80, 50, 20); // Bronze
 
-	// Bronze
-	AssignedColor = FColor(80, 50, 20);
+	TilesTraversedThisRound = 0;
+	TotalTilesTraversed = 0;
 }
 
 void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME(ACSKPlayerState, CSKPlayerID);
+	DOREPLIFETIME(ACSKPlayerState, Castle);
+		
 	DOREPLIFETIME(ACSKPlayerState, Gold);
 	DOREPLIFETIME(ACSKPlayerState, Mana);
 	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
+}
+
+void ACSKPlayerState::SetCSKPlayerID(int32 InPlayerID)
+{
+	if (HasAuthority())
+	{
+		CSKPlayerID = InPlayerID;
+	}
+}
+
+void ACSKPlayerState::SetCastle(ACastle* InCastle)
+{
+	if (HasAuthority())
+	{
+		Castle = InCastle;
+	}
 }
 
 void ACSKPlayerState::GiveResources(int32 InGold, int32 InMana)
@@ -81,21 +104,31 @@ bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount) const
 
 void ACSKPlayerState::IncrementTilesTraversed()
 {
-	++TilesTraversedThisRound;
-
-	#if WITH_EDITOR
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
+	if (HasAuthority())
 	{
-		// Warning check
-		if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound))
-		{
-			UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed per round! "
-				"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
-		}
-	}
-	#endif
+		++TilesTraversedThisRound;
 
-	++TotalTilesTraversed;
+		#if WITH_EDITOR
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			// Warning check
+			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound))
+			{
+				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed per round! "
+					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
+			}
+		}
+		#endif
+
+		++TotalTilesTraversed;
+	}
+}
+
+void ACSKPlayerState::ResetTilesTraversed()
+{
+	if (HasAuthority())
+	{
+		TilesTraversedThisRound = 0;
+	}
 }

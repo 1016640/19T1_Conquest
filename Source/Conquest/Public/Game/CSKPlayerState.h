@@ -6,6 +6,8 @@
 #include "GameFramework/PlayerState.h"
 #include "CSKPlayerState.generated.h"
 
+class ACastle;
+
 /**
  * Tracks states and stats for a player
  */
@@ -23,6 +25,32 @@ protected:
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
+
+public:
+
+	/** Sets this players CSK player ID */
+	void SetCSKPlayerID(int32 InPlayerID);
+
+	/** Set this players castle */
+	void SetCastle(ACastle* InCastle);
+
+public:
+
+	/** Get this players CSK player ID */
+	FORCEINLINE int32 GetCSKPlayerID() const { return CSKPlayerID; }
+
+	/** Get this players castle */
+	FORCEINLINE ACastle* GetCastle() const { return Castle; }
+
+protected:
+
+	/** This players CSKPlayerID */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = CSK)
+	int32 CSKPlayerID;
+
+	/** This players castle */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = CSK)
+	ACastle* Castle;
 
 public:
 
@@ -81,6 +109,9 @@ public:
 
 	/** Increments the tiles we have traversed this round */
 	void IncrementTilesTraversed();
+
+	/** Resets the tiles traversed count for next round */
+	void ResetTilesTraversed();
 
 public:
 

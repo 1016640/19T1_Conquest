@@ -257,12 +257,6 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 			break;
 		}
 
-		// Have we travelled too far?
-		if (Segment.Distance > MaxDistance)
-		{
-			break;
-		}
-
 		// Marked as visit, so we don't return here
 		Visited.Add(Segment.Hex);
 	
@@ -318,11 +312,15 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 		// Can we still continue down this path?
 		if (BestNeighborIndex != -1)
 		{
-			// Establish new path edge (increment distance)
-			Queue.HeapPush(FPathSegment(BestNeighborHex, BestNeighborCost, Segment.Distance + 1), FPathPredicate());
-			PathEdges[Segment.Hex] = BestNeighborHex;
+			int32 NewDistance = Segment.Distance + 1;
+			if (NewDistance <= MaxDistance)
+			{
+				// Establish new path edge (increment distance)
+				Queue.HeapPush(FPathSegment(BestNeighborHex, BestNeighborCost, Segment.Distance + 1), FPathPredicate());
+				PathEdges[Segment.Hex] = BestNeighborHex;
 
-			PathEdges.Add(BestNeighborHex, BestNeighborHex);
+				PathEdges.Add(BestNeighborHex, BestNeighborHex);
+			}
 		}
 	}
 

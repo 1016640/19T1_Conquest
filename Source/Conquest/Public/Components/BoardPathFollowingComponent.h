@@ -12,6 +12,8 @@
 // AI controllers already have a member variable for path following components, so it would feel iffy to have two different
 // components that do the same thing
 
+// TODO: fix upm some names (like currentitleindex, it is for the index we are aiming for, not actually what we are up to)
+
 /** Event for when we have reached new segment of the path */
 DECLARE_MULTICAST_DELEGATE_OneParam(FBoardMoveComplete, ATile* /** DestinationTile */);
 

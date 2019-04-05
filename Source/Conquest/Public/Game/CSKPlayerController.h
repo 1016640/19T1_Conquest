@@ -137,7 +137,7 @@ public:
 	void SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly = false);
 
 	/** Enters the given action mode */
-	UFUNCTION(BlueprintCallable, Category = CSK)
+	UFUNCTION(BlueprintCallable, Category = CSK, meta = (DisplayName="Set Action Mode"))
 	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
 private:
@@ -189,8 +189,6 @@ protected:
 	ECSKActionPhaseMode RemainingActions;
 
 
-
-
 public:
 
 	/** Notify that an action phase move request has been confirmed */
@@ -203,4 +201,10 @@ public:
 
 	/** Notify that our move request has finished */
 	void OnMoveActionFinished();
+
+protected:
+
+	/** Makes a request to move our castle towards the goal tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastleMoveAction(ATile* Goal);
 };

@@ -15,6 +15,7 @@
 #include "CastleAIController.h"
 #include "GameDelegates.h"
 #include "Tile.h"
+#include "TimerManager.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -39,6 +40,9 @@ ACSKGameMode::ACSKGameMode()
 	Player1CastleClass = ACastle::StaticClass();
 	Player2CastleClass = ACastle::StaticClass();
 	CastleAIControllerClass = ACastleAIController::StaticClass();
+
+	MatchState = ECSKMatchState::EnteringGame;
+	RoundState = ECSKRoundState::Invalid;
 
 	StartingGold = 5;
 	StartingMana = 3;
@@ -69,6 +73,21 @@ void ACSKGameMode::Tick(float DeltaTime)
 	}
 }
 
+void ACSKGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Players.Add(nullptr);
+	Players.Add(nullptr);
+
+	Super::InitGame(MapName, Options, ErrorMessage);
+
+	// Entering game is default state, we call it here anyways to fire off events
+	EnterMatchState(ECSKMatchState::EnteringGame);
+
+	// Callbacks required
+	FGameDelegates& GameDelegates = FGameDelegates::Get();
+	GameDelegates.GetHandleDisconnectDelegate().AddUObject(this, &ACSKGameMode::OnDisconnect);
+}
+
 void ACSKGameMode::InitGameState()
 {
 	Super::InitGameState();
@@ -79,12 +98,6 @@ void ACSKGameMode::InitGameState()
 	{
 		CSKGameState->SetMatchBoardManager(UConquestFunctionLibrary::FindMatchBoardManager(this));
 	}
-
-	EnterMatchState(ECSKMatchState::EnteringGame);
-
-	// Callbacks required
-	FGameDelegates& GameDelegates = FGameDelegates::Get();
-	GameDelegates.GetHandleDisconnectDelegate().AddUObject(this, &ACSKGameMode::OnDisconnect);
 }
 
 void ACSKGameMode::StartPlay()
@@ -311,8 +324,19 @@ void ACSKGameMode::SetPlayerWithID(ACSKPlayerController* Controller, int32 Playe
 
 	if (Players.IsValidIndex(PlayerID))
 	{
-		Players[PlayerID] = Controller;
-		Controller->CSKPlayerID = PlayerID;
+		// Space might already be occupied
+		if (Players[PlayerID] == nullptr)
+		{
+			// Save reference to this player
+			Players[PlayerID] = Controller;
+			Controller->CSKPlayerID = PlayerID;
+
+			ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+			if (PlayerState)
+			{
+				PlayerState->SetCSKPlayerID(PlayerID);
+			}
+		}
 	}
 }
 
@@ -464,6 +488,9 @@ void ACSKGameMode::OnMatchStart()
 	// Give players the default resources
 	ResetResourcesForPlayers();
 
+	// For now (move to coin flip section)
+	StartingPlayerID = CoinFlip() ? 0 : 1;
+
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
@@ -494,18 +521,45 @@ void ACSKGameMode::OnMatchAbort()
 void ACSKGameMode::OnCollectionPhaseStart()
 {
 	CollectResourcesForPlayers();
+
+	UKismetSystemLibrary::PrintString(this, "Collection Phase Start", true, false, FLinearColor::Blue, 5.f);
+
+	FTimerHandle Temp;
+	GetWorldTimerManager().SetTimer(Temp, this, &ACSKGameMode::GotoActionPhase1, 2.f, false);
 }
 
-void ACSKGameMode::OnFirstActionPhaseFinished()
+void ACSKGameMode::OnFirstActionPhaseStart()
 {
+	ActionPhaseActiveController = GetActivePlayerForActionPhase(0);
+	ActionPhaseActiveController->SetActionPhaseEnabled(true);
+	
+	bWaitingOnActivePlayerMoveAction = false;
+
+	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
+	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
 }
 
-void ACSKGameMode::OnSecondActionPhaseFinished()
+void ACSKGameMode::OnSecondActionPhaseStart()
 {
+	ActionPhaseActiveController->SetActionPhaseEnabled(false);
+	ActionPhaseActiveController = GetActivePlayerForActionPhase(1);
+	ActionPhaseActiveController->SetActionPhaseEnabled(true);
+
+	bWaitingOnActivePlayerMoveAction = false;
+
+	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
+	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);
 }
 
-void ACSKGameMode::OnEndRoundPhaseFinished()
+void ACSKGameMode::OnEndRoundPhaseStart()
 {
+	ActionPhaseActiveController->SetActionPhaseEnabled(false);
+	ActionPhaseActiveController = nullptr;
+
+	UKismetSystemLibrary::PrintString(this, "End round Phase Start", true, false, FLinearColor::Blue, 5.f );
+
+	FTimerHandle Temp;
+	GetWorldTimerManager().SetTimer(Temp, this, &ACSKGameMode::GototCollectPhase, 2.f, false);
 }
 
 void ACSKGameMode::HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState)
@@ -555,17 +609,17 @@ void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundStat
 		}
 		case ECSKRoundState::FirstActionPhase:
 		{
-			OnFirstActionPhaseFinished();
+			OnFirstActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::SecondActionPhase:
 		{
-			OnSecondActionPhaseFinished();
+			OnSecondActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::EndRoundPhase:
 		{
-			OnEndRoundPhaseFinished();
+			OnEndRoundPhaseStart();
 			break;
 		}
 	}
@@ -631,7 +685,7 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 			FBoardPath OutBoardPath;
 			if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
 			{
-				ConfirmCastleMove(OutBoardPath);
+				return ConfirmCastleMove(OutBoardPath);
 			}
 		}
 	}
@@ -742,6 +796,16 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 	}
 
 	ActionPhaseActiveController->OnMoveActionFinished();
+
+	// For now
+	if (RoundState == ECSKRoundState::FirstActionPhase)
+	{
+		EnterRoundState(ECSKRoundState::SecondActionPhase);
+	}
+	else
+	{
+		EnterRoundState(ECSKRoundState::EndRoundPhase);
+	}
 }
 
 void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
@@ -765,7 +829,7 @@ void ACSKGameMode::OnActivePlayersPathFollowComplete(ATile* DestinationTile)
 bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 {
 	// Can't win post move outside of an action phase
-	if (IsActionPhaseInProgress())
+	if (!IsActionPhaseInProgress())
 	{
 		return false;
 	}
@@ -783,7 +847,7 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 		if (BoardManager->GetPlayerPortalTile(PlayerID) == SegmentTile)
 		{
 			// TODO: End game with winner (we would also want to stop movement for the castle)
-			return true;
+			return false;// true;
 		}
 	}
 
@@ -798,7 +862,22 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 
 bool ACSKGameMode::CoinFlip_Implementation() const
 {
-	return UConquestFunctionLibrary::CoinFlip();
+	int32 RandomValue = FMath::Rand();
+	return (RandomValue % 2) == 1;
+}
+
+ACSKPlayerController* ACSKGameMode::GetActivePlayerForActionPhase(int32 Phase) const
+{
+	if (IsMatchInProgress())
+	{
+		// There are two action phases, one for each player.
+		if (Players.IsValidIndex(Phase))
+		{
+			return Players[Phase == 0 ? StartingPlayerID : FMath::Abs(StartingPlayerID - 1)];
+		}
+	}
+
+	return nullptr;
 }
 
 void ACSKGameMode::ResetResourcesForPlayers()
@@ -863,6 +942,16 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 {
 	AbortMatch();
+}
+
+void ACSKGameMode::GotoActionPhase1()
+{
+	EnterRoundState(ECSKRoundState::FirstActionPhase);
+}
+
+void ACSKGameMode::GototCollectPhase()
+{
+	EnterRoundState(ECSKRoundState::CollectionPhase);
 }
 
 #undef LOCTEXT_NAMESPACE

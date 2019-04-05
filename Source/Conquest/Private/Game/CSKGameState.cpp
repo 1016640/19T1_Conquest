@@ -10,8 +10,14 @@
 #include "CastleAIController.h"
 #include "Engine/World.h"
 
+// for now
+#include "Kismet/KismetSystemLibrary.h"
+
 ACSKGameState::ACSKGameState()
 {
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
+
 	BoardManager = nullptr;
 
 	MatchState = ECSKMatchState::EnteringGame;
@@ -19,14 +25,33 @@ ACSKGameState::ACSKGameState()
 	PreviousMatchState = MatchState;
 	PreviousRoundState = RoundState;
 
-	StartingPlayerID = 0;
+	ActivePhasePlayerID = -1;
+	ActionPhaseTimeRemaining = -1.f;
+	bFreezeActionPhaseTimer = false;
 
 	RoundsPlayed = 0;
 }
 
+void ACSKGameState::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (ShouldCountdownActionPhase())
+	{
+		ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
+		if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
+		{
+			// TODO: inform game mode that time has run out
+		}
+
+		FString TimeRem = FString("Time Remaining for Action Phase: ") + FString::SanitizeFloat(ActionPhaseTimeRemaining);
+		UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
+	}
+}
+
 void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
 {
-	if (bReplicatedHasBegunPlay && Role != ROLE_Authority)
+	if (bReplicatedHasBegunPlay)
 	{
 		// We need to have a board manager, we will find one until we wait for the initial one to replicate
 		if (!BoardManager)
@@ -46,12 +71,13 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, MatchState);
 	DOREPLIFETIME(ACSKGameState, RoundState);
 
-	DOREPLIFETIME(ACSKGameState, RoundsPlayed);
+	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
+	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
 }
 
 void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
 {
-	if (!BoardManager && HasAuthority())
+	if (HasAuthority() && !BoardManager)
 	{
 		BoardManager = InBoardManager;
 	}
@@ -83,6 +109,21 @@ void ACSKGameState::SetRoundState(ECSKRoundState NewState)
 		RoundState = NewState;
 		HandleRoundStateChange(NewState);
 	}
+}
+
+bool ACSKGameState::IsMatchInProgress() const
+{
+	return MatchState == ECSKMatchState::Running;
+}
+
+bool ACSKGameState::IsActionPhaseActive() const
+{
+	if (IsMatchInProgress())
+	{
+		return RoundState == ECSKRoundState::FirstActionPhase || RoundState == ECSKRoundState::SecondActionPhase;
+	}
+
+	return false;
 }
 
 void ACSKGameState::NotifyWaitingForPlayers()
@@ -124,14 +165,43 @@ void ACSKGameState::NotifyCollectionPhaseStart()
 
 void ACSKGameState::NotifyFirstCollectionPhaseStart()
 {
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
+		if (ActivePlayer)
+		{
+			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
+		}
+
+		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
+	}
+
+	SetFreezeActionPhaseTimer(false);
 }
 
 void ACSKGameState::NotifySecondCollectionPhaseStart()
 {
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
+		if (ActivePlayer)
+		{
+			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
+		}
+
+		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
+	}
+
+	SetFreezeActionPhaseTimer(false);
 }
 
 void ACSKGameState::NotifyEndRoundPhaseStart()
 {
+	SetActorTickEnabled(false);
 }
 
 void ACSKGameState::OnRep_MatchState()
@@ -214,4 +284,41 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	// Setting it same as new state, as previous state will be valid
 	// after being replicated from the server (or before this call)
 	PreviousRoundState = NewState;
+}
+
+void ACSKGameState::HandleMoveRequestConfirmed()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		Multi_HandleMoveRequestConfirmed();
+	}
+}
+
+void ACSKGameState::HandleMoveRequestFinished()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after an action is complete
+		if (IsActionPhaseTimed())
+		{
+			// Game mode only exists on the server
+			ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+			if (GameMode)
+			{
+				ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
+			}
+		}
+
+		Multi_HandleMoveRequestFinished();
+	}
+}
+
+void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
+{
+	SetFreezeActionPhaseTimer(true);
+}
+
+void ACSKGameState::Multi_HandleMoveRequestFinished_Implementation()
+{
+	SetFreezeActionPhaseTimer(false);
 }
