@@ -26,9 +26,17 @@ public:
 public:
 
 	// Begin IBoardPiece Interface
+	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
+	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual void RemovedOffTile() override;
 	// End IBoardPiece Interface
+
+protected:
+
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
 
 public:
 
@@ -47,6 +55,22 @@ private:
 	/** Basic Movement component */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UFloatingPawnMovement* PawnMovement;
+
+protected:
+
+	/** Event for when the castle has been placed on given tile */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Placed on Tile"))
+	void BP_OnPlacedOnTile(ATile* Tile);
+
+	/** Event for when the castle has moved off of given tile */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Removed from Tile"))
+	void BP_OnRemovedFromTile(ATile* Tile);
+
+protected:
+
+	/** The player state of the player who owns this castle */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
+	ACSKPlayerState* OwnerPlayerState;
 
 public:
 

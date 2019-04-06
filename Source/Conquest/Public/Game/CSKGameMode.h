@@ -10,7 +10,9 @@
 class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
+class ACSKPlayerState;
 class ATile;
+class ATower;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
 
@@ -64,8 +66,8 @@ private:
 	/** Spawns default castle for given controller. Get the AI controller possessing the newly spawned castle */
 	ACastleAIController* SpawnDefaultCastleFor(ACSKPlayerController* NewPlayer) const;
 
-	/** Spawns a castle at portal corresponding with player ID */
-	ACastle* SpawnCastleAtPortal(int32 PlayerID, TSubclassOf<ACastle> Class) const;
+	/** Spawns a castle at portal corresponding with player*/
+	ACastle* SpawnCastleAtPortal(ACSKPlayerController* Controller, TSubclassOf<ACastle> Class) const;
 
 	/** Spawns the AI controller for given castle. Will auto possess the castle if successful */
 	ACastleAIController* SpawnCastleControllerFor(ACastle* Castle) const;
@@ -200,7 +202,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestCastleMove(ATile* Goal);
 
+	/** Will attempt to build the given type of tower for active player at given tile */
+	// TODO: Don't take in subclass directly, we need to know the price (both gold and mana) before confirming
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	bool RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* Tile);
+
 private:
+
+	/** Disables the action mode for active player. Will end this phase if no actions remain */
+	void DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode);
 
 	/** Starts movement request for active player. The request still has the chance of failing */
 	bool ConfirmCastleMove(const FBoardPath& BoardPath);
@@ -220,14 +230,24 @@ private:
 	Will return true if the win condition has been met, false otherwise */
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
+	/** Spawns a new tower of type for given player at tile */
+	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const;
+
+	/** Finalizes build request for active player. The request still has a chance of failing */
+	bool ConfirmBuildTower(ATower* Tower, ATile* Tile);
+
 public:
 
 	/** Get the controller for player whose action phase it is */
 	FORCEINLINE ACSKPlayerController* GetActionPhaseActiveController() const { return ActionPhaseActiveController; }
 
+	/** If we are waiting on an action request to finish */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsWaitingForAction() const { return bWaitingOnActionRequest; }
+
 	/** If we are waiting on a move request to finsih */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool IsPendingCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
+	bool IsWaitingForCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
 
 protected:
 
@@ -236,6 +256,9 @@ protected:
 	ACSKPlayerController* ActionPhaseActiveController;
 
 private:
+
+	/** If we are waiting for an action request to finish */
+	uint32 bWaitingOnActionRequest : 1;
 
 	/** If we are waiting for active players move action to complete */
 	uint32 bWaitingOnActivePlayerMoveAction : 1;
@@ -346,8 +369,7 @@ public:
 	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
 
 	/** Get the max amount of tiles that can be traversed per action phase */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
+	FORCEINLINE int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
 
 protected:
 
@@ -366,10 +388,6 @@ protected:
 	/** The max amount of tiles a player can move per action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
 	int32 MaxTileMovements;
-
-	/** The limit to how many buildings can be constructed per action phase (zero means indefinite) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	int32 MaxTowerConstructs;
 
 protected:
 

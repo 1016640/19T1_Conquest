@@ -163,16 +163,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName = "Board Tile Type"))
 	TSubclassOf<ATile> GridTileTemplate;
 	#endif
-	
-public:
-
-	/** Traces the board to get a tile (can return null) */
-	UFUNCTION(BlueprintCallable, Category = "Board")
-	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
-
-	/** Generates a path from the start tile to goal tile */
-	UFUNCTION(BlueprintCallable, Category = "Board")
-	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
 public:
 
@@ -212,6 +202,10 @@ public:
 	/** Get the tile at given location */
 	FORCEINLINE ATile* GetTileAtLocation(const FVector& Location) const;
 
+	/** If a tower is allowed to be placed on given tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	bool CanPlaceTowerOnTile(const ATile* Tile) const;
+
 private:
 
 	/** Hex value for the first players portal (starting tile) */
@@ -221,6 +215,16 @@ private:
 	/** Hex value for the second players portal (starting tile) */
 	UPROPERTY()
 	FIntVector Player2PortalHex;
+
+public:
+
+	/** Traces the board to get a tile (can return null) */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
+
+	/** Generates a path from the start tile to goal tile */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
 public:
 

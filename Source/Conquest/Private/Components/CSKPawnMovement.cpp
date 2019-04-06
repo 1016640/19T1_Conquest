@@ -11,6 +11,16 @@ UCSKPawnMovement::UCSKPawnMovement()
 	bCanCacelTravel = false;
 }
 
+void UCSKPawnMovement::AddInputVector(FVector WorldVector, bool bForce)
+{
+	// If tracking an actor or when executing a travel task that can't be cancelled, ignore input
+	bool bCancelTravelTask = bIsTravelling && !bCanCacelTravel;
+	if (!IsTrackingActor() && !bCancelTravelTask)
+	{
+		Super::AddInputVector(WorldVector, bForce);
+	}
+}
+
 FVector UCSKPawnMovement::ConsumeInputVector()
 {
 	FVector InputVector = Super::ConsumeInputVector();
@@ -21,7 +31,7 @@ FVector UCSKPawnMovement::ConsumeInputVector()
 		bIsTravelling = false;
 	}
 
-	return Super::ConsumeInputVector();
+	return InputVector;
 }
 
 bool UCSKPawnMovement::IsMoveInputIgnored() const
@@ -30,7 +40,8 @@ bool UCSKPawnMovement::IsMoveInputIgnored() const
 	if (!bResult)
 	{
 		// If executing travel task that can't be cancelled
-		bResult = IsTrackingActor() || (bIsTravelling && !bCanCacelTravel);
+		bool bCancelTravelTask = bIsTravelling && !bCanCacelTravel;
+		bResult = IsTrackingActor() || bCancelTravelTask;
 	}
 
 	return bResult;

@@ -30,15 +30,33 @@ ACastle::ACastle()
 	PawnMovement->Deceleration = 2000.f;
 	PawnMovement->TurningBoost = 0.f;
 
+	OwnerPlayerState = nullptr;
 	CachedTile = nullptr;
+}
+
+void ACastle::SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState)
+{
+	if (HasAuthority())
+	{
+		OwnerPlayerState = InPlayerState;
+	}
 }
 
 void ACastle::PlacedOnTile(ATile* Tile)
 {
 	CachedTile = Tile;
+	BP_OnPlacedOnTile(CachedTile);
 }
 
 void ACastle::RemovedOffTile()
 {
+	BP_OnRemovedFromTile(CachedTile);
 	CachedTile = nullptr;
+}
+
+void ACastle::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ACastle, OwnerPlayerState, COND_InitialOnly);
 }

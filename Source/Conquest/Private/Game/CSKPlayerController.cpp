@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "Tower.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -42,29 +43,22 @@ void ACSKPlayerController::Tick(float DeltaTime)
 
 	if (IsLocalPlayerController())
 	{
-		// Update the tile under the mouse
+		// Get tile player is hovering over
 		ATile* TileUnderMouse = GetTileUnderMouse();
-		if (TileUnderMouse)
+		if (TileUnderMouse != HoveredTile)
 		{
-			// for now
-			///HoveredTile = TileUnderMouse;
-			// TODO: want to tell tile we are not hovering
-			// want to tell new tile we are hovering
-		}
+			if (HoveredTile)
+			{
+				HoveredTile->EndHoveringTile(this);
+			}
 
-		#if WITH_EDITORONLY_DATA
-		// Help with debugging while in editor. This change is local to client
-		if (HoveredTile)
-		{
-			HoveredTile->bHighlightTile = false;
-		}
-		if (TileUnderMouse)
-		{
-			TileUnderMouse->bHighlightTile = true;
-		}
-		#endif
+			HoveredTile = TileUnderMouse;
 
-		HoveredTile = TileUnderMouse;
+			if (HoveredTile)
+			{
+				HoveredTile->StartHoveringTile(this);
+			}
+		}
 	}
 }
 
@@ -75,6 +69,9 @@ void ACSKPlayerController::SetupInputComponent()
 	
 	// Selection
 	InputComponent->BindAction("Select", IE_Pressed, this, &ACSKPlayerController::SelectTile);
+
+	// Shortcuts
+	InputComponent->BindAction("ResetCamera", IE_Pressed, this, &ACSKPlayerController::ResetCamera);
 }
 
 void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -132,10 +129,10 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	/*if (!bCanSelectTile)
+	if (false)//TODO: !bCanSelectTile)
 	{
 		return;
-	}*/
+	}
 
 	// Are we allowed to perform actions
 	if (IsPerformingActionPhase())
@@ -160,6 +157,15 @@ void ACSKPlayerController::SelectTile()
 				break;
 			}
 		}
+	}
+}
+
+void ACSKPlayerController::ResetCamera()
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && CastlePawn)
+	{
+		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
 	}
 }
 
@@ -303,6 +309,16 @@ bool ACSKPlayerController::CanRequestCastleMoveAction() const
 	return false;
 }
 
+bool ACSKPlayerController::CanRequestBuildTowerAction() const
+{
+	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::BuildTowers))
+	{
+		return true;
+	}
+
+	return false;
+}
+
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
@@ -313,7 +329,7 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		ACSKPawn* Pawn = GetCSKPawn();
 		if (Pawn && CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
 	}
 }
@@ -365,12 +381,28 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 	}
 }
 
-void ACSKPlayerController::OnMoveActionFinished()
+void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATower* NewTower)
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && NewTower)
+	{
+		// Have the client waiting be forced to see where a tower was built
+		Pawn->TravelToLocation(NewTower->GetActorLocation(), IsPerformingActionPhase());
+	}
+}
+
+bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 {
 	if (HasAuthority() && IsPerformingActionPhase())
 	{
-		RemainingActions &= ~ECSKActionPhaseMode::MoveCastle;
+		if (ActionMode != ECSKActionPhaseMode::None || ActionMode != ECSKActionPhaseMode::All)
+		{
+			RemainingActions &= ~ActionMode;
+			return RemainingActions == ECSKActionPhaseMode::None;
+		}
 	}
+
+	return false;
 }
 
 bool ACSKPlayerController::Server_RequestCastleMoveAction_Validate(ATile* Goal)

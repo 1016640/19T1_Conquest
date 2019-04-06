@@ -13,6 +13,7 @@ class ACSKHUD;
 class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
+class ATower;
 
 /**
  * Controller for handling communication events between players and the server
@@ -78,8 +79,11 @@ protected:
 
 private:
 
-	/** Sets the current tile we are hovering over as selected */
+	/** Attempts to perform an action using the current hovered tile */
 	void SelectTile();
+
+	/** Resets our camera to focus on our castle */
+	void ResetCamera();
 
 protected:
 
@@ -155,8 +159,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool CanEnterActionMode(ECSKActionPhaseMode ActionMode) const;
 
-	/** If this castle is allowed to request a castle move */
+	/** If this player is allowed to request a castle move */
 	bool CanRequestCastleMoveAction() const;
+
+	/** If this player is allowed to request a tower construction */
+	bool CanRequestBuildTowerAction() const;
 
 protected:
 
@@ -188,7 +195,6 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
-
 public:
 
 	/** Notify that an action phase move request has been confirmed */
@@ -199,8 +205,13 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastleMoveRequestFinished();
 
-	/** Notify that our move request has finished */
-	void OnMoveActionFinished();
+	/** Notify that an action phase build request has been confirmed */
+	UFUNCTION(Client, Reliable)
+	void Client_OnTowerBuildRequestConfirmed(ATower* NewTower);
+
+	/** Disable the ability to use the given action mode for the rest of this round.
+	Get if no action remains (always returns false on client or if not in action phase) */
+	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
 
 protected:
 

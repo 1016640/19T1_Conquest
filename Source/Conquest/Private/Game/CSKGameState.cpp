@@ -286,6 +286,19 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	PreviousRoundState = NewState;
 }
 
+void ACSKGameState::AddBonusActionPhaseTime()
+{
+	if (IsActionPhaseTimed())
+	{
+		// Game mode only exists on the server
+		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+		if (GameMode)
+		{
+			ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
+		}
+	}
+}
+
 void ACSKGameState::HandleMoveRequestConfirmed()
 {
 	if (IsActionPhaseActive() && HasAuthority())
@@ -299,17 +312,20 @@ void ACSKGameState::HandleMoveRequestFinished()
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
-		if (IsActionPhaseTimed())
-		{
-			// Game mode only exists on the server
-			ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-			if (GameMode)
-			{
-				ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
-			}
-		}
+		AddBonusActionPhaseTime();
 
 		Multi_HandleMoveRequestFinished();
+	}
+}
+
+void ACSKGameState::HandleBuildRequestConfirmed(ATower* NewTower)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after having built a tower
+		AddBonusActionPhaseTime();
+
+		Multi_HandleBuildRequestConfirmed(NewTower);
 	}
 }
 
@@ -321,4 +337,8 @@ void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
 void ACSKGameState::Multi_HandleMoveRequestFinished_Implementation()
 {
 	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATower* NewTower)
+{
 }

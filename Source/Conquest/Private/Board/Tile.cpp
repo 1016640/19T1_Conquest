@@ -3,6 +3,7 @@
 #include "Tile.h"
 #include "BoardManager.h"
 #include "BoardPieceInterface.h"
+#include "CSKPlayerController.h"
 
 ATile::ATile()
 {
@@ -31,6 +32,38 @@ ATile::ATile()
 void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+}
+
+void ATile::StartHoveringTile(ACSKPlayerController* Controller)
+{
+	if (Controller && Controller->IsLocalPlayerController())
+	{
+		// Null tiles do not recieve this event
+		if (!bIsNullTile)
+		{ 
+			BP_OnHoverStart(Controller);
+		}
+
+		#if WITH_EDITORONLY_DATA
+		bHighlightTile = true;
+		#endif
+	}
+}
+
+void ATile::EndHoveringTile(ACSKPlayerController* Controller)
+{
+	if (Controller && Controller->IsLocalPlayerController())
+	{
+		// Null tiles do not recieve this event
+		if (!bIsNullTile)
+		{
+			BP_OnHoverEnd(Controller);
+		}
+
+		#if WITH_EDITORONLY_DATA
+		bHighlightTile = false;
+		#endif
+	}
 }
 
 bool ATile::SetBoardPiece(AActor* BoardPiece)
@@ -116,15 +149,16 @@ bool ATile::IsTileOccupied() const
 
 bool ATile::CanPlaceTowersOn() const
 {
-	if (!IsTileOccupied())
+	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	return BoardManager ? BoardManager->CanPlaceTowerOnTile(this) : false;
+}
+
+ACSKPlayerState* ATile::GetBoardPiecesOwner() const
+{
+	if (IsTileOccupied())
 	{
-		// Towers aren't allowed to be built on portal tiles
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (BoardManager->IsPlayerPortalTile(this) == -1)
-		{
-			return true;
-		}
+		return PieceOccupant->GetBoardPieceOwnerPlayerState();
 	}
 
-	return false;
+	return nullptr;
 }

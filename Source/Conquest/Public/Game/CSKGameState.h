@@ -10,6 +10,7 @@ class ABoardManager;
 class ACastle;
 class ACSKPlayerController;
 class ATile;
+class ATower;
 
 /**
  * Tracks state of game and stats about the board
@@ -156,6 +157,9 @@ protected:
 		SetActorTickEnabled(!bEnable);
 	}
 
+	/** Helper function for adding bonus time to action phase timer */
+	void AddBonusActionPhaseTime();
+
 protected:
 
 	/** ID of the player whose action phase it is */
@@ -178,15 +182,22 @@ public:
 	/** Notify that the current move request has finished */
 	void HandleMoveRequestFinished();
 
+	/** Notify that a new tower has been placed on the map */
+	void HandleBuildRequestConfirmed(ATower* NewTower);
+
 private:
 
 	/** Handle movement request confirmation on every clients */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestConfirmed();
 
-	/** Handle movement request confirmation on every clients */
+	/** Handle movement request finished on every clients */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestFinished();
+
+	/** Handle build request confirmation client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleBuildRequestConfirmed(ATower* NewTower);
 
 protected:
 

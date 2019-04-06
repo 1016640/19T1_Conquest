@@ -6,6 +6,7 @@
 #include "UObject/Interface.h"
 #include "BoardPieceInterface.generated.h"
 
+class ACSKPlayerState;
 class ATile;
 
 UINTERFACE(MinimalAPI)
@@ -20,6 +21,14 @@ class UBoardPieceInterface : public UInterface
 class CONQUEST_API IBoardPieceInterface
 {
 	GENERATED_BODY()
+
+public:
+
+	/** Set the player state for the player who owns this board piece */
+	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) PURE_VIRTUAL(IBoardPieceInterface::SetBoardPieceOwnerPlayerState, )
+
+	/** Get the player state for the player who owns this board peice */
+	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const PURE_VIRTUAL(IBoardPieceInterface::GetBoardPieceOwnerPlayerState, return nullptr;)
 
 public:
 

@@ -16,6 +16,7 @@
 #include "GameDelegates.h"
 #include "Tile.h"
 #include "TimerManager.h"
+#include "Tower.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -59,7 +60,6 @@ ACSKGameMode::ACSKGameMode()
 	BonusActionPhaseTime = 20.f;
 	MinTileMovements = 1;
 	MaxTileMovements = 2;
-	MaxTowerConstructs = 0;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -215,7 +215,7 @@ ACastleAIController* ACSKGameMode::SpawnDefaultCastleFor(ACSKPlayerController* N
 		TSubclassOf<ACastle> CastleTemplate = PlayerID == 0 ? Player1CastleClass : Player2CastleClass;
 		if (CastleTemplate)
 		{
-			ACastle* Castle = SpawnCastleAtPortal(PlayerID, CastleTemplate);
+			ACastle* Castle = SpawnCastleAtPortal(NewPlayer, CastleTemplate);
 			if (Castle)
 			{
 				return SpawnCastleControllerFor(Castle);
@@ -230,14 +230,15 @@ ACastleAIController* ACSKGameMode::SpawnDefaultCastleFor(ACSKPlayerController* N
 	return nullptr;
 }
 
-ACastle* ACSKGameMode::SpawnCastleAtPortal(int32 PlayerID, TSubclassOf<ACastle> Class) const
+ACastle* ACSKGameMode::SpawnCastleAtPortal(ACSKPlayerController* Controller, TSubclassOf<ACastle> Class) const
 {
+	check(Controller);
 	check(Class);
 
 	const ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 	if (BoardManager)
 	{
-		ATile* PortalTile = BoardManager->GetPlayerPortalTile(PlayerID);
+		ATile* PortalTile = BoardManager->GetPlayerPortalTile(Controller->CSKPlayerID);
 		if (PortalTile)
 		{
 			FTransform TileTransform = PortalTile->GetTransform();
@@ -245,12 +246,18 @@ ACastle* ACSKGameMode::SpawnCastleAtPortal(int32 PlayerID, TSubclassOf<ACastle> 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.ObjectFlags |= RF_Transient;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			//SpawnParams.bDeferConstruction = true;
+			SpawnParams.bDeferConstruction = true;
 
 			ACastle* Castle = GetWorld()->SpawnActor<ACastle>(Class, TileTransform, SpawnParams);
-			if (!Castle)
+			if (Castle)
 			{
-				UE_LOG(LogConquest, Warning, TEXT("Failed to spawn castle for Player %i"), PlayerID + 1);
+				// Initialize castle with the players state before spawning, so it gets sent with initial replication
+				Castle->SetBoardPieceOwnerPlayerState(Controller->GetCSKPlayerState());
+				Castle->FinishSpawning(TileTransform);
+			}
+			else
+			{
+				UE_LOG(LogConquest, Warning, TEXT("Failed to spawn castle for Player %i"), Controller->CSKPlayerID + 1);
 			}
 
 			return Castle;
@@ -533,6 +540,7 @@ void ACSKGameMode::OnFirstActionPhaseStart()
 	ActionPhaseActiveController = GetActivePlayerForActionPhase(0);
 	ActionPhaseActiveController->SetActionPhaseEnabled(true);
 	
+	// TODO: reset function
 	bWaitingOnActivePlayerMoveAction = false;
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
@@ -545,6 +553,7 @@ void ACSKGameMode::OnSecondActionPhaseStart()
 	ActionPhaseActiveController = GetActivePlayerForActionPhase(1);
 	ActionPhaseActiveController->SetActionPhaseEnabled(true);
 
+	// TODO: reset function
 	bWaitingOnActivePlayerMoveAction = false;
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
@@ -641,14 +650,12 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 		return false;
 	}
 
-	// TODO: Add check if round state is right and move action is allowed
-	// for now
-	if (bWaitingOnActivePlayerMoveAction)
+	// An action request might already be active
+	if (!IsActionPhaseInProgress() || IsWaitingForAction())
 	{
 		return false;
 	}
 
-	// This player might have already used all their moves
 	if (ActionPhaseActiveController->CanRequestCastleMoveAction())
 	{
 		ACastle* Castle = ActionPhaseActiveController->GetCastlePawn();
@@ -657,7 +664,7 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 		if (!Origin || Origin == Goal)
 		{
 			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestCastleMove: Move request "
-				"denied as castle tile is either invalid or the move goal"));
+				"denied as castle tile is either invalid or is the move goal"));
 
 			return false;
 		}
@@ -693,6 +700,108 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 	return false;
 }
 
+bool ACSKGameMode::RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* Tile)
+{
+	if (!Tile)
+	{
+		return false;
+	}
+
+	// We don't build base towers
+	if (!TowerTemplate || TowerTemplate->HasAnyClassFlags(CLASS_Abstract))
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTowe: Tower Template "
+			"is invalid. Tower template was either null or was marked as abstract"));
+	}
+
+	// Player is not the active player
+	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
+	{
+		return false;
+	}
+
+	// An action request might already be active
+	if (!IsActionPhaseInProgress() || IsWaitingForAction())
+	{
+		return false;
+	}
+
+	if (ActionPhaseActiveController->CanRequestBuildTowerAction())
+	{
+		// We have to be allowed to place towers on the desired tile
+		if (!Tile->CanPlaceTowersOn())
+		{
+			return false;
+		}
+
+		ATower* DefaultTower = TowerTemplate.GetDefaultObject();
+		check(DefaultTower);
+
+		bool bIsLegendaryTower = DefaultTower->IsLegendaryTower();
+
+		// Need to make sure player can't build more towers than allowed
+		int32 TowerMax = bIsLegendaryTower ? MaxNumLegendaryTowers : MaxNumTowers;
+		int32 TowerMaxDuplicates = bIsLegendaryTower ? 1 : MaxNumDuplicatedTowers;
+
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (ensure(PlayerState))
+		{
+			// TODO: Check cost
+
+			// Has this player built too much of this tower?
+			int32 TowersBuilt = bIsLegendaryTower ? PlayerState->GetNumLegendaryTowersOwned() : PlayerState->GetNumNormalTowersOwned();
+			if (TowersBuilt >= TowerMax)
+			{
+				return false;
+			}
+
+			// Does player already have max amount of duplicates of the specific tower
+			int32 TowerDuplicates = PlayerState->GetNumOwnedTowerDuplicates(TowerTemplate);
+			if (TowerDuplicates >= TowerMaxDuplicates)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTower: Player may exceed "
+				"max number of towers as player state is not of CSKPlayerState"));
+		}
+
+		// Confirm request if tower was successfully spawned
+		ATower* NewTower = SpawnTowerFor(TowerTemplate, Tile, PlayerState);
+		if (NewTower)
+		{
+			return ConfirmBuildTower(NewTower, Tile);
+		}
+	}
+
+	return false;
+}
+
+void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode)
+{
+	if (IsActionPhaseInProgress())
+	{
+		check(ActionPhaseActiveController);
+		if (ActionPhaseActiveController->DisableActionMode(ActionMode) || true)
+		{
+			// TODO: end this round
+			// for now
+			// will also prob want to add some small delays here to make sure
+			// all changes reach all clients
+			if (RoundState == ECSKRoundState::FirstActionPhase)
+			{
+				EnterRoundState(ECSKRoundState::SecondActionPhase);
+			}
+			else
+			{
+				EnterRoundState(ECSKRoundState::EndRoundPhase);
+			}
+		}
+	}
+}
+
 bool ACSKGameMode::ConfirmCastleMove(const FBoardPath& BoardPath)
 {
 	check(IsActionPhaseInProgress());
@@ -721,7 +830,8 @@ bool ACSKGameMode::ConfirmCastleMove(const FBoardPath& BoardPath)
 			Handle_ActivePlayerPathSegment = FollowComp->OnBoardSegmentCompleted.AddUObject(this, &ACSKGameMode::OnActivePlayersPathSegmentComplete);
 			Handle_ActivePlayerPathComplete = FollowComp->OnBoardPathFinished.AddUObject(this, &ACSKGameMode::OnActivePlayersPathFollowComplete);
 
-			bWaitingOnActivePlayerMoveAction = true;
+			bWaitingOnActionRequest = true;
+			bWaitingOnActivePlayerMoveAction = true;		
 		}
 		else
 		{
@@ -773,7 +883,8 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 		FollowComp->OnBoardSegmentCompleted.Remove(Handle_ActivePlayerPathSegment);
 		FollowComp->OnBoardPathFinished.Remove(Handle_ActivePlayerPathComplete);
 
-		bWaitingOnActivePlayerMoveAction = false;
+		bWaitingOnActionRequest = false;
+		bWaitingOnActivePlayerMoveAction = false;		
 		Handle_ActivePlayerPathSegment.Reset();
 		Handle_ActivePlayerPathComplete.Reset();
 	}
@@ -795,21 +906,21 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 		}
 	}
 
-	ActionPhaseActiveController->OnMoveActionFinished();
+	// TODO: Could possibly check if player hasn't used all tiles they can use here
 
-	// For now
-	if (RoundState == ECSKRoundState::FirstActionPhase)
-	{
-		EnterRoundState(ECSKRoundState::SecondActionPhase);
-	}
-	else
-	{
-		EnterRoundState(ECSKRoundState::EndRoundPhase);
-	}
+	// Disable this player from moving their castle again
+	DisableActionModeForActivePlayer(ECSKActionPhaseMode::MoveCastle);
 }
 
 void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
 {
+	// Keep track of how many tiles this player has moved this round
+	ACSKPlayerState* State = ActionPhaseActiveController ? ActionPhaseActiveController->GetCSKPlayerState() : nullptr;
+	if (State)
+	{
+		State->IncrementTilesTraversed();
+	}
+
 	// Check if active player has won
 	if (!PostCastleMoveCheckWinCondition(SegmentTile))
 	{
@@ -819,6 +930,13 @@ void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
 
 void ACSKGameMode::OnActivePlayersPathFollowComplete(ATile* DestinationTile)
 {
+	// Keep track of how many tiles this player has moved this round
+	ACSKPlayerState* State = ActionPhaseActiveController ? ActionPhaseActiveController->GetCSKPlayerState() : nullptr;
+	if (State)
+	{
+		State->IncrementTilesTraversed();
+	}
+
 	// Check if activer player has won
 	if (!PostCastleMoveCheckWinCondition(DestinationTile))
 	{
@@ -852,6 +970,82 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 	}
 
 	return false;
+}
+
+ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
+{
+	check(Template);
+	check(Tile);
+	check(PlayerState);
+
+	FTransform TileTransform = Tile->GetTransform();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.bDeferConstruction = true;
+
+	ATower* Tower = GetWorld()->SpawnActor<ATower>(Template, TileTransform, SpawnParams);
+	if (Tower)
+	{
+		Tower->SetBoardPieceOwnerPlayerState(PlayerState);
+		Tower->FinishSpawning(TileTransform);
+	}
+
+	return Tower;
+}
+
+bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
+{
+	check(IsActionPhaseInProgress());
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	// Place tower on tile
+	{
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
+
+		if (!BoardManager->PlaceBoardPieceOnTile(Tower, Tile))
+		{
+			UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::ConfirmBuildTower: Failed to place "
+				"new tower (%s) on the board! Destroying tower"), *Tower->GetName());
+
+			Tower->Destroy();
+			return false;
+		}
+	}
+
+	// TODO: hook callbacks (both in general and potential build anim)
+	{
+
+	}
+
+	// Inform game state
+	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			CSKGameState->HandleBuildRequestConfirmed(Tower);
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnTowerBuildRequestConfirmed(Tower);
+		}
+	}
+
+	// TODO:
+	// We might want to wait for a build animation or the sorts (this will
+	// require us to alter the game state as well), but for now, buildings are
+	// instant, so we can 'finish' here
+
+	// TODO: check if player could possibly build any more towers, disable build tower action mode if not
+	DisableActionModeForActivePlayer(ECSKActionPhaseMode::BuildTowers);
+
+	return true;
 }
 
 

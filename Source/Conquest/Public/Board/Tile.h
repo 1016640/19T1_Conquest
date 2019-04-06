@@ -6,6 +6,8 @@
 #include "GameFramework/Actor.h"
 #include "Tile.generated.h"
 
+class ACSKPlayerController;
+class ACSKPlayerState;
 class IBoardPieceInterface;
 
 /**
@@ -62,6 +64,24 @@ protected:
 
 public:
 
+	/** Informs this tile that given player is now hovering over it */
+	void StartHoveringTile(ACSKPlayerController* Controller);
+
+	/** Informs this tile thay given player is no longer hovering over it */
+	void EndHoveringTile(ACSKPlayerController* Controller);
+
+protected:
+
+	/** Event for when the player has started to hover over this tile. This event will only ever be called on the client */
+	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName="On Hover Start"))
+	void BP_OnHoverStart(ACSKPlayerController* Controller);
+
+	/** Event for when the player is no longer hovering over this tile. This event will only ever be called on the client */
+	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName = "On Hover End"))
+	void BP_OnHoverEnd(ACSKPlayerController* Controller);
+
+public:
+
 	/** Set a new board piece to occupy this tile. Get if setting piece was successful */
 	bool SetBoardPiece(AActor* BoardPiece);
 
@@ -96,9 +116,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	bool CanPlaceTowersOn() const;
 
+	/** Get the player state for the player whose board piece is on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	ACSKPlayerState* GetBoardPiecesOwner() const;
+
 private:
 
-	// TODO: Save on client via RPC
 	/** The board piece currently on this tile */
 	UPROPERTY(Transient)
 	TScriptInterface<IBoardPieceInterface> PieceOccupant;

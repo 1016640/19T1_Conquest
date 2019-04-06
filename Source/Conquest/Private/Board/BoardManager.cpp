@@ -363,6 +363,17 @@ ATile* ABoardManager::GetTileAtLocation(const FVector& Location) const
 	return HexGrid.GetTile(FHexGrid::ConvertWorldToHex(Location, Origin, Size));
 }
 
+bool ABoardManager::CanPlaceTowerOnTile(const ATile* Tile) const
+{
+	if (Tile && !Tile->IsTileOccupied())
+	{
+		// Towers aren't allowed to be build on portal tiles
+		return IsPlayerPortalTile(Tile) == -1;
+	}
+
+	return false;
+}
+
 bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const
 {
 	if (HasAuthority())
