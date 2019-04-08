@@ -73,6 +73,13 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 
 	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
+
+	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
+	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
+	DOREPLIFETIME(ACSKGameState, MaxNumDuplicatedTowers);
+	DOREPLIFETIME(ACSKGameState, MaxNumLegendaryTowers);
+	DOREPLIFETIME(ACSKGameState, MinTileMovements);
+	DOREPLIFETIME(ACSKGameState, MaxTileMovements);
 }
 
 void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
@@ -130,6 +137,10 @@ void ACSKGameState::NotifyWaitingForPlayers()
 {
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
+
+	// Capture rules set out by the game mode, as
+	// certain checks need to know about these values
+	UpdateRules();
 }
 
 void ACSKGameState::NotifyPerformCoinFlip()
@@ -145,6 +156,8 @@ void ACSKGameState::NotifyMatchStart()
 	{
 		bReplicatedHasBegunPlay = true;
 	}
+
+	RoundsPlayed = 0;
 }
 
 void ACSKGameState::NotifyMatchFinished()
@@ -165,6 +178,8 @@ void ACSKGameState::NotifyCollectionPhaseStart()
 
 void ACSKGameState::NotifyFirstCollectionPhaseStart()
 {
+	++RoundsPlayed;
+
 	// Game mode only exists on the server
 	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
 	if (GameMode)
@@ -174,11 +189,9 @@ void ACSKGameState::NotifyFirstCollectionPhaseStart()
 		{
 			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
 		}
-
-		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
 	}
 
-	SetFreezeActionPhaseTimer(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::NotifySecondCollectionPhaseStart()
@@ -192,16 +205,14 @@ void ACSKGameState::NotifySecondCollectionPhaseStart()
 		{
 			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
 		}
-
-		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
 	}
 
-	SetFreezeActionPhaseTimer(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::NotifyEndRoundPhaseStart()
 {
-	SetActorTickEnabled(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::OnRep_MatchState()
@@ -299,6 +310,14 @@ void ACSKGameState::AddBonusActionPhaseTime()
 	}
 }
 
+void ACSKGameState::ResetActionPhaseProperties()
+{
+	ActionPhaseTimeRemaining = ActionPhaseTime;
+
+	// This will disable tick when entering end round phase
+	SetFreezeActionPhaseTimer(IsActionPhaseActive());
+}
+
 void ACSKGameState::HandleMoveRequestConfirmed()
 {
 	if (IsActionPhaseActive() && HasAuthority())
@@ -318,14 +337,50 @@ void ACSKGameState::HandleMoveRequestFinished()
 	}
 }
 
-void ACSKGameState::HandleBuildRequestConfirmed(ATower* NewTower)
+void ACSKGameState::HandleBuildRequestConfirmed(ATower* NewTower, ATile* TargetTile)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
-		// Add bonus time after having built a tower
+		Multi_HandleBuildRequestConfirmed(TargetTile);
+	}
+}
+
+void ACSKGameState::HandleBuildRequestFinished()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after an action is complete
 		AddBonusActionPhaseTime();
 
-		Multi_HandleBuildRequestConfirmed(NewTower);
+		Multi_HandleBuildRequestFinished();
+	}
+}
+
+bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const
+{
+	ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		return PlayerState->GetTilesTraversedThisRound() >= MinTileMovements;
+	}
+
+	return false;
+}
+
+void ACSKGameState::UpdateRules()
+{
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		ActionPhaseTime = GameMode->GetActionPhaseTime();
+		MaxNumTowers = GameMode->GetMaxNumTowers();
+		MaxNumDuplicatedTowers = GameMode->GetMaxNumDuplicatedTowers();
+		MaxNumLegendaryTowers = GameMode->GetMaxNumLegendaryTowers();
+		MinTileMovements = GameMode->GetMinTileMovementsPerTurn();
+		MaxTileMovements = GameMode->GetMaxTileMovementsPerTurn();
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameState: Rules updated"));
 	}
 }
 
@@ -339,6 +394,12 @@ void ACSKGameState::Multi_HandleMoveRequestFinished_Implementation()
 	SetFreezeActionPhaseTimer(false);
 }
 
-void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATower* NewTower)
+void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
+	SetFreezeActionPhaseTimer(true);
+}
+
+void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation()
+{
+	SetFreezeActionPhaseTimer(false);
 }

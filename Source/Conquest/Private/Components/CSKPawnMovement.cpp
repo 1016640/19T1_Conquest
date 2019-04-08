@@ -166,8 +166,14 @@ void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
 
 	FVector Displacement = TargetLocation - ComponentLocation;
 	
-	// Dividing by delta time here as later in TickComponent, velocity will get multiplied by it (which we want to negate)
-	Velocity = Displacement.GetClampedToMaxSize(GetMaxSpeed()) / DeltaTime;
+	float Distance = Displacement.Size();
+	float MaxSpeed = GetMaxSpeed();
+
+	// Travel faster if further away, but maintain focus if within range
+	const float TravelDilation = 3.f; // TODO: make this a variable?
+	float Scale = Distance > (MaxSpeed / 4.f) ? (MaxSpeed * TravelDilation) : (Distance / DeltaTime);
+	
+	Velocity = Displacement.GetSafeNormal() * Scale;
 
 	// Consume input for this frame
 	ConsumeInputVector();

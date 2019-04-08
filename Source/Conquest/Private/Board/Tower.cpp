@@ -11,6 +11,15 @@ ATower::ATower()
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
 
+	bReplicates = true;
+	bReplicateMovement = false;
+	bOnlyRelevantToOwner = false;
+
+	// Actors aren't relevant when hidden, this will result in board piece
+	// placement in ATile passing null when placing this tower on the client.
+	// We need the PlacedOnTile event to fire so we move client side
+	bAlwaysRelevant = true;		
+
 	OwnerPlayerState = nullptr;
 	CachedTile = nullptr;
 	bIsLegendaryTower = false;
@@ -42,10 +51,10 @@ void ATower::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	// TODO: make config variable
-	static const float InterpSpeed = 6.f;
+	static const float InterpSpeed = 2.f;
 
 	FVector CurLocation = GetActorLocation();
-	FVector TarLocation = GetTargetLocation();
+	FVector TarLocation = CachedTile->GetActorLocation();
 
 	float CurZ = CurLocation.Z;
 	float TarZ = TarLocation.Z;
@@ -76,6 +85,7 @@ void ATower::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePr
 
 void ATower::StartBuildSequence()
 {
+	// Start off under the board, our sequence involves us moving on top of it
 	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 	if (BoardManager)
 	{
@@ -85,15 +95,19 @@ void ATower::StartBuildSequence()
 	// Start the building sequence
 	SetActorHiddenInGame(false);
 	SetActorTickEnabled(true);
+
+	BP_OnStartBuildSequence();
 }
 
 void ATower::FinishBuildSequence()
 {
-	if (HasAuthority())
-	{
-		// TODO: notify game mode
-	}
-
 	// Only needed to tick to move ourselves into place
 	SetActorTickEnabled(false);
+
+	BP_OnFinishBuildSequence();
+
+	if (HasAuthority())
+	{
+		OnBuildSequenceComplete.Broadcast();
+	}
 }

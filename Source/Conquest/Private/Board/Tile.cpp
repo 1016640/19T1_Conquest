@@ -126,6 +126,15 @@ void ATile::Multi_SetBoardPiece_Implementation(AActor* BoardPiece)
 		// Execute any events after set up is complete
 		BP_OnBoardPieceSet(BoardPiece);
 	}
+	else
+	{
+		// If we are clients and the board piece is null
+		if (!BoardPiece && !HasAuthority())
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ATile::Multi_SetBoardPiece: Board Piece is null on the client. "
+				"This board piece may not be replicating or has yet to replicate."))
+		}
+	}
 }
 
 void ATile::Multi_ClearBoardPiece_Implementation()

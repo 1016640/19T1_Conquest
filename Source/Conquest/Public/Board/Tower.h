@@ -9,7 +9,8 @@
 
 class UStaticMeshComponent;
 
-DECLARE_DELEGATE(FTowerBuildSequenceComplete);
+/** Delegate for towers when they complete the build sequence */
+DECLARE_MULTICAST_DELEGATE(FTowerBuildSequenceComplete);
 
 /** 
  * Towers are board pieces that occupy a single tile and cannot move.
@@ -61,6 +62,12 @@ protected:
 protected:
 
 	/** Event for when we have started the build sequence. This is called on individual clients */
+	UFUNCTION(BlueprintImplementableEvent, Category = Tower, meta = (DisplayName="On Start Build Sequence"))
+	void BP_OnStartBuildSequence();
+
+	/** Event for when we have finished the build sequence. This is called on individual clients */
+	UFUNCTION(BlueprintImplementableEvent, Category = Tower, meta = (DisplayName = "On Finish Build Sequence"))
+	void BP_OnFinishBuildSequence();
 
 private:
 
@@ -69,6 +76,11 @@ private:
 
 	/** Ends the building sequence */
 	void FinishBuildSequence();
+
+public:
+
+	/** Event for when build sequence has finish. This only gets executed on the server */
+	FTowerBuildSequenceComplete OnBuildSequenceComplete;
 
 private:
 

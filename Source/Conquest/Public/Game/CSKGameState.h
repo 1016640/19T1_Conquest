@@ -160,6 +160,11 @@ protected:
 	/** Helper function for adding bonus time to action phase timer */
 	void AddBonusActionPhaseTime();
 
+private:
+
+	/** Resets action phase variables */
+	void ResetActionPhaseProperties();
+
 protected:
 
 	/** ID of the player whose action phase it is */
@@ -183,25 +188,70 @@ public:
 	void HandleMoveRequestFinished();
 
 	/** Notify that a new tower has been placed on the map */
-	void HandleBuildRequestConfirmed(ATower* NewTower);
+	void HandleBuildRequestConfirmed(ATower* NewTower, ATile* TargetTile);
+
+	/** Notify that the current build request has finished */
+	void HandleBuildRequestFinished();
 
 private:
 
-	/** Handle movement request confirmation on every clients */
+	/** Handle movement request confirmation client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestConfirmed();
 
-	/** Handle movement request finished on every clients */
+	/** Handle movement request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestFinished();
 
 	/** Handle build request confirmation client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleBuildRequestConfirmed(ATower* NewTower);
+	void Multi_HandleBuildRequestConfirmed(ATile* TargetTile);
+
+	/** Handle build request finished client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleBuildRequestFinished();
+
+public:
+
+	/** If given player has moved the required amount of tiles this turn */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const;
+
+protected:
+
+	/** Updates the rules variables by cloning rules establish by game mode */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = CSK)
+	void UpdateRules();
+
+protected:
+
+	/** Cached action phase timer used to reset action phase time each round */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	float ActionPhaseTime;
+
+	/** The max number of NORMAL towers players are allowed to build */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumTowers;
+
+	/** The max number of duplicated NORMAL towers a player can have built at once */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumDuplicatedTowers;
+
+	/** The max number of LEGENDARY towers a player can have built at once */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumLegendaryTowers;
+
+	/** The minimum amount of tiles a player must move each action phase */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MinTileMovements;
+
+	/** The maximum amount of tiles a player can move each action round */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxTileMovements;
 
 protected:
 
 	/** How many rounds have been played */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Stats)
+	UPROPERTY(BlueprintReadOnly, Category = Stats)
 	int32 RoundsPlayed;
 };

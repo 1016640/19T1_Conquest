@@ -141,10 +141,13 @@ bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount) const
 
 int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const
 {
-	const int32* Num = CachedUniqueTowerCount.Find(Tower);
-	if (Num != nullptr)
-	{
-		return *Num;
+	if (Tower)
+	{		
+		const int32* Num = CachedUniqueTowerCount.Find(Tower);
+		if (Num != nullptr)
+		{
+			return *Num;
+		}
 	}
 
 	return 0;
@@ -172,16 +175,14 @@ void ACSKPlayerState::UpdateTowerCounts()
 			++CachedNumLegendaryTowers;
 		}
 
-		UClass* StaticTower = Tower->StaticClass();
-		check(StaticTower);
-
-		if (CachedUniqueTowerCount.Contains(StaticTower))
+		TSubclassOf<ATower> TowerClass = Tower->GetClass();
+		if (CachedUniqueTowerCount.Contains(TowerClass))
 		{
-			CachedUniqueTowerCount[StaticTower]++;
+			CachedUniqueTowerCount[TowerClass]++;
 		}
 		else
 		{
-			CachedUniqueTowerCount.Add(StaticTower, 1);
+			CachedUniqueTowerCount.Add(TowerClass, 1);
 		}
 	}
 }

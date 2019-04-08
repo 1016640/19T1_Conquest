@@ -198,6 +198,9 @@ protected:
 
 public:
 
+	/** Will attempt to end active players action phase if active player has fulfilled action requirements */
+	bool RequestEndActionPhase();
+
 	/** Will attempt to move active players castle towards given tile. Doing this will
 	lock the ability for any other action to be made until castle reaches it's destination */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -242,6 +245,10 @@ private:
 
 	/** Notify from timer that we should start tower build sequence */
 	void OnStartActivePlayersBuildSequence();
+
+	/** Notify from the active players pending tower that is has completed its build seuqence */
+	UFUNCTION()
+	void OnPendingTowerBuildSequenceComplete();
 
 public:
 
@@ -302,6 +309,8 @@ private:
 	/** Timer handle for when activating the build sequence for pending tower */
 	FTimerHandle Handle_ActivePlayerStartBuildSequence;
 
+	/** Delegate handle for when pending towers build sequence has completed */
+	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
 public:
 
@@ -312,6 +321,11 @@ public:
 
 	/** Helper function for getting the player whose action phase it is based on starting player ID */
 	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
+
+private:
+
+	/** Helper function for initializing an action phase for given player */
+	void UpdateActivePlayerForActionPhase(int32 Phase);
 
 protected:
 
@@ -347,6 +361,15 @@ public:
 	/** Clamps value based on max mana allowed */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 ClampManaToLimit(int32 Mana) const { return FMath::Clamp(Mana, 0, MaxMana); }
+
+	/** Get the max number of NORMAL towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumTowers() const { return MaxNumTowers; }
+
+	/** Get the max number of duplicate NORMAL towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumDuplicatedTowers() const { return MaxNumDuplicatedTowers; }
+
+	/** Get the max number of LEGENDARY towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumLegendaryTowers() const { return MaxNumLegendaryTowers; }
 
 protected:
 
@@ -398,6 +421,9 @@ public:
 	/** Get the bonus time to add to action phase time after finishing an action */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
+
+	/** Get the min amount of tiles that must be traversed per action phase */
+	FORCEINLINE int32 GetMinTileMovementsPerTurn() const { return MinTileMovements; }
 
 	/** Get the max amount of tiles that can be traversed per action phase */
 	FORCEINLINE int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }

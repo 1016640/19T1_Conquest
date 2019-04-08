@@ -150,6 +150,11 @@ void ACSKPlayerController::SelectTile()
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
+				// TODO: Move this to a function
+				if (HoveredTile)
+				{
+					Server_RequestBuildTowerAction(TestTowerTemplate, HoveredTile);
+				}
 				break;
 			}
 			case ECSKActionPhaseMode::CastSpell:
@@ -247,6 +252,14 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 	}
 }
 
+void ACSKPlayerController::EndActionPhase()
+{
+	if (IsLocalPlayerController() && CanEndActionPhase())
+	{
+		Server_EndActionPhase();
+	}
+}
+
 void ACSKPlayerController::SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly)
 {
 	if (NewMode == ECSKActionPhaseMode::All)
@@ -286,6 +299,23 @@ bool ACSKPlayerController::Server_SetActionMode_Validate(ECSKActionPhaseMode New
 void ACSKPlayerController::Server_SetActionMode_Implementation(ECSKActionPhaseMode NewMode)
 {
 	SetActionMode(NewMode);
+}
+
+bool ACSKPlayerController::CanEndActionPhase() const
+{
+	if (IsPerformingActionPhase())
+	{
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			return GameState->HasPlayerMovedRequiredTiles(this);
+		}
+
+		// If movement is being tracked, just assume we can end action phase whenever
+		return true;
+	}
+
+	return false;
 }
 
 bool ACSKPlayerController::CanEnterActionMode(ECSKActionPhaseMode ActionMode) const
@@ -381,13 +411,26 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 	}
 }
 
-void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATower* NewTower)
+void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
+	bCanSelectTile = false;
+
 	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && NewTower)
+	if (Pawn && TargetTile)
 	{
-		// Have the client waiting be forced to see where a tower was built
-		Pawn->TravelToLocation(NewTower->GetActorLocation(), IsPerformingActionPhase());
+		// Have players watch get tower built
+		Pawn->TrackActor(TargetTile);
+	}
+}
+
+void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
+{
+	bCanSelectTile = true;
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn)
+	{
+		Pawn->TrackActor(nullptr);
 	}
 }
 
@@ -403,6 +446,31 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 	}
 
 	return false;
+}
+
+bool ACSKPlayerController::Server_EndActionPhase_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_EndActionPhase_Implementation()
+{
+	bool bSuccess = false;
+
+	if (CanEndActionPhase())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestEndActionPhase();
+		}
+	}
+
+	// TODO: notify client if we failed (we prob want to send a reason as well)
+	if (!bSuccess)
+	{
+
+	}
 }
 
 bool ACSKPlayerController::Server_RequestCastleMoveAction_Validate(ATile* Goal)
@@ -421,6 +489,31 @@ void ACSKPlayerController::Server_RequestCastleMoveAction_Implementation(ATile* 
 		{
 			bSuccess = GameMode->RequestCastleMove(Goal);
 		}		
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_RequestBuildTowerAction_Validate(TSubclassOf<ATower> Tower, ATile* Target)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubclassOf<ATower> Tower, ATile* Target)
+{
+	bool bSuccess = false;
+
+	if (CanRequestBuildTowerAction())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestBuildTower(Tower, Target);
+		}
 	}
 
 	// TODO: inform client if we failed

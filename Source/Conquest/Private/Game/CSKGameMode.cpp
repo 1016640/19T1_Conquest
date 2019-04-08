@@ -537,11 +537,7 @@ void ACSKGameMode::OnCollectionPhaseStart()
 
 void ACSKGameMode::OnFirstActionPhaseStart()
 {
-	ActionPhaseActiveController = GetActivePlayerForActionPhase(0);
-	ActionPhaseActiveController->SetActionPhaseEnabled(true);
-	
-	// TODO: reset function
-	bWaitingOnActivePlayerMoveAction = false;
+	UpdateActivePlayerForActionPhase(0);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
@@ -549,12 +545,7 @@ void ACSKGameMode::OnFirstActionPhaseStart()
 
 void ACSKGameMode::OnSecondActionPhaseStart()
 {
-	ActionPhaseActiveController->SetActionPhaseEnabled(false);
-	ActionPhaseActiveController = GetActivePlayerForActionPhase(1);
-	ActionPhaseActiveController->SetActionPhaseEnabled(true);
-
-	// TODO: reset function
-	bWaitingOnActivePlayerMoveAction = false;
+	UpdateActivePlayerForActionPhase(1);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);
@@ -562,8 +553,7 @@ void ACSKGameMode::OnSecondActionPhaseStart()
 
 void ACSKGameMode::OnEndRoundPhaseStart()
 {
-	ActionPhaseActiveController->SetActionPhaseEnabled(false);
-	ActionPhaseActiveController = nullptr;
+	UpdateActivePlayerForActionPhase(-1);
 
 	UKismetSystemLibrary::PrintString(this, "End round Phase Start", true, false, FLinearColor::Blue, 5.f );
 
@@ -637,6 +627,33 @@ void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundStat
 
 
 
+bool ACSKGameMode::RequestEndActionPhase()
+{
+	// Player is not the active player
+	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
+	{
+		return false;
+	}
+
+	// An action request might already be active
+	if (!IsActionPhaseInProgress() || IsWaitingForAction())
+	{
+		return false;
+	}
+
+	// Player might not have fulfilled action phase requirements (e.g. moving castle)
+	if (!ActionPhaseActiveController->CanEndActionPhase())
+	{
+		return false;
+	}
+
+	ActionPhaseActiveController->SetActionPhaseEnabled(false);
+
+	// Move onto next phase (TODO: maybe delay?)
+	EnterRoundState(RoundState == ECSKRoundState::FirstActionPhase ? ECSKRoundState::SecondActionPhase : ECSKRoundState::EndRoundPhase);
+	return true;
+}
+
 bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 {
 	if (!Goal)
@@ -708,7 +725,7 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* T
 	}
 
 	// We don't build base towers
-	if (!TowerTemplate || TowerTemplate->HasAnyClassFlags(CLASS_Abstract))
+	if (!TowerTemplate.Get() || TowerTemplate->HasAnyClassFlags(CLASS_Abstract))
 	{
 		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTowe: Tower Template "
 			"is invalid. Tower template was either null or was marked as abstract"));
@@ -784,7 +801,7 @@ void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMo
 	if (IsActionPhaseInProgress())
 	{
 		check(ActionPhaseActiveController);
-		if (ActionPhaseActiveController->DisableActionMode(ActionMode) || true)
+		if (ActionPhaseActiveController->DisableActionMode(ActionMode))
 		{
 			// TODO: end this round
 			// for now
@@ -862,7 +879,6 @@ bool ACSKGameMode::ConfirmCastleMove(const FBoardPath& BoardPath)
 void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 {
 	check(bWaitingOnActivePlayerMoveAction);
-	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
 
 	// Set castle on tile
@@ -975,26 +991,20 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
 
-	// Place tower on tile
+	// TODO: hook callbacks (both in general and potential build anim)
 	{
-	/*	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		check(BoardManager);
-
-		if (!BoardManager->PlaceBoardPieceOnTile(Tower, Tile))
-		{
-			UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::ConfirmBuildTower: Failed to place "
-				"new tower (%s) on the board! Destroying tower"), *Tower->GetName());
-
-			Tower->Destroy();
-			return false;
-		}*/
+		Handle_ActivePlayerBuildSequenceComplete = Tower->OnBuildSequenceComplete.AddUObject(this, &ACSKGameMode::OnPendingTowerBuildSequenceComplete);
 
 		bWaitingOnActivePlayerBuildAction = true;
 	}
 
-	// TODO: hook callbacks (both in general and potential build anim)
+	// Give tower to player
 	{
-	
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (PlayerState)
+		{
+			PlayerState->AddTower(Tower);
+		}
 	}
 
 	// Inform game state
@@ -1002,7 +1012,7 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 		if (CSKGameState)
 		{
-			CSKGameState->HandleBuildRequestConfirmed(Tower);
+			CSKGameState->HandleBuildRequestConfirmed(Tower, Tile);
 		}
 	}
 
@@ -1010,7 +1020,9 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 	{
 		for (ACSKPlayerController* Controller : Players)
 		{
-			Controller->Client_OnTowerBuildRequestConfirmed(Tower);
+			// We will pass the target tile instead of the new tower,
+			// as we don't know if tower will replicate in time
+			Controller->Client_OnTowerBuildRequestConfirmed(Tile);
 		}
 	}
 
@@ -1019,9 +1031,46 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 
 	// Give tower 1 second to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.f, false);
+	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.5f, false);
 
 	return true;
+}
+
+void ACSKGameMode::FinishBuildTower()
+{
+	check(bWaitingOnActivePlayerBuildAction);
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	// Unhook callbacks
+	{
+		ActivePlayerPendingTower->OnBuildSequenceComplete.Remove(Handle_ActivePlayerBuildSequenceComplete);
+
+		bWaitingOnActivePlayerBuildAction = false;
+		Handle_ActivePlayerStartBuildSequence.Invalidate();
+		Handle_ActivePlayerBuildSequenceComplete.Reset();
+	}
+
+	// Inform game state
+	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			CSKGameState->HandleBuildRequestFinished();
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnTowerBuildRequestFinished();
+		}
+	}
+
+	ActivePlayerPendingTower = nullptr;
+	ActivePlayerPendingTowerTile = nullptr;
+
+	// TODO: we want to check if player could possibly build any more towers, if not, we want to force end their turn
 }
 
 
@@ -1056,12 +1105,29 @@ ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, A
 
 void ACSKGameMode::OnStartActivePlayersBuildSequence()
 {
-	check(ActivePlayerPendingTower);
-	check(ActivePlayerPendingTowerTile);
+	check(IsActionPhaseInProgress());
+	check(ActivePlayerPendingTower && ActivePlayerPendingTowerTile);
 
+	// Place tower on board 
 	{
-		ActivePlayerPendingTower->Start
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
+
+		if (!BoardManager->PlaceBoardPieceOnTile(ActivePlayerPendingTower, ActivePlayerPendingTowerTile))
+		{
+			UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::OnStartActivePlayersBuildSequence: Failed to place "
+				"new tower (%s) on the board! Destroying tower"), *ActivePlayerPendingTower->GetName());
+
+			ActivePlayerPendingTower->Destroy();
+			
+			// TODO: Notify active player that build request failed
+		}
 	}
+}
+
+void ACSKGameMode::OnPendingTowerBuildSequenceComplete()
+{
+	FinishBuildTower();
 }
 
 
@@ -1088,6 +1154,28 @@ ACSKPlayerController* ACSKGameMode::GetActivePlayerForActionPhase(int32 Phase) c
 	}
 
 	return nullptr;
+}
+
+void ACSKGameMode::UpdateActivePlayerForActionPhase(int32 Phase)
+{
+	// Disable action phase for current active player
+	if (ActionPhaseActiveController)
+	{
+		ActionPhaseActiveController->SetActionPhaseEnabled(false);
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Disabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+	}
+
+	ActionPhaseActiveController = GetActivePlayerForActionPhase(Phase);
+	if (ActionPhaseActiveController)
+	{
+		ensure(IsActionPhaseInProgress());
+		ActionPhaseActiveController->SetActionPhaseEnabled(true);
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Enabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+	}
+
+	ResetWaitingOnActionFlags();
 }
 
 void ACSKGameMode::ResetResourcesForPlayers()

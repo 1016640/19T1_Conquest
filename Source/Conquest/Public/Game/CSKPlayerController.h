@@ -137,6 +137,10 @@ public:
 	/** Enables/Disables this players action phase */
 	void SetActionPhaseEnabled(bool bEnabled);
 
+	/** Ends our action phase if we are allowed to */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void EndActionPhase();
+
 	/** Sets the action mode for this player */
 	void SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly = false);
 
@@ -154,6 +158,10 @@ public:
 
 	/** If this player is currently performing their action phase */
 	FORCEINLINE bool IsPerformingActionPhase() const { return bIsActionPhase; }
+
+	/** If this player is allowed to end their action phase */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanEndActionPhase() const;
 
 	/** Get if this player cen enter given action mode */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -205,18 +213,37 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastleMoveRequestFinished();
 
-	// TODO: remove Tower from being passed (as it might not be replicated yet)
 	/** Notify that an action phase build request has been confirmed */
 	UFUNCTION(Client, Reliable)
-	void Client_OnTowerBuildRequestConfirmed(ATower* NewTower);
+	void Client_OnTowerBuildRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that an action phase build request has finished */
+	UFUNCTION(Client, Reliable)
+	void Client_OnTowerBuildRequestFinished();
 
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
 
+	/** Disables all action modes. This is used when the player request their phase be ended */
+	void DisableAllActions();
+
 protected:
+
+	/** Makes a request to the server to end our action phase */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_EndActionPhase();
 
 	/** Makes a request to move our castle towards the goal tile */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestCastleMoveAction(ATile* Goal);
+
+	/** Makes a request to build a tower at given tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestBuildTowerAction(TSubclassOf<ATower> Tower, ATile* Target);
+
+public:
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<ATower> TestTowerTemplate;
 };

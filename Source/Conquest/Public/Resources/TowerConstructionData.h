@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
-#include "TowerData.generated.h"
+#include "TowerConstructionData.generated.h"
 
 class ATower;
 
