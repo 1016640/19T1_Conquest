@@ -830,7 +830,6 @@ bool ACSKGameMode::ConfirmCastleMove(const FBoardPath& BoardPath)
 			Handle_ActivePlayerPathSegment = FollowComp->OnBoardSegmentCompleted.AddUObject(this, &ACSKGameMode::OnActivePlayersPathSegmentComplete);
 			Handle_ActivePlayerPathComplete = FollowComp->OnBoardPathFinished.AddUObject(this, &ACSKGameMode::OnActivePlayersPathFollowComplete);
 
-			bWaitingOnActionRequest = true;
 			bWaitingOnActivePlayerMoveAction = true;		
 		}
 		else
@@ -883,7 +882,6 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 		FollowComp->OnBoardSegmentCompleted.Remove(Handle_ActivePlayerPathSegment);
 		FollowComp->OnBoardPathFinished.Remove(Handle_ActivePlayerPathComplete);
 
-		bWaitingOnActionRequest = false;
 		bWaitingOnActivePlayerMoveAction = false;		
 		Handle_ActivePlayerPathSegment.Reset();
 		Handle_ActivePlayerPathComplete.Reset();
@@ -972,29 +970,6 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 	return false;
 }
 
-ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
-{
-	check(Template);
-	check(Tile);
-	check(PlayerState);
-
-	FTransform TileTransform = Tile->GetTransform();
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	SpawnParams.bDeferConstruction = true;
-
-	ATower* Tower = GetWorld()->SpawnActor<ATower>(Template, TileTransform, SpawnParams);
-	if (Tower)
-	{
-		Tower->SetBoardPieceOwnerPlayerState(PlayerState);
-		Tower->FinishSpawning(TileTransform);
-	}
-
-	return Tower;
-}
-
 bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 {
 	check(IsActionPhaseInProgress());
@@ -1002,7 +977,7 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 
 	// Place tower on tile
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	/*	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		check(BoardManager);
 
 		if (!BoardManager->PlaceBoardPieceOnTile(Tower, Tile))
@@ -1012,12 +987,14 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 
 			Tower->Destroy();
 			return false;
-		}
+		}*/
+
+		bWaitingOnActivePlayerBuildAction = true;
 	}
 
 	// TODO: hook callbacks (both in general and potential build anim)
 	{
-
+	
 	}
 
 	// Inform game state
@@ -1037,15 +1014,54 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 		}
 	}
 
-	// TODO:
-	// We might want to wait for a build animation or the sorts (this will
-	// require us to alter the game state as well), but for now, buildings are
-	// instant, so we can 'finish' here
+	ActivePlayerPendingTower = Tower;
+	ActivePlayerPendingTowerTile = Tile;
 
-	// TODO: check if player could possibly build any more towers, disable build tower action mode if not
-	DisableActionModeForActivePlayer(ECSKActionPhaseMode::BuildTowers);
+	// Give tower 1 second to replicate
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.f, false);
 
 	return true;
+}
+
+
+ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
+{
+	check(Template);
+	check(Tile);
+	check(PlayerState);
+
+	FTransform TileTransform = Tile->GetTransform();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.bDeferConstruction = true;
+
+	ATower* Tower = GetWorld()->SpawnActor<ATower>(Template, TileTransform, SpawnParams);
+	if (Tower)
+	{
+		Tower->SetBoardPieceOwnerPlayerState(PlayerState);
+
+		// Towers are moved client side when performing the build sequence. This means while we wait,
+		// the actor could pop in and be visible before it moves underground. We can set it to hidden
+		// then revert it back once starting the build sequence
+		Tower->SetActorHiddenInGame(true);
+
+		Tower->FinishSpawning(TileTransform);
+	}
+
+	return Tower;
+}
+
+void ACSKGameMode::OnStartActivePlayersBuildSequence()
+{
+	check(ActivePlayerPendingTower);
+	check(ActivePlayerPendingTowerTile);
+
+	{
+		ActivePlayerPendingTower->Start
+	}
 }
 
 

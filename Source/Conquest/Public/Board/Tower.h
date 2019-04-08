@@ -7,6 +7,10 @@
 #include "BoardPieceInterface.h"
 #include "Tower.generated.h"
 
+class UStaticMeshComponent;
+
+DECLARE_DELEGATE(FTowerBuildSequenceComplete);
+
 /** 
  * Towers are board pieces that occupy a single tile and cannot move.
  */
@@ -24,7 +28,12 @@ public:
 	// Begin IBoardPiece Interface
 	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
+	virtual void PlacedOnTile(ATile* Tile) override;
 	// End IBoardPiece Interface
+
+	// Begin AActor Interface
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
 
 protected:
 
@@ -32,11 +41,40 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
 
+public:
+
+	/** Get mesh */
+	FORCEINLINE UStaticMeshComponent* GetMesh() const { return Mesh; }
+
+private:
+
+	/** The mesh that acts as the base of this tower (some towers might have more than mesh) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UStaticMeshComponent* Mesh;
+
 protected:
 
 	/** The player state of the player who owns this tower */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
 	ACSKPlayerState* OwnerPlayerState;
+
+protected:
+
+	/** Event for when we have started the build sequence. This is called on individual clients */
+
+private:
+
+	/** Starts the building sequence */
+	void StartBuildSequence();
+
+	/** Ends the building sequence */
+	void FinishBuildSequence();
+
+private:
+
+	/** The tile we are currently on, this is cached for quick access to it */
+	UPROPERTY(Transient, DuplicateTransient)
+	ATile* CachedTile;
 
 public:
 

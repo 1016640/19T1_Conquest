@@ -404,4 +404,24 @@ bool ABoardManager::ClearBoardPieceOnTile(ATile* Tile) const
 	return false;
 }
 
+void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) const
+{
+	if (Scale != 0.f)
+	{
+		if (BoardPiece)
+		{
+			FVector Origin;
+			FVector BoxExtents;
+			BoardPiece->GetActorBounds(false, Origin, BoxExtents);
+
+			FVector BoardOrigin = GetActorLocation();
+
+			// Scale the scaler by 2 as box extents if only half of the pieces actual size
+			Origin.Z = BoardOrigin.Z - (BoxExtents.Z * (Scale * 2.f));
+
+			BoardPiece->SetActorLocation(Origin);
+		}
+	}
+}
+
 #undef LOCTEXT_NAMESPACE

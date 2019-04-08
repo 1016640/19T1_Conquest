@@ -7,6 +7,8 @@
 #include "Containers/HexGrid.h"
 #include "BoardManager.generated.h"
 
+class ATower;
+
 struct CONQUEST_API FBoardInitData
 {
 public:
@@ -223,7 +225,7 @@ public:
 	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
 
 	/** Generates a path from the start tile to goal tile */
-	UFUNCTION(BlueprintCallable, Category = "Board")
+	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay = 3))
 	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
 public:
@@ -235,5 +237,11 @@ public:
 	/** Clears the board piece set on given tile. This only runs on the server */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
 	bool ClearBoardPieceOnTile(ATile* Tile) const;
+
+public:
+
+	/** Moves a board piece under the board based on it's boundaries */
+	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay=1))
+	void MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale = 1.5f) const;
 };
 

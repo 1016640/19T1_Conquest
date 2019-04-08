@@ -13,6 +13,7 @@ class ACSKPlayerController;
 class ACSKPlayerState;
 class ATile;
 class ATower;
+class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
 
@@ -230,11 +231,17 @@ private:
 	Will return true if the win condition has been met, false otherwise */
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
+	/** Finalizes build request for active player. The request still has a chance of failing */
+	bool ConfirmBuildTower(ATower* Tower, ATile* Tile);
+
+	/** Finishes the build request for active player. This is after the tower has finished its emerge sequence */
+	void FinishBuildTower();
+
 	/** Spawns a new tower of type for given player at tile */
 	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const;
 
-	/** Finalizes build request for active player. The request still has a chance of failing */
-	bool ConfirmBuildTower(ATower* Tower, ATile* Tile);
+	/** Notify from timer that we should start tower build sequence */
+	void OnStartActivePlayersBuildSequence();
 
 public:
 
@@ -243,11 +250,24 @@ public:
 
 	/** If we are waiting on an action request to finish */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool IsWaitingForAction() const { return bWaitingOnActionRequest; }
+	bool IsWaitingForAction() const { return IsWaitingForCastleMove() || IsWaitingForBuildTower(); }
 
 	/** If we are waiting on a move request to finsih */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsWaitingForCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
+
+	/** If we are waiting on a build request to finish */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsWaitingForBuildTower() const { return bWaitingOnActivePlayerBuildAction; }
+
+private:
+
+	/** Resets all wait action flags */
+	FORCEINLINE void ResetWaitingOnActionFlags()
+	{
+		bWaitingOnActivePlayerMoveAction = false;
+		bWaitingOnActivePlayerBuildAction = false;
+	}
 
 protected:
 
@@ -257,11 +277,11 @@ protected:
 
 private:
 
-	/** If we are waiting for an action request to finish */
-	uint32 bWaitingOnActionRequest : 1;
-
 	/** If we are waiting for active players move action to complete */
 	uint32 bWaitingOnActivePlayerMoveAction : 1;
+
+	/** If we are waiting for active players build action to complete */
+	uint32 bWaitingOnActivePlayerBuildAction : 1;
 
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
@@ -269,7 +289,18 @@ private:
 	/** Delegate handle for when active players castle reaches its destination tile */
 	FDelegateHandle Handle_ActivePlayerPathComplete;
 
+	/** The tower that is in the process of being built. Keeping this here so we can
+	wait for it to initially replicate to all clients before placing on the board */
+	UPROPERTY()
+	ATower* ActivePlayerPendingTower;
 
+	/** The tile the pending tower needs to be palced on.  Keeping this here so we can
+	wait for it the tower to initially replicate to all clients before placing on the board */
+	UPROPERTY()
+	ATile* ActivePlayerPendingTowerTile;
+
+	/** Timer handle for when activating the build sequence for pending tower */
+	FTimerHandle Handle_ActivePlayerStartBuildSequence;
 
 
 public:

@@ -205,6 +205,7 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastleMoveRequestFinished();
 
+	// TODO: remove Tower from being passed (as it might not be replicated yet)
 	/** Notify that an action phase build request has been confirmed */
 	UFUNCTION(Client, Reliable)
 	void Client_OnTowerBuildRequestConfirmed(ATower* NewTower);
