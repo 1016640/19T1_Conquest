@@ -8,7 +8,6 @@ UHealthComponent::UHealthComponent()
 
 	Health = 5;
 	MaxHealth = 5;
-	bIsDead = false;
 }
 
 void UHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -17,7 +16,6 @@ void UHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	DOREPLIFETIME(UHealthComponent, Health);
 	DOREPLIFETIME(UHealthComponent, MaxHealth);
-	DOREPLIFETIME(UHealthComponent, bIsDead);
 }
 
 #if WITH_EDITOR
@@ -37,9 +35,18 @@ void UHealthComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 }
 #endif
 
+void UHealthComponent::InitHealth(int32 InHealth, int32 InMaxHealth)
+{
+	if (!HasBeenInitialized())
+	{
+		Health = InHealth;
+		MaxHealth = InMaxHealth;
+	}
+}
+
 int32 UHealthComponent::ApplyDamage(int32 Amount)
 {
-	if (!bIsDead)
+	if (IsDead())
 	{
 		if (Amount <= 0)
 		{
@@ -55,7 +62,6 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 		int32 Delta = NewHealth - Health;
 
 		Health = NewHealth;
-		bIsDead = NewHealth == 0;
 
 		OnHealthChanged.Broadcast(this, NewHealth, Delta);
 		return Delta;
@@ -66,9 +72,8 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 
 int32 UHealthComponent::RestoreHealth(int32 Amount)
 {
-	if (!bIsDead)
+	if (IsDead())
 	{
-
 		if (Amount <= 0)
 		{
 			UE_LOG(LogConquest, Log, TEXT("UHealthComponent::RestoreHealth: Amount must be a positive value greater than zero. Amount = %i"), Amount);
@@ -94,7 +99,7 @@ void UHealthComponent::IncreaseMaxHealth(int32 Amount, bool bIncreaseHealth)
 		int32 NewMaxHealth = FMath::Max(1, MaxHealth + Amount);
 
 		// If increasing health as well, we want to increase it by the delta instead of given amount
-		// since their is a possibity that the change is not actually the given amount (decreasing)
+		// since their is a possibility that the change is not actually the given amount (e.g. decreasing)
 		int32 Delta = NewMaxHealth - MaxHealth;
 
 		MaxHealth = NewMaxHealth;
@@ -120,15 +125,18 @@ void UHealthComponent::Kill()
 
 void UHealthComponent::Revive(float Percent)
 {
-	// Keep alpha valid
-	Percent = FMath::Clamp(Percent, 0.f, 1.f);
-	if (Percent > 0.f)
+	if (IsDead())
 	{
-		bIsDead = false;
-		RestoreHealth(FMath::RoundToInt(static_cast<float>(MaxHealth) * Percent));
-	}
-	else
-	{
-		UE_LOG(LogConquest, Warning, TEXT("UHealthComponent::Revive: Revive called with a percent value of 0%"));
+		// Keep alpha valid
+		Percent = FMath::Clamp(Percent, 0.f, 1.f);
+		if (Percent > 0.f)
+		{
+			Health = FMath::RoundToInt(static_cast<float>(MaxHealth) * Percent);
+			OnHealthChanged.Broadcast(this, Health, Health);
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("UHealthComponent::Revive: Revive called with a percent value of 0"));
+		}
 	}
 }

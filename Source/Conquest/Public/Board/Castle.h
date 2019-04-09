@@ -30,6 +30,7 @@ public:
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual void RemovedOffTile() override;
+	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
 	// End IBoardPiece Interface
 
 protected:
@@ -49,12 +50,16 @@ public:
 private:
 
 	/** Animated skeletal mesh */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* Mesh;
 
 	/** Basic Movement component */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UFloatingPawnMovement* PawnMovement;
+
+	/** Health component */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UHealthComponent* HealthTracker;
 
 protected:
 

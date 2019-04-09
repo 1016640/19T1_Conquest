@@ -6,11 +6,14 @@
 #include "GameFramework/Pawn.h"
 #include "CSKPawn.generated.h"
 
+class ACSKPawn;
 class UCameraComponent;
 class UCSKPawnMovement;
 class UCSKSpringArmComponent;
 class USphereComponent;
 
+/** Delegate for when we have finished travelling to a location */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPawnTravelTaskComplete, ACSKPawn*, Pawn);
 
 /**
  * Default pawn used by players to traverse around the board. This pawn does not represent
@@ -85,4 +88,10 @@ public:
 	/** Tracks the given actor (can be null to track none) */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic = false);
+
+public:
+
+	/** Event for when we have finished a travel task */
+	UPROPERTY(BlueprintAssignable)
+	FPawnTravelTaskComplete OnTravelTaskFinished;
 };

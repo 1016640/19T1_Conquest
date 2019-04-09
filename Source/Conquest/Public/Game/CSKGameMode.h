@@ -207,9 +207,8 @@ public:
 	bool RequestCastleMove(ATile* Goal);
 
 	/** Will attempt to build the given type of tower for active player at given tile */
-	// TODO: Don't take in subclass directly, we need to know the price (both gold and mana) before confirming
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	bool RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* Tile);
+	bool RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerData, ATile* Tile);
 
 private:
 
@@ -235,7 +234,7 @@ private:
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
 	/** Finalizes build request for active player. The request still has a chance of failing */
-	bool ConfirmBuildTower(ATower* Tower, ATile* Tile);
+	bool ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstructionData* ConstructData);
 
 	/** Finishes the build request for active player. This is after the tower has finished its emerge sequence */
 	void FinishBuildTower();
@@ -371,6 +370,12 @@ public:
 	/** Get the max number of LEGENDARY towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumLegendaryTowers() const { return MaxNumLegendaryTowers; }
 
+	/** Get the max range the player can build a tower away from their castle */
+	FORCEINLINE int32 GetMaxBuildRange() const { return MaxBuildRange; }
+
+	/** Get the towers available for use */
+	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
+
 protected:
 
 	/** The amount of gold each player starts with */
@@ -409,6 +414,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumLegendaryTowers;
 
+	/** The max range players can be a tower away from their castle at */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
+	int32 MaxBuildRange;
+
+	/** The types of towers that can be built */
+	// TODO: replace this with primary asset IDs for towers, when game state gets it
+	// it will load them in manually via the asset manager
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
+
 public:
 
 	/** Get if given value is within the limit of tiles that can be traversed each round */
@@ -445,6 +460,10 @@ protected:
 	/** The max amount of tiles a player can move per action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
 	int32 MaxTileMovements;
+
+	/** If players are only allowed to request one move action per turn */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	uint32 bLimitOneMoveActionPerTurn : 1;
 
 protected:
 

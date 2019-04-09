@@ -25,6 +25,7 @@ ACSKPlayerController::ACSKPlayerController()
 	CSKPlayerID = -1;
 	HoveredTile = nullptr;
 	bCanSelectTile = false;
+	bWaitingOnTallyEvent = false;
 	bIsActionPhase = false;
 	SelectedAction = ECSKActionPhaseMode::None;
 	RemainingActions = ECSKActionPhaseMode::All;
@@ -198,10 +199,68 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 	}
 }
 
+void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
+{
+	switch (NewState)
+	{
+		case ECSKRoundState::CollectionPhase:
+		{
+			// Ignore value could stack when going from end round phase to collection phase
+			if (!IsMoveInputIgnored())
+			{
+				SetIgnoreLookInput(!IsMoveInputIgnored());
+			}
+
+			ACSKPawn* Pawn = GetCSKPawn();
+			if (Pawn && CastlePawn)
+			{
+				// Focus on our castle while we wait for tallied resources
+				Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			}
+
+			bWaitingOnTallyEvent = false;
+
+			break;
+		}
+		case ECSKRoundState::FirstActionPhase:
+		{
+			ResetIgnoreMoveInput();
+
+			// Tally event should have concluded by now
+			if (bWaitingOnTallyEvent)
+			{
+				UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController::OnCollectionResourcesTallied: Event did not call FinishCollectionTallyEvent()."));
+				bWaitingOnTallyEvent = false;
+			}
+
+			break;
+		}
+		case ECSKRoundState::SecondActionPhase:
+		{
+			ResetIgnoreMoveInput();
+
+			break;
+		}
+		case ECSKRoundState::EndRoundPhase:
+		{
+			SetIgnoreMoveInput(true);
+
+			break;
+		}
+	}
+
+	if (CachedCSKHUD)
+	{
+		// TODO:
+		// Notify hud
+	}
+}
+
 void ACSKPlayerController::OnTransitionToBoard()
 {
 	if (HasAuthority())
 	{
+		// TODO: Move this to game mode (game mode should handle place board pieces)
 		// Occupy the space we are on
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
@@ -217,6 +276,28 @@ void ACSKPlayerController::OnTransitionToBoard()
 
 		// Have client handle any local transition requirements
 		Client_OnTransitionToBoard();
+	}
+}
+
+void ACSKPlayerController::FinishCollectionTallyEvent()
+{
+	if (bWaitingOnTallyEvent)
+	{
+		Server_FinishCollectingResources();
+	}
+}
+
+bool ACSKPlayerController::Server_FinishCollectingResources_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_FinishCollectingResources_Implementation()
+{
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		// TODO: tell game mode
 	}
 }
 
@@ -343,7 +424,8 @@ bool ACSKPlayerController::CanRequestBuildTowerAction() const
 {
 	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::BuildTowers))
 	{
-		return true;
+		// We need to know where we are on the map to determine if target tile is within build range
+		return CastlePawn != nullptr;
 	}
 
 	return false;
@@ -498,12 +580,12 @@ void ACSKPlayerController::Server_RequestCastleMoveAction_Implementation(ATile* 
 	}
 }
 
-bool ACSKPlayerController::Server_RequestBuildTowerAction_Validate(TSubclassOf<ATower> Tower, ATile* Target)
+bool ACSKPlayerController::Server_RequestBuildTowerAction_Validate(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target)
 {
 	return true;
 }
 
-void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubclassOf<ATower> Tower, ATile* Target)
+void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target)
 {
 	bool bSuccess = false;
 
@@ -512,7 +594,7 @@ void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubcla
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
-			bSuccess = GameMode->RequestBuildTower(Tower, Target);
+			bSuccess = GameMode->RequestBuildTower(TowerConstructData, Target);
 		}
 	}
 

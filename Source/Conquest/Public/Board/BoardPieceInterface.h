@@ -8,6 +8,7 @@
 
 class ACSKPlayerState;
 class ATile;
+class UHealthComponent;
 
 UINTERFACE(MinimalAPI)
 class UBoardPieceInterface : public UInterface
@@ -29,6 +30,9 @@ public:
 
 	/** Get the player state for the player who owns this board peice */
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const PURE_VIRTUAL(IBoardPieceInterface::GetBoardPieceOwnerPlayerState, return nullptr;)
+
+	/** Get this board pieces health component */
+	virtual UHealthComponent* GetHealthComponent() const PURE_VIRTUAL(IBoardPieceInterface::GetHealthComponent, return nullptr;)
 
 public:
 

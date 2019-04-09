@@ -4,6 +4,7 @@
 #include "Tile.h"
 #include "BoardManager.h"
 
+#include "HealthComponent.h"
 #include "Components/StaticMeshComponent.h"
 
 ATower::ATower()
@@ -23,6 +24,7 @@ ATower::ATower()
 	OwnerPlayerState = nullptr;
 	CachedTile = nullptr;
 	bIsLegendaryTower = false;
+	bGivesCollectionPhaseResources = false;
 
 	// TODO: We might change this to skeletal meshes later
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
@@ -30,6 +32,9 @@ ATower::ATower()
 	Mesh->SetMobility(EComponentMobility::Movable);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetSimulatePhysics(false);
+
+	HealthTracker = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComp"));
+	HealthTracker->InitHealth(5, 5);
 }
 
 void ATower::SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState)

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKPawnMovement.h"
+#include "CSKPawn.h"
 
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
@@ -132,7 +133,7 @@ void UCSKPawnMovement::StopTrackingActor()
 // TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 {
-	// Estimated time (in seconds) in would take to reach goal if travelling constant velocity of max speed
+	// Travel over 2 seconds
 	const float TravelDilation = 2.f; // TODO: make this a variable?
 	TravelElapsedTime = FMath::Clamp(TravelElapsedTime + (DeltaTime / 2.f), 0.f, 1.f);
 
@@ -150,13 +151,18 @@ void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 	{
 		bIsTravelling = false;
 
-		// TODO: Could add an event here!
+		ACSKPawn* Pawn = Cast<ACSKPawn>(GetPawnOwner());
+		if (Pawn)
+		{
+			Pawn->OnTravelTaskFinished.Broadcast(Pawn);
+		}
 	}
 
 	// Consume input for this frame. This could also cancel out this transition (if cancellable)
 	ConsumeInputVector();
 }
 
+// TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
 {
 	check(TrackedActor);

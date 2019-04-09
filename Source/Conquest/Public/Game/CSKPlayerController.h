@@ -14,6 +14,45 @@ class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 class ATower;
+class UTowerConstructionData;
+
+/** Struct containing tallied amount of resources to give to a player */
+USTRUCT()
+struct CONQUEST_API FCollectionPhaseResourcesTally
+{
+	GENERATED_BODY()
+
+public:
+
+	FCollectionPhaseResourcesTally()
+	{
+		Reset();
+	}
+
+public:
+
+	/** Resets tally */
+	FORCEINLINE void Reset()
+	{
+		Gold = 0;
+		Mana = 0;
+		SpellUses = 0;
+	}
+
+public:
+
+	/** Gold tallied */
+	UPROPERTY()
+	int32 Gold;
+
+	/** Mana tallied */
+	UPROPERTY()
+	int32 Mana;
+
+	/** Additional spell uses tallied */
+	UPROPERTY()
+	int32 SpellUses;
+};
 
 /**
  * Controller for handling communication events between players and the server
@@ -118,19 +157,51 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = CSK)
 	ACastle* CastlePawn;
 
+protected:
+
+	/** Notify that the round state has changed */
+	UFUNCTION()
+	void OnRoundStateChanged(ECSKRoundState NewState);
+
 public:
 
 	/** Called to inform player that coin flip is taking place */
-	void OnReadyForCoinFlip();
+	void OnReadyForCoinFlip(); // Refactor
 
 	/** Called by the game mode when transitioning to the board */
-	void OnTransitionToBoard();
+	void OnTransitionToBoard(); // Refactor
+
+public:
+
+	/** Notify that we have collected resources during collection phase */
+	//UFUNCTION(Client, Reliable)
+	//void Client_OnCollectionPhaseResourcesTallied(FCollectionPhaseResourcesTally TalliedResources);
+
+protected:
+
+	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
+	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
+	UFUNCTION(BlueprintImplementableEvent, Category = CSK, meta = (DisplayName = "On Collection Resources Tallied"))
+	void BP_OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
+
+	/** Finishes the collection phase tallying process. This must be called after collection resources tallied event */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void FinishCollectionTallyEvent();
 
 private:
 
 	/** Handle transition to board client side */
 	UFUNCTION(Client, Reliable)
-	void Client_OnTransitionToBoard();
+	void Client_OnTransitionToBoard(); // TODO: refactor
+
+	/** Notifies server that local client has finished collecting resources */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_FinishCollectingResources();
+
+private:
+
+	/** If we are waiting on the collection phase tally to conclude */
+	uint32 bWaitingOnTallyEvent : 1;
 
 public:
 
@@ -225,9 +296,6 @@ public:
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
 
-	/** Disables all action modes. This is used when the player request their phase be ended */
-	void DisableAllActions();
-
 protected:
 
 	/** Makes a request to the server to end our action phase */
@@ -240,10 +308,10 @@ protected:
 
 	/** Makes a request to build a tower at given tile */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestBuildTowerAction(TSubclassOf<ATower> Tower, ATile* Target);
+	void Server_RequestBuildTowerAction(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target);
 
 public:
 
 	UPROPERTY(EditAnywhere)
-	TSubclassOf<ATower> TestTowerTemplate;
+	TSubclassOf<UTowerConstructionData> TestTowerTemplate;
 };

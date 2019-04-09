@@ -17,6 +17,7 @@
 #include "Tile.h"
 #include "TimerManager.h"
 #include "Tower.h"
+#include "TowerConstructionData.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -37,6 +38,7 @@ ACSKGameMode::ACSKGameMode()
 	PlayerStateClass = ACSKPlayerState::StaticClass();
 
 	DefaultPlayerName = LOCTEXT("DefaultPlayerName", "Sorcerer");
+	bUseSeamlessTravel = true;
 
 	Player1CastleClass = ACastle::StaticClass();
 	Player2CastleClass = ACastle::StaticClass();
@@ -55,11 +57,13 @@ ACSKGameMode::ACSKGameMode()
 	MaxNumTowers = 7;
 	MaxNumLegendaryTowers = 1;
 	MaxNumDuplicatedTowers = 2;
+	MaxBuildRange = 4;
 
 	ActionPhaseTime = 90.f;
 	BonusActionPhaseTime = 20.f;
 	MinTileMovements = 1;
 	MaxTileMovements = 2;
+	bLimitOneMoveActionPerTurn = false;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -717,7 +721,7 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 	return false;
 }
 
-bool ACSKGameMode::RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* Tile)
+bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTemplate, ATile* Tile)
 {
 	if (!Tile)
 	{
@@ -751,45 +755,46 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<ATower> TowerTemplate, ATile* T
 			return false;
 		}
 
-		ATower* DefaultTower = TowerTemplate.GetDefaultObject();
-		check(DefaultTower);
+		ACastle* Castle = ActionPhaseActiveController->GetCastlePawn();
+		ATile* Origin = Castle ? Castle->GetCachedTile() : nullptr;
 
-		bool bIsLegendaryTower = DefaultTower->IsLegendaryTower();
-
-		// Need to make sure player can't build more towers than allowed
-		int32 TowerMax = bIsLegendaryTower ? MaxNumLegendaryTowers : MaxNumTowers;
-		int32 TowerMaxDuplicates = bIsLegendaryTower ? 1 : MaxNumDuplicatedTowers;
-
-		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
-		if (ensure(PlayerState))
+		if (Origin)
 		{
-			// TODO: Check cost
-
-			// Has this player built too much of this tower?
-			int32 TowersBuilt = bIsLegendaryTower ? PlayerState->GetNumLegendaryTowersOwned() : PlayerState->GetNumNormalTowersOwned();
-			if (TowersBuilt >= TowerMax)
-			{
-				return false;
-			}
-
-			// Does player already have max amount of duplicates of the specific tower
-			int32 TowerDuplicates = PlayerState->GetNumOwnedTowerDuplicates(TowerTemplate);
-			if (TowerDuplicates >= TowerMaxDuplicates)
+			// The requested tile is not within build range
+			if (FHexGrid::HexDisplacement(Origin->GetGridHexValue(), Tile->GetGridHexValue()) > MaxBuildRange)
 			{
 				return false;
 			}
 		}
 		else
 		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTower: Player may exceed "
-				"max number of towers as player state is not of CSKPlayerState"));
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTower: Confirming build request "
+				"without range check as players castle cached tile is invalid"));
 		}
 
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			// The player might not be able to build this tower
+			if (!CSKGameState->CanPlayerBuildTower(ActionPhaseActiveController, TowerTemplate, false))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTower: Confirming build request "
+				"without board validation as game state is not of CSKGameState"));
+		}
+
+		UTowerConstructionData* ConstructData = TowerTemplate.GetDefaultObject();
+		TSubclassOf<ATower> TowerClass = ConstructData->TowerClass;
+
 		// Confirm request if tower was successfully spawned
-		ATower* NewTower = SpawnTowerFor(TowerTemplate, Tile, PlayerState);
+		ATower* NewTower = SpawnTowerFor(TowerClass, Tile, ActionPhaseActiveController->GetCSKPlayerState());
 		if (NewTower)
 		{
-			return ConfirmBuildTower(NewTower, Tile);
+			return ConfirmBuildTower(NewTower, Tile, ConstructData);
 		}
 	}
 
@@ -803,8 +808,6 @@ void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMo
 		check(ActionPhaseActiveController);
 		if (ActionPhaseActiveController->DisableActionMode(ActionMode))
 		{
-			// TODO: end this round
-			// for now
 			// will also prob want to add some small delays here to make sure
 			// all changes reach all clients
 			if (RoundState == ECSKRoundState::FirstActionPhase)
@@ -920,10 +923,21 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 		}
 	}
 
-	// TODO: Could possibly check if player hasn't used all tiles they can use here
-
-	// Disable this player from moving their castle again
-	DisableActionModeForActivePlayer(ECSKActionPhaseMode::MoveCastle);
+	// Disable move action if required
+	if (bLimitOneMoveActionPerTurn)
+	{
+		// Disable this player from moving their castle again
+		DisableActionModeForActivePlayer(ECSKActionPhaseMode::MoveCastle);
+	}
+	else
+	{
+		// This player might be able to move again, check to see if they have moved the max amount of tiles
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (PlayerState && PlayerState->GetTilesTraversedThisRound() >= MaxTileMovements)
+		{
+			DisableActionModeForActivePlayer(ECSKActionPhaseMode::MoveCastle);
+		}
+	}
 }
 
 void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
@@ -986,7 +1000,7 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 	return false;
 }
 
-bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
+bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstructionData* ConstructData)
 {
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
@@ -1003,7 +1017,12 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (PlayerState)
 		{
+			// Add tower to player
 			PlayerState->AddTower(Tower);
+
+			// Consume costs
+			PlayerState->SetGold(PlayerState->GetGold() - ConstructData->GoldCost);
+			PlayerState->SetMana(PlayerState->GetMana() - ConstructData->ManaCost);
 		}
 	}
 
@@ -1026,12 +1045,17 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile)
 		}
 	}
 
+	// Execute tower event (only on server)
+	{
+		Tower->BP_OnBuiltByPlayer(ActionPhaseActiveController);
+	}
+
 	ActivePlayerPendingTower = Tower;
 	ActivePlayerPendingTowerTile = Tile;
 
 	// Give tower 1 second to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.5f, false);
+	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.f, false);
 
 	return true;
 }
@@ -1040,6 +1064,8 @@ void ACSKGameMode::FinishBuildTower()
 {
 	check(bWaitingOnActivePlayerBuildAction);
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 
 	// Unhook callbacks
 	{
@@ -1052,7 +1078,6 @@ void ACSKGameMode::FinishBuildTower()
 
 	// Inform game state
 	{
-		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 		if (CSKGameState)
 		{
 			CSKGameState->HandleBuildRequestFinished();
@@ -1070,15 +1095,22 @@ void ACSKGameMode::FinishBuildTower()
 	ActivePlayerPendingTower = nullptr;
 	ActivePlayerPendingTowerTile = nullptr;
 
-	// TODO: we want to check if player could possibly build any more towers, if not, we want to force end their turn
+	// Disable this action if player can't build or destroy any more towers this round
+	if (CSKGameState && !CSKGameState->CanPlayerBuildMoreTowers(ActionPhaseActiveController, true))
+	{
+		DisableActionModeForActivePlayer(ECSKActionPhaseMode::BuildTowers);
+	}
 }
 
 
 ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
 {
-	check(Template);
 	check(Tile);
-	check(PlayerState);
+
+	if (!Template || !PlayerState)
+	{
+		return nullptr;
+	}
 
 	FTransform TileTransform = Tile->GetTransform();
 
@@ -1201,15 +1233,15 @@ void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 
 		ACSKPlayerState* State = Controller->GetCSKPlayerState();
 		if (!ensure(State))
 		{
-			UE_LOG(LogConquest, Warning, TEXT("Unable to reset resources for player %i as player state is invalid"), PlayerID);
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as player state is invalid"), PlayerID);
 			return;
 		}
 
-		State->GiveResources(StartingGold, StartingMana);
+		State->SetResources(StartingGold, StartingMana);
 	}
 	else
 	{
-		UE_LOG(LogConquest, Error, TEXT("Unable to reset resources for player %i as controller was null!"), PlayerID);
+		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as controller was null!"), PlayerID);
 	}
 }
 
@@ -1220,20 +1252,39 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 		ACSKPlayerState* State = Controller->GetCSKPlayerState();
 		if (!ensure(State))
 		{
-			UE_LOG(LogConquest, Warning, TEXT("Unable to update resources for player %i as player state is invalid"), PlayerID);
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as player state is invalid"), PlayerID);
 			return;
 		}
 
 		int32 GoldToGive = CollectionPhaseGold;
 		int32 ManaToGive = CollectionPhaseMana;
+		
+		// Cycle through this players towers to collect any additional resources
+		// TODO: Designers want camera to pan to each tower as it shows how much resources it's given the player. This
+		// will force this function to be split up (not all resources have to be given at once)
+		TArray<ATower*> PlayersTowers = State->GetOwnedTowers();
+		for (ATower* Tower : PlayersTowers)
+		{
+			if (ensure(Tower) && Tower->WantsCollectionPhaseEvent())
+			{
+				int32 AdditionalGold = 0;
+				int32 AdditionalMana = 0;
+				int32 AdditionalSpellUses = 0;
 
-		// TODO: Cycle through players owned buildings to collect additional resources
+				Tower->BP_GetCollectionPhaseResources(Controller, AdditionalGold, AdditionalMana, AdditionalSpellUses);
 
-		State->GiveResources(GoldToGive, ManaToGive);
+				GoldToGive += AdditionalGold;
+				ManaToGive += AdditionalMana;
+			}
+		}
+
+		int32 NewGold = ClampGoldToLimit(State->GetGold() + GoldToGive);
+		int32 NewMana = ClampManaToLimit(State->GetMana() + ManaToGive);
+		State->GiveResources(NewGold, NewMana);
 	}
 	else
 	{
-		UE_LOG(LogConquest, Error, TEXT("Unable to update resources for player %i as controller was null!"), PlayerID);
+		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as controller was null!"), PlayerID);
 	}
 }
 

@@ -57,13 +57,8 @@ void ACSKPlayerState::GiveResources(int32 InGold, int32 InMana)
 
 void ACSKPlayerState::SetResources(int32 InGold, int32 InMana)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this); // TODO: get rid of this and have game mode calc and set it
-	if (GameMode)
-	{
-		Gold = GameMode->ClampGoldToLimit(InGold);
-		Mana = GameMode->ClampManaToLimit(InMana);
-	}
+	Gold = FMath::Max(0, InGold);
+	Mana = FMath::Max(0, InMana);
 }
 
 void ACSKPlayerState::AddGold(int32 Amount)
@@ -73,12 +68,7 @@ void ACSKPlayerState::AddGold(int32 Amount)
 
 void ACSKPlayerState::SetGold(int32 Amount)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this); // TODO: get rid of this and have game mode calc and set it
-	if (GameMode)
-	{
-		Gold = GameMode->ClampGoldToLimit(Amount);
-	}
+	Gold = FMath::Max(0, Amount);
 }
 
 void ACSKPlayerState::AddMana(int32 Amount)
@@ -88,12 +78,7 @@ void ACSKPlayerState::AddMana(int32 Amount)
 
 void ACSKPlayerState::SetMana(int32 Amount)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this); // TODO: get rid of this and have game mode calc and set it
-	if (GameMode)
-	{
-		Mana = GameMode->ClampManaToLimit(Amount);
-	}
+	Mana = FMath::Max(0, Amount);
 }
 
 void ACSKPlayerState::AddTower(ATower* InTower)

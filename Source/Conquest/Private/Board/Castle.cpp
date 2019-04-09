@@ -3,6 +3,7 @@
 #include "Castle.h"
 #include "CastleAIController.h"
 
+#include "HealthComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/FloatingPawnMovement.h"
 
@@ -29,6 +30,9 @@ ACastle::ACastle()
 	PawnMovement->Acceleration = 2000.f;
 	PawnMovement->Deceleration = 2000.f;
 	PawnMovement->TurningBoost = 0.f;
+
+	HealthTracker = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComp"));
+	HealthTracker->InitHealth(40, 40);
 
 	OwnerPlayerState = nullptr;
 	CachedTile = nullptr;

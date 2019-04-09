@@ -7,6 +7,7 @@
 #include "BoardPieceInterface.h"
 #include "Tower.generated.h"
 
+class ACSKPlayerController;
 class UStaticMeshComponent;
 
 /** Delegate for towers when they complete the build sequence */
@@ -30,6 +31,7 @@ public:
 	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
+	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
 	// End IBoardPiece Interface
 
 	// Begin AActor Interface
@@ -53,11 +55,27 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UStaticMeshComponent* Mesh;
 
+	/** Health component */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UHealthComponent* HealthTracker;
+
 protected:
 
 	/** The player state of the player who owns this tower */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
 	ACSKPlayerState* OwnerPlayerState;
+
+public:
+
+	/** Event for when the given player has built this tower. This should be used to
+	grant or bind bonuses to the specific player. This function only runs on the server */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "On Built By Player"))
+	void BP_OnBuiltByPlayer(ACSKPlayerController* Controller);
+
+	/** Event for when this tower should give resources to given player. This will only 
+	run on the server and only when bGivesCollectionPhaseResources is set to true */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "Get Collection Phase Resources"))
+	void BP_GetCollectionPhaseResources(const ACSKPlayerController* Controller, int32& OutGold, int32& OutMana, int32& OutSpellUses);
 
 protected:
 
@@ -91,12 +109,19 @@ private:
 public:
 
 	/** Get if this tower is a legendary tower */
-	UFUNCTION(BlueprintPure, Category = "Board|Towers")
-	bool IsLegendaryTower() const { return bIsLegendaryTower; }
+	FORCEINLINE bool IsLegendaryTower() const { return bIsLegendaryTower; }
+
+	/** Get if this tower wants the collection phase event called */
+	FORCEINLINE bool WantsCollectionPhaseEvent() const { return bGivesCollectionPhaseResources; }
 
 protected:
 
 	/** If this tower is a legendary tower */
-	UPROPERTY(EditDefaultsOnly, Category = BoardPiece)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = BoardPiece)
 	uint8 bIsLegendaryTower : 1;
+
+	/** If this tower can give resources during the collection phase */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece)
+	uint8 bGivesCollectionPhaseResources : 1;
+
 };
