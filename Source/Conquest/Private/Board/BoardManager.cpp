@@ -76,7 +76,7 @@ void ABoardManager::Tick(float DeltaTime)
 	if (bDrawDebugBoard && HexGrid.bGridGenerated)
 	{
 		// Draws a hexagon based on a tile (not a static lambda since we might be PIE testing with more than 1 client)
-		auto DrawHexagon = [this](ATile* Tile, const FColor& Color, float Thickness)->void
+		auto DrawHexagon = [this](ATile* Tile, const FColor& Color, uint8 DepthPriority, float Thickness)->void
 		{
 			UWorld* World = this->GetWorld();
 			FVector Position = Tile->GetActorLocation();
@@ -85,7 +85,7 @@ void ABoardManager::Tick(float DeltaTime)
 			for (int32 i = 0; i <= 5; ++i)
 			{
 				FVector NextVertex = FHexGrid::ConvertHexVertexIndexToWorld(Position, this->GridHexSize, (i + 1) % 6);
-				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, 0, Thickness);
+				DrawDebugLine(World, CurrentVertex, NextVertex, Color, false, -1.f, DepthPriority, Thickness);
 
 				CurrentVertex = NextVertex;
 			}
@@ -98,15 +98,15 @@ void ABoardManager::Tick(float DeltaTime)
 			{
 				if (Tile->bHighlightTile)
 				{
-					DrawHexagon(Tile, FColor::Magenta, 10.f);
+					DrawHexagon(Tile, FColor::Magenta, 0, 10.f);
 				}
-				else if (Tile->bIsNullTile)
+				else if (Tile->IsTileOccupied())
 				{
-					DrawHexagon(Tile, FColor::Black, 7.5f);
+					DrawHexagon(Tile, FColor::Black, 1, 7.5f);
 				}
 				else
 				{
-					DrawHexagon(Tile, FColor::Emerald, 5.f);
+					DrawHexagon(Tile, FColor::Emerald, 2, 5.f);
 				}
 			}
 		}
@@ -331,6 +331,18 @@ bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& 
 	{
 		OutPath.Path = ResultData.Path;
 		bSuccess = true;
+	}
+
+	return bSuccess;
+}
+
+bool ABoardManager::FindTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
+{
+	bool bSuccess = false;
+	if (Origin)
+	{
+		const FIntVector& TileHex = Origin->GetGridHexValue();
+		bSuccess = HexGrid.GetAllTilesWithinRange(TileHex, Distance, OutTiles, bIgnoreOccupiedTiles);
 	}
 
 	return bSuccess;

@@ -18,8 +18,6 @@
 
 ACSKPlayerController::ACSKPlayerController()
 {
-	
-
 	bShowMouseCursor = true;
 	CachedCSKHUD = nullptr;
 	CastleController = nullptr;
