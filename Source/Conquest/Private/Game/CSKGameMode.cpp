@@ -571,16 +571,18 @@ void ACSKGameMode::OnMatchAbort()
 
 void ACSKGameMode::OnCollectionPhaseStart()
 {
+	UE_LOG(LogConquest, Log, TEXT("Starting Collection Phase"));
+
 	CollectionSequenceFinishedFlags = 0;
 	DelayThenStartCollectionPhaseSequence();
 
 	UKismetSystemLibrary::PrintString(this, "Collection Phase Start", true, false, FLinearColor::Blue, 5.f);
-
-	UE_LOG(LogConquest, Log, TEXT("Starting Collection Phase"));
 }
 
 void ACSKGameMode::OnFirstActionPhaseStart()
 {
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+
 	Handle_CollectionSequences.Invalidate();
 
 	UpdateActivePlayerForActionPhase(0);
@@ -588,31 +590,48 @@ void ACSKGameMode::OnFirstActionPhaseStart()
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID + 1), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
-
-	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
 }
 
 void ACSKGameMode::OnSecondActionPhaseStart()
 {
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+
 	UpdateActivePlayerForActionPhase(1);
 	check(ActionPhaseActiveController);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);
 
-	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+	
 }
 
 void ACSKGameMode::OnEndRoundPhaseStart()
 {
+	UE_LOG(LogConquest, Log, TEXT("Starting End Round Phase"));
+
 	// Resets action phase active controller
 	UpdateActivePlayerForActionPhase(-1);
 
+	EndRoundRunningTower = 0;
+	bRunningTowerEndRoundAction = false;
+	bInitiatingTowerEndRoundAction = false;
+
+	if (PrepareEndRoundActionTowers())
+	{
+		if (!StartRunningTowersEndRoundAction(0))
+		{
+			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
+		}
+	}
+	else
+	{
+		ACSKGameState* CSKGameState = CastChecked<ACSKGameState>(GameState);
+		UE_LOG(LogConquest, Log, TEXT("Skipping End Round Phase for round %i as no placed towers can perform actions"), CSKGameState->GetRound());
+
+		EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
+	}
+
 	UKismetSystemLibrary::PrintString(this, "End round Phase Start", true, false, FLinearColor::Blue, 5.f );
-
-	EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
-
-	UE_LOG(LogConquest, Log, TEXT("Starting End Round Phase"));
 }
 
 void ACSKGameMode::EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay)
@@ -1410,6 +1429,179 @@ void ACSKGameMode::OnStartActivePlayersBuildSequence()
 void ACSKGameMode::OnPendingTowerBuildSequenceComplete()
 {
 	FinishBuildTower();
+}
+
+void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
+{
+	if (bRunningTowerEndRoundAction && Tower)
+	{
+		// If we should end the end round phase and move back onto the collection phase
+		bool bEndPhase = false;
+
+		if (ensure(EndRoundActionTowers.IsValidIndex(EndRoundRunningTower)))
+		{
+			// Double check
+			check(EndRoundActionTowers[EndRoundRunningTower] == Tower);
+			bRunningTowerEndRoundAction = false;
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode: Index of tower executing end round action is invalid. Forcing end of end round phase"));
+			bEndPhase = true;
+		}
+
+		// End phase if no more towers are awaiting action execution
+		if (!bEndPhase)
+		{
+			++EndRoundRunningTower;
+			bEndPhase = EndRoundRunningTower == EndRoundActionTowers.Num();
+		}
+
+		if (bEndPhase)
+		{
+			// TODO: Notify clients and game state
+
+			// Start the next round after 2 second delay
+			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
+		}
+		else
+		{
+			// TODO: Notify clients and game state?
+
+			// Execute the next towers action after 1 second delay
+			StartNextEndRoundActionAfterDelay(1.f);
+		}
+	}
+}
+
+// TODO: Optomize by associating towers with a CSKPlayerID before sorting
+// right now, the sorting predicate will constantly use get player state which involes casting
+bool ACSKGameMode::PrepareEndRoundActionTowers()
+{
+	// We will most likely have the same amount of tiles as last round
+	// (Maybe one or two towers were added since the last round)
+	TArray<ATower*> ActionTowers;
+	ActionTowers.Reserve(EndRoundActionTowers.Num());
+
+	// First get all towers that will run an action this round
+	for (ACSKPlayerController* Controller : Players)
+	{
+		ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+		check(PlayerState);
+
+		const TArray<ATower*>& PlayerTower = PlayerState->GetOwnedTowers();
+		for (ATower* Tower : PlayerTower)
+		{
+			if (ensure(Tower) && Tower->WantsEndRoundPhaseEvent())
+			{
+				ActionTowers.Add(Tower);
+			}
+		}
+	}
+
+	// If two towers happen to share the same priority, we decide
+	// who goes first based on the player who won the coin toss 
+	int32 PlayerWithPriority = StartingPlayerID;
+
+	// Now sort action towers based on their priority
+	ActionTowers.Sort([PlayerWithPriority](const ATower& lhs, const ATower& rhs)->bool
+	{
+		int32 T1Priority = lhs.GetEndRoundActionPriority();
+		int32 T2Priority = rhs.GetEndRoundActionPriority();
+
+		if (T1Priority > T2Priority)
+		{
+			return true;
+		}
+		else if (T1Priority < T2Priority)
+		{
+			return false;
+		}
+		else
+		{
+			ACSKPlayerState* T1PlayerState = lhs.GetOwnerPlayerState();
+			if (T1PlayerState->GetCSKPlayerID() == PlayerWithPriority)
+			{
+				// Starting player always takes priority
+				return true;
+			}
+			else
+			{
+				ACSKPlayerState* T2PlayerState = lhs.GetOwnerPlayerState();
+				return T2PlayerState->GetCSKPlayerID() != PlayerWithPriority;
+			}
+		}
+	});
+
+	// We can perform end round phase if there are any towers that can perform an action
+	EndRoundActionTowers = MoveTemp(ActionTowers);
+	return EndRoundActionTowers.Num() > 0;
+}
+
+bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
+{
+	bool bResult = false;
+
+	// Safety lock
+	bInitiatingTowerEndRoundAction = true;
+
+	if (!bRunningTowerEndRoundAction && EndRoundActionTowers.IsValidIndex(Index))
+	{
+		check(IsEndRoundPhaseInProgress());
+
+		ATower* TowerToRun = EndRoundActionTowers[Index];
+		if (ensure(TowerToRun))
+		{
+			TowerToRun->ExecuteEndRoundPhaseAction();
+			bRunningTowerEndRoundAction = true;
+
+			// Track this for use when this towers action ends
+			EndRoundRunningTower = Index;
+
+			bResult = true;
+		}
+	}
+
+	// Safety lock
+	bInitiatingTowerEndRoundAction = false;
+
+	return bResult;
+}
+
+void ACSKGameMode::StartNextEndRoundActionAfterDelay(float Delay)
+{
+	if (IsEndRoundPhaseInProgress())
+	{
+		if (bRunningTowerEndRoundAction)
+		{
+			return;
+		}
+
+		FTimerManager& TimerManager = GetWorldTimerManager();
+		if (TimerManager.IsTimerActive(Handle_DelayEndRoundAction))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::StartNextEndRoundActionAfterDelay: Delay is already set, replacing it with new delay"));
+			TimerManager.ClearTimer(Handle_DelayEndRoundAction);
+		}
+
+		if (Delay > 0.f)
+		{
+			TimerManager.SetTimer(Handle_DelayEndRoundAction, this, &ACSKGameMode::OnStartNextEndRoundAction, Delay);
+		}
+		else
+		{
+			TimerManager.SetTimerForNextTick(this, &ACSKGameMode::OnStartNextEndRoundAction);
+			Handle_DelayEndRoundAction.Invalidate();
+		}
+	}
+}
+
+void ACSKGameMode::OnStartNextEndRoundAction()
+{
+	if (IsEndRoundPhaseInProgress() && !StartRunningTowersEndRoundAction(EndRoundRunningTower))
+	{
+		EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 1.f);
+	}
 }
 
 

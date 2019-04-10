@@ -190,7 +190,7 @@ protected:
 
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
-	UFUNCTION(BlueprintNativeEvent, Category = CSK, meta = (DisplayName = "On Collection Resources Tallied"))
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
 
 	/** Finishes the collection phase event. This must be called after collection resources tallied event */

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKPlayerState.h"
+#include "CSKPlayerController.h"
 #include "CSKGameMode.h"
 #include "Tower.h"
 
@@ -32,6 +33,11 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
+}
+
+ACSKPlayerController* ACSKPlayerState::GetCSKPlayerController() const
+{
+	return CastChecked<ACSKPlayerController>(GetOwner());
 }
 
 void ACSKPlayerState::SetCSKPlayerID(int32 InPlayerID)

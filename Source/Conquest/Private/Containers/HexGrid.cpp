@@ -212,9 +212,9 @@ bool FHexGrid::FindPath(const FHex& Start, const FHex& Goal, FHexGridPathFindRes
 	// Predicate for sorting queue
 	struct FPathPredicate
 	{
-		bool operator() (const FPathSegment& rhs, const FPathSegment lhs) const
+		bool operator() (const FPathSegment& lhs, const FPathSegment rhs) const
 		{
-			return rhs.Cost > lhs.Cost;
+			return lhs.Cost > rhs.Cost;
 		}
 	};
 

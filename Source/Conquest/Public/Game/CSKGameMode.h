@@ -212,12 +212,19 @@ private:
 	/** Timer handle to the small delay before entering a new round state */
 	FTimerHandle Handle_EnterRoundState;
 
+
+
+
 public:
 
 	/** Function called when deciding which player gets to go first.
 	True will result in Player 1 going first, false for player 2 */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	bool CoinFlip() const;
+
+
+
+public:
 
 	/** Helper function for getting the player whose action phase it is based on starting player ID */
 	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
@@ -232,6 +239,9 @@ protected:
 	/** The ID of the player who goes first */
 	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	int32 StartingPlayerID;
+
+
+
 
 private:
 
@@ -275,6 +285,9 @@ private:
 	/** Timer handle for managing the collection phase sequences. This is both as an initial delay
 	before updating resources and a limit timer in-case clients take to long to finish their sequence */
 	FTimerHandle Handle_CollectionSequences;
+
+
+
 
 public:
 
@@ -390,6 +403,49 @@ private:
 
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
+
+
+
+
+public:
+
+	/** Notify that tower running its end round phase event has finished */
+	void NotifyEndRoundActionFinished(ATower* Tower);
+
+private:
+
+	/** Checks all towers determine order to execute end round actions. Get if any actions are ready to be performed */
+	bool PrepareEndRoundActionTowers();
+
+	/** Attempts to start the action for end round tower at given index. Get if starting the next towers action was successfull */
+	bool StartRunningTowersEndRoundAction(int32 Index);
+
+	/** Sets delay of given time before attempting to start next tower action */
+	void StartNextEndRoundActionAfterDelay(float Delay);
+
+	/** Callback from delay end round action */
+	void OnStartNextEndRoundAction();
+
+private:
+
+	/** The list of towers that will run the end round action during this end
+	round phase. This array is sorted by order of action priority (see Tower.h).*/
+	UPROPERTY()
+	TArray<ATower*> EndRoundActionTowers;
+
+	/** The index of the current tower running the end round action */
+	int32 EndRoundRunningTower;
+
+	/** If we are current initiating a towers action. This helps 
+	dealing with towers whose actions conclude immediately */
+	uint32 bInitiatingTowerEndRoundAction : 1;
+
+	/** If a tower is running its end round action event */
+	uint32 bRunningTowerEndRoundAction : 1;
+
+	/** Timer handle for creating small delays between end round actions */
+	FTimerHandle Handle_DelayEndRoundAction;
+
 
 public:
 

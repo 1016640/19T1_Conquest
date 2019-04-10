@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "UObject/NoExportTypes.h"
 #include "TowerConstructionData.generated.h"
 

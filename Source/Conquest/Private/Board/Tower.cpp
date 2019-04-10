@@ -3,6 +3,7 @@
 #include "Tower.h"
 #include "Tile.h"
 #include "BoardManager.h"
+#include "CSKGameMode.h"
 
 #include "HealthComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -25,6 +26,8 @@ ATower::ATower()
 	CachedTile = nullptr;
 	bIsLegendaryTower = false;
 	bGivesCollectionPhaseResources = false;
+	bWantsActionDuringEndRoundPhase = false;
+	EndRoundPhaseActionPriority = 0;
 
 	// TODO: We might change this to skeletal meshes later
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
@@ -86,6 +89,32 @@ void ATower::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePr
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(ATower, OwnerPlayerState, COND_InitialOnly);
+}
+
+void ATower::ExecuteEndRoundPhaseAction()
+{
+	if (!bIsRunningEndRoundAction && HasAuthority())
+	{
+		bIsRunningEndRoundAction = true;
+		StartEndRoundAction();
+	}
+}
+
+void ATower::StartEndRoundAction_Implementation()
+{
+	FinishEndRoundAction();
+}
+
+void ATower::FinishEndRoundAction()
+{
+	if (bIsRunningEndRoundAction && HasAuthority())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		check(GameMode);
+		
+		GameMode->NotifyEndRoundActionFinished(this);	
+		bIsRunningEndRoundAction = false;
+	}
 }
 
 void ATower::StartBuildSequence()

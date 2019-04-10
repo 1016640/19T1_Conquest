@@ -71,20 +71,23 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Removed from Tile"))
 	void BP_OnRemovedFromTile(ATile* Tile);
 
+public:
+
+	/** Get the player who owns this castle */
+	FORCEINLINE ACSKPlayerState* GetOwnerPlayerState() const { return OwnerPlayerState; }
+
+	/** Get the tile we are currently on */
+	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
+
 protected:
 
 	/** The player state of the player who owns this castle */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
 	ACSKPlayerState* OwnerPlayerState;
 
-public:
-
-	/** Get the tile we are currently on */
-	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
-
 private:
 
 	/** The tile we are currently on, this is cached for quick access to it */
-	UPROPERTY(Transient, DuplicateTransient)
+	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, meta = (AllowPrivateAccess = "true"))
 	ATile* CachedTile;
 };

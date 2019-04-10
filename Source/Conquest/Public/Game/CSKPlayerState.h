@@ -7,6 +7,7 @@
 #include "CSKPlayerState.generated.h"
 
 class ACastle;
+class ACSKPlayerController;
 class ATower;
 
 /**
@@ -26,6 +27,12 @@ protected:
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
+
+public:
+
+	/** Get this states owner as a CSKPlayerController */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerController* GetCSKPlayerController() const;
 
 public:
 

@@ -293,6 +293,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	int32 MaxTileMovements;
 
+public:
+
+	/** Get the current round being played */
+	FORCEINLINE int32 GetRound() const { return RoundsPlayed; }
+
 protected:
 
 	/** How many rounds have been played */

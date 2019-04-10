@@ -59,11 +59,25 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UHealthComponent* HealthTracker;
 
+public:
+
+	/** Get the player who owns this tower */
+	FORCEINLINE ACSKPlayerState* GetOwnerPlayerState() const { return OwnerPlayerState; }
+
+	/** Get the tile we are currently on */
+	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
+
 protected:
 
 	/** The player state of the player who owns this tower */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
 	ACSKPlayerState* OwnerPlayerState;
+
+private:
+
+	/** The tile we are currently on, this is cached for quick access to it */
+	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, meta = (AllowPrivateAccess = "true"))
+	ATile* CachedTile;
 
 public:
 
@@ -73,9 +87,12 @@ public:
 	void BP_OnBuiltByPlayer(ACSKPlayerController* Controller);
 
 	/** Event for when this tower should give resources to given player. This will only 
-	run on the server and only when bGivesCollectionPhaseResources is set to true */
+	run on the server and only when WantsCollectionPhaseEvent returns true */
 	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "Get Collection Phase Resources"))
 	void BP_GetCollectionPhaseResources(const ACSKPlayerController* Controller, int32& OutGold, int32& OutMana, int32& OutSpellUses);
+
+	/** Notify that this tower can begin to execute its end round action */
+	void ExecuteEndRoundPhaseAction();
 
 protected:
 
@@ -86,6 +103,16 @@ protected:
 	/** Event for when we have finished the build sequence. This is called on individual clients */
 	UFUNCTION(BlueprintImplementableEvent, Category = Tower, meta = (DisplayName = "On Finish Build Sequence"))
 	void BP_OnFinishBuildSequence();
+
+	/** Event for when this tower can execute its end round phase action. This will only
+	run on the server and only when WantsEndRoundPhaseEvent returns true . When the event
+	has concluded, FinishEndRoundAction should be called to signal this towers event is over */
+	UFUNCTION(BlueprintNativeEvent, BlueprintAuthorityOnly, Category = Tower)
+	void StartEndRoundAction();
+
+	/** Signals that this towers end round action has finished */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Tower)
+	void FinishEndRoundAction();
 
 private:
 
@@ -102,9 +129,8 @@ public:
 
 private:
 
-	/** The tile we are currently on, this is cached for quick access to it */
-	UPROPERTY(Transient, DuplicateTransient)
-	ATile* CachedTile;
+	/** If this tower is running its end round action (only valid on server) */
+	uint8 bIsRunningEndRoundAction : 1;
 
 public:
 
@@ -112,7 +138,16 @@ public:
 	FORCEINLINE bool IsLegendaryTower() const { return bIsLegendaryTower; }
 
 	/** Get if this tower wants the collection phase event called */
-	FORCEINLINE bool WantsCollectionPhaseEvent() const { return bGivesCollectionPhaseResources; }
+	UFUNCTION(BlueprintPure, Category = Tower)
+	virtual bool WantsCollectionPhaseEvent() const { return bGivesCollectionPhaseResources; }
+
+	/** Get if this tower wants the end round phase event called.
+	By default, will return bWantsActionDuringEndRoundPhase */
+	UFUNCTION(BlueprintPure, Category = Tower)
+	virtual bool WantsEndRoundPhaseEvent() const { return bWantsActionDuringEndRoundPhase; }
+
+	/** This towers priority during the end round phase */
+	FORCEINLINE int32 GetEndRoundActionPriority() const { return EndRoundPhaseActionPriority; }
 
 protected:
 
@@ -124,4 +159,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece)
 	uint8 bGivesCollectionPhaseResources : 1;
 
+	/** If this tower wants to perform an action during the end round phase */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece)
+	uint8 bWantsActionDuringEndRoundPhase : 1;
+
+	/** This towers priority over other towers who also have round end actions. This is used to determine
+	which towers will execute their actions first. The lower the value, the higher the priority */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece, meta = (ClampMin = 0, EditCondition = "bWantsActionDuringEndRoundPhase"))
+	int32 EndRoundPhaseActionPriority;
 };
