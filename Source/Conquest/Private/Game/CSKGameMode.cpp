@@ -581,12 +581,12 @@ void ACSKGameMode::OnCollectionPhaseStart()
 
 void ACSKGameMode::OnFirstActionPhaseStart()
 {
-	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-
 	Handle_CollectionSequences.Invalidate();
 
 	UpdateActivePlayerForActionPhase(0);
 	check(ActionPhaseActiveController);
+
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID + 1), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
@@ -594,10 +594,10 @@ void ACSKGameMode::OnFirstActionPhaseStart()
 
 void ACSKGameMode::OnSecondActionPhaseStart()
 {
-	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-
 	UpdateActivePlayerForActionPhase(1);
 	check(ActionPhaseActiveController);
+
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);
@@ -1552,6 +1552,9 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 		ATower* TowerToRun = EndRoundActionTowers[Index];
 		if (ensure(TowerToRun))
 		{
+			UE_LOG(LogConquest, Log, TEXT("Executing end round action for Tower %s. Action index = %i"), 
+				*TowerToRun->GetFName().ToString(), Index + 1);
+
 			TowerToRun->ExecuteEndRoundPhaseAction();
 			bRunningTowerEndRoundAction = true;
 
