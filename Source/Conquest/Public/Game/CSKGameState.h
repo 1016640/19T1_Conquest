@@ -9,7 +9,14 @@
 class ABoardManager;
 class ACastle;
 class ACSKPlayerController;
+class ACSKPlayerState;
+class ACSKGameMode;
 class ATile;
+class ATower;
+class UTowerConstructionData;
+
+/** Delegate for when the round state changes */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCSKRoundStateChanged, ECSKRoundState, NewState);
 
 /**
  * Tracks state of game and stats about the board
@@ -112,6 +119,12 @@ private:
 	/** Determines which round state change notify to call */
 	void HandleRoundStateChange(ECSKRoundState NewState);
 
+public:
+
+	/** Event called when the round state has changed */
+	UPROPERTY(BlueprintAssignable, Category = CSK)
+	FCSKRoundStateChanged OnRoundStateChanged;
+
 protected:
 
 	/** The current state of the match */
@@ -136,6 +149,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	bool IsActionPhaseTimed() const { return ActionPhaseTimeRemaining != -1.f; }
 
+	/** Get the amount of instances of given type of tower active on the board */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
+
 protected:
 
 	/** Helper function for checking if action phase timer should count down */
@@ -156,6 +173,14 @@ protected:
 		SetActorTickEnabled(!bEnable);
 	}
 
+	/** Helper function for adding bonus time to action phase timer */
+	void AddBonusActionPhaseTime();
+
+private:
+
+	/** Resets action phase variables */
+	void ResetActionPhaseProperties();
+
 protected:
 
 	/** ID of the player whose action phase it is */
@@ -170,6 +195,10 @@ protected:
 	UPROPERTY(Transient)
 	uint32 bFreezeActionPhaseTimer : 1;
 
+	/** Lookup table for how many instances of a certain tower exists on the board */
+	UPROPERTY(Transient)
+	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
+
 public:
 
 	/** Notify that a move request has been confirmed and is starting */
@@ -178,19 +207,100 @@ public:
 	/** Notify that the current move request has finished */
 	void HandleMoveRequestFinished();
 
+	/** Notify that a new tower has been placed on the map */
+	void HandleBuildRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that the current build request has finished */
+	void HandleBuildRequestFinished(ATower* NewTower);
+
 private:
 
-	/** Handle movement request confirmation on every clients */
+	/** Handle movement request confirmation client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestConfirmed();
 
-	/** Handle movement request confirmation on every clients */
+	/** Handle movement request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleMoveRequestFinished();
+
+	/** Handle build request confirmation client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleBuildRequestConfirmed(ATile* TargetTile);
+
+	/** Handle build request finished client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleBuildRequestFinished(ATower* NewTower);
+
+public:
+
+	/** If given player has moved the required amount of tiles this turn */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const;
+
+	/** If given player can build or destroy the given tower */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy = false) const;
+
+	/** If given player can build or destroy anymore towers this turn */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy = false) const;
+
+	/** Get all towers that can be built this match */
+	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
+
+protected:
+
+	/** Updates the rules variables by cloning rules establish by game mode */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = CSK)
+	void UpdateRules();
+
+	/** Helper function for checking if given player can build or destroy given tower */
+	// TODO: Implement OrDestroy functionality
+	bool CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const;
+	
+protected:
+
+	/** Cached action phase timer used to reset action phase time each round */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	float ActionPhaseTime;
+
+	/** The max number of NORMAL towers players are allowed to build */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumTowers;
+
+	/** The max number of duplicated NORMAL towers a player can have built at once */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumDuplicatedTowers;
+
+	/** The max number of LEGENDARY towers a player can have built at once */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxNumLegendaryTowers;
+
+	/** The max range from the players castle they can build from */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxBuildRange;
+
+	/** The towers supported for this match */
+	// TODO: See CSKGameMode.h (ln 412) for a TODO
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
+
+	/** The minimum amount of tiles a player must move each action phase */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MinTileMovements;
+
+	/** The maximum amount of tiles a player can move each action round */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxTileMovements;
+
+public:
+
+	/** Get the current round being played */
+	FORCEINLINE int32 GetRound() const { return RoundsPlayed; }
 
 protected:
 
 	/** How many rounds have been played */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Stats)
+	UPROPERTY(BlueprintReadOnly, Category = Stats)
 	int32 RoundsPlayed;
 };

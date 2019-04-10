@@ -2,12 +2,12 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "Engine/LocalPlayer.h"
 #include "CSKLocalPlayer.generated.h"
 
 /**
- * 
+ * Local player class specialized for CSK
  */
 UCLASS(ClassGroup = (CSK))
 class CONQUEST_API UCSKLocalPlayer : public ULocalPlayer

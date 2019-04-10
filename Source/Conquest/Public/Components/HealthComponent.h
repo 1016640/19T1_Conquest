@@ -34,6 +34,9 @@ protected:
 
 public:
 
+	/** Initializes health, should be called during component creation */
+	void InitHealth(int32 InHealth, int32 InMaxHealth);
+
 	/** Applies damage to the owner. Get how much damage was applied */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Health")
 	int32 ApplyDamage(int32 Amount);
@@ -63,6 +66,9 @@ public:
 	/** Get max health */
 	FORCEINLINE int32 GetMaxHealth() const { return MaxHealth; }
 
+	/** If owner is dead */
+	FORCEINLINE bool IsDead() const { return Health <= 0; }
+
 public:
 
 	/** Event for when health has changed (either from damaged or healing) */
@@ -78,8 +84,4 @@ protected:
 	/** Max health of our owner */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Health", meta = (ClampMin = 1, EditCondition = "!bIsDead"))
 	int32 MaxHealth;
-
-	/** If the last health change resulted in death */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Replicated, Category = "Health")
-	uint8 bIsDead : 1;
 };

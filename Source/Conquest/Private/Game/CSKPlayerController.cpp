@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "Tower.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -17,6 +18,8 @@
 
 ACSKPlayerController::ACSKPlayerController()
 {
+	
+
 	bShowMouseCursor = true;
 	CachedCSKHUD = nullptr;
 	CastleController = nullptr;
@@ -24,6 +27,7 @@ ACSKPlayerController::ACSKPlayerController()
 	CSKPlayerID = -1;
 	HoveredTile = nullptr;
 	bCanSelectTile = false;
+	bWaitingOnTallyEvent = false;
 	bIsActionPhase = false;
 	SelectedAction = ECSKActionPhaseMode::None;
 	RemainingActions = ECSKActionPhaseMode::All;
@@ -36,35 +40,55 @@ void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDC
 	CachedCSKHUD = Cast<ACSKHUD>(MyHUD);
 }
 
+void ACSKPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (GameState)
+	{
+		GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
+			"change event as game state is not of CSKGameState"));
+	}
+}
+
+void ACSKPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (GameState)
+	{
+		GameState->OnRoundStateChanged.RemoveDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void ACSKPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 	if (IsLocalPlayerController())
 	{
-		// Update the tile under the mouse
+		// Get tile player is hovering over
 		ATile* TileUnderMouse = GetTileUnderMouse();
-		if (TileUnderMouse)
+		if (TileUnderMouse != HoveredTile)
 		{
-			// for now
-			///HoveredTile = TileUnderMouse;
-			// TODO: want to tell tile we are not hovering
-			// want to tell new tile we are hovering
-		}
+			if (HoveredTile)
+			{
+				HoveredTile->EndHoveringTile(this);
+			}
 
-		#if WITH_EDITORONLY_DATA
-		// Help with debugging while in editor. This change is local to client
-		if (HoveredTile)
-		{
-			HoveredTile->bHighlightTile = false;
-		}
-		if (TileUnderMouse)
-		{
-			TileUnderMouse->bHighlightTile = true;
-		}
-		#endif
+			HoveredTile = TileUnderMouse;
 
-		HoveredTile = TileUnderMouse;
+			if (HoveredTile)
+			{
+				HoveredTile->StartHoveringTile(this);
+			}
+		}
 	}
 }
 
@@ -75,6 +99,9 @@ void ACSKPlayerController::SetupInputComponent()
 	
 	// Selection
 	InputComponent->BindAction("Select", IE_Pressed, this, &ACSKPlayerController::SelectTile);
+
+	// Shortcuts
+	InputComponent->BindAction("ResetCamera", IE_Pressed, this, &ACSKPlayerController::ResetCamera);
 }
 
 void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -104,27 +131,18 @@ ACSKHUD* ACSKPlayerController::GetCSKHUD() const
 
 ATile* ACSKPlayerController::GetTileUnderMouse() const
 {
-	// Local player will only exist if we are a client
-	ULocalPlayer* LocalPlayer = GetLocalPlayer();
-	if (LocalPlayer && LocalPlayer->ViewportClient)
+	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	if (!BoardManager)
 	{
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (!BoardManager)
-		{
-			return nullptr;
-		}
-		
-		FVector2D MousePosition;
-		if (LocalPlayer->ViewportClient->GetMousePosition(MousePosition))
-		{
-			FVector Position;
-			FVector Direction;
-			if (UGameplayStatics::DeprojectScreenToWorld(this, MousePosition, Position, Direction))
-			{
-				FVector End = Position + Direction * 10000.f;
-				return BoardManager->TraceBoard(Position, End);
-			}
-		}
+		return nullptr;
+	}
+
+	FVector Location;
+	FVector Direction;
+	if (DeprojectMousePositionToWorld(Location, Direction))
+	{
+		FVector End = Location + Direction * 10000.f;
+		return BoardManager->TraceBoard(Location, End);
 	}
 
 	return nullptr;
@@ -132,10 +150,10 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	/*if (!bCanSelectTile)
+	if (false)//TODO: !bCanSelectTile)
 	{
 		return;
-	}*/
+	}
 
 	// Are we allowed to perform actions
 	if (IsPerformingActionPhase())
@@ -153,6 +171,11 @@ void ACSKPlayerController::SelectTile()
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
+				// TODO: Move this to a function
+				if (HoveredTile)
+				{
+					Server_RequestBuildTowerAction(TestTowerTemplate, HoveredTile);
+				}
 				break;
 			}
 			case ECSKActionPhaseMode::CastSpell:
@@ -160,6 +183,15 @@ void ACSKPlayerController::SelectTile()
 				break;
 			}
 		}
+	}
+}
+
+void ACSKPlayerController::ResetCamera()
+{
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && CastlePawn)
+	{
+		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
 	}
 }
 
@@ -187,10 +219,68 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 	}
 }
 
+void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
+{
+	switch (NewState)
+	{
+		case ECSKRoundState::CollectionPhase:
+		{
+			// Ignore value could stack when going from end round phase to collection phase
+			if (!IsMoveInputIgnored())
+			{
+				SetIgnoreMoveInput(true);
+			}
+
+			ACSKPawn* Pawn = GetCSKPawn();
+			if (Pawn && CastlePawn)
+			{
+				// Focus on our castle while we wait for tallied resources
+				Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			}
+
+			bWaitingOnTallyEvent = false;
+
+			break;
+		}
+		case ECSKRoundState::FirstActionPhase:
+		{
+			ResetIgnoreMoveInput();
+
+			// Tally event should have concluded by now
+			if (bWaitingOnTallyEvent)
+			{
+				UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController::OnCollectionResourcesTallied: Event did not call FinishCollectionTallyEvent()."));
+				bWaitingOnTallyEvent = false;
+			}
+
+			break;
+		}
+		case ECSKRoundState::SecondActionPhase:
+		{
+			ResetIgnoreMoveInput();
+
+			break;
+		}
+		case ECSKRoundState::EndRoundPhase:
+		{
+			SetIgnoreMoveInput(true);
+
+			break;
+		}
+	}
+
+	if (CachedCSKHUD)
+	{
+		// TODO:
+		// Notify hud
+	}
+}
+
 void ACSKPlayerController::OnTransitionToBoard()
 {
 	if (HasAuthority())
 	{
+		// TODO: Move this to game mode (game mode should handle place board pieces)
 		// Occupy the space we are on
 		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 		if (BoardManager)
@@ -206,6 +296,41 @@ void ACSKPlayerController::OnTransitionToBoard()
 
 		// Have client handle any local transition requirements
 		Client_OnTransitionToBoard();
+	}
+}
+
+void ACSKPlayerController::Client_OnCollectionPhaseResourcesTallied_Implementation(FCollectionPhaseResourcesTally TalliedResources)
+{
+	bWaitingOnTallyEvent = true;
+	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.SpellUses);
+}
+
+void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, int32 SpellUses)
+{
+	// Just end immediately if not implemented
+	FinishCollectionSequenceEvent();
+}
+
+void ACSKPlayerController::FinishCollectionSequenceEvent()
+{
+	if (bWaitingOnTallyEvent)
+	{
+		Server_FinishCollecionSequence();
+		bWaitingOnTallyEvent = false;
+	}
+}
+
+bool ACSKPlayerController::Server_FinishCollecionSequence_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_FinishCollecionSequence_Implementation()
+{
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		GameMode->NotifyCollectionPhaseSequenceFinished(this);
 	}
 }
 
@@ -238,6 +363,14 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 				}
 			}
 		}
+	}
+}
+
+void ACSKPlayerController::EndActionPhase()
+{
+	if (IsLocalPlayerController() && CanEndActionPhase())
+	{
+		Server_EndActionPhase();
 	}
 }
 
@@ -282,6 +415,23 @@ void ACSKPlayerController::Server_SetActionMode_Implementation(ECSKActionPhaseMo
 	SetActionMode(NewMode);
 }
 
+bool ACSKPlayerController::CanEndActionPhase() const
+{
+	if (IsPerformingActionPhase())
+	{
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			return GameState->HasPlayerMovedRequiredTiles(this);
+		}
+
+		// If movement is being tracked, just assume we can end action phase whenever
+		return true;
+	}
+
+	return false;
+}
+
 bool ACSKPlayerController::CanEnterActionMode(ECSKActionPhaseMode ActionMode) const
 {
 	if (IsPerformingActionPhase())
@@ -303,6 +453,17 @@ bool ACSKPlayerController::CanRequestCastleMoveAction() const
 	return false;
 }
 
+bool ACSKPlayerController::CanRequestBuildTowerAction() const
+{
+	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::BuildTowers))
+	{
+		// We need to know where we are on the map to determine if target tile is within build range
+		return CastlePawn != nullptr;
+	}
+
+	return false;
+}
+
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
@@ -313,7 +474,7 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		ACSKPawn* Pawn = GetCSKPawn();
 		if (Pawn && CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
 	}
 }
@@ -365,11 +526,61 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 	}
 }
 
-void ACSKPlayerController::OnMoveActionFinished()
+void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)
+{
+	bCanSelectTile = false;
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && TargetTile)
+	{
+		// Have players watch get tower built		
+		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		SetIgnoreMoveInput(true);
+	}
+}
+
+void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
+{
+	bCanSelectTile = true;
+	SetIgnoreMoveInput(false);
+}
+
+bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 {
 	if (HasAuthority() && IsPerformingActionPhase())
 	{
-		RemainingActions &= ~ECSKActionPhaseMode::MoveCastle;
+		if (ActionMode != ECSKActionPhaseMode::None || ActionMode != ECSKActionPhaseMode::All)
+		{
+			RemainingActions &= ~ActionMode;
+			return RemainingActions == ECSKActionPhaseMode::None;
+		}
+	}
+
+	return false;
+}
+
+bool ACSKPlayerController::Server_EndActionPhase_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_EndActionPhase_Implementation()
+{
+	bool bSuccess = false;
+
+	if (CanEndActionPhase())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestEndActionPhase();
+		}
+	}
+
+	// TODO: notify client if we failed (we prob want to send a reason as well)
+	if (!bSuccess)
+	{
+
 	}
 }
 
@@ -389,6 +600,31 @@ void ACSKPlayerController::Server_RequestCastleMoveAction_Implementation(ATile* 
 		{
 			bSuccess = GameMode->RequestCastleMove(Goal);
 		}		
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_RequestBuildTowerAction_Validate(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target)
+{
+	bool bSuccess = false;
+
+	if (CanRequestBuildTowerAction())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestBuildTower(TowerConstructData, Target);
+		}
 	}
 
 	// TODO: inform client if we failed

@@ -363,6 +363,17 @@ ATile* ABoardManager::GetTileAtLocation(const FVector& Location) const
 	return HexGrid.GetTile(FHexGrid::ConvertWorldToHex(Location, Origin, Size));
 }
 
+bool ABoardManager::CanPlaceTowerOnTile(const ATile* Tile) const
+{
+	if (Tile && !Tile->IsTileOccupied())
+	{
+		// Towers aren't allowed to be build on portal tiles
+		return IsPlayerPortalTile(Tile) == -1;
+	}
+
+	return false;
+}
+
 bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const
 {
 	if (HasAuthority())
@@ -391,6 +402,26 @@ bool ABoardManager::ClearBoardPieceOnTile(ATile* Tile) const
 	}
 
 	return false;
+}
+
+void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) const
+{
+	if (Scale != 0.f)
+	{
+		if (BoardPiece)
+		{
+			FVector Origin;
+			FVector BoxExtents;
+			BoardPiece->GetActorBounds(false, Origin, BoxExtents);
+
+			FVector BoardOrigin = GetActorLocation();
+
+			// Scale the scaler by 2 as box extents if only half of the pieces actual size
+			Origin.Z = BoardOrigin.Z - (BoxExtents.Z * (Scale * 2.f));
+
+			BoardPiece->SetActorLocation(Origin);
+		}
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKPawnMovement.h"
+#include "CSKPawn.h"
 
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
@@ -9,6 +10,16 @@ UCSKPawnMovement::UCSKPawnMovement()
 {
 	bIsTravelling = false;
 	bCanCacelTravel = false;
+}
+
+void UCSKPawnMovement::AddInputVector(FVector WorldVector, bool bForce)
+{
+	// If tracking an actor or when executing a travel task that can't be cancelled, ignore input
+	bool bCancelTravelTask = bIsTravelling && !bCanCacelTravel;
+	if (!IsTrackingActor() && !bCancelTravelTask)
+	{
+		Super::AddInputVector(WorldVector, bForce);
+	}
 }
 
 FVector UCSKPawnMovement::ConsumeInputVector()
@@ -21,7 +32,7 @@ FVector UCSKPawnMovement::ConsumeInputVector()
 		bIsTravelling = false;
 	}
 
-	return Super::ConsumeInputVector();
+	return InputVector;
 }
 
 bool UCSKPawnMovement::IsMoveInputIgnored() const
@@ -30,7 +41,8 @@ bool UCSKPawnMovement::IsMoveInputIgnored() const
 	if (!bResult)
 	{
 		// If executing travel task that can't be cancelled
-		bResult = IsTrackingActor() || (bIsTravelling && !bCanCacelTravel);
+		bool bCancelTravelTask = bIsTravelling && !bCanCacelTravel;
+		bResult = IsTrackingActor() || bCancelTravelTask;
 	}
 
 	return bResult;
@@ -121,7 +133,7 @@ void UCSKPawnMovement::StopTrackingActor()
 // TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 {
-	// Estimated time (in seconds) in would take to reach goal if travelling constant velocity of max speed
+	// Travel over 2 seconds
 	const float TravelDilation = 2.f; // TODO: make this a variable?
 	TravelElapsedTime = FMath::Clamp(TravelElapsedTime + (DeltaTime / 2.f), 0.f, 1.f);
 
@@ -139,13 +151,18 @@ void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 	{
 		bIsTravelling = false;
 
-		// TODO: Could add an event here!
+		ACSKPawn* Pawn = Cast<ACSKPawn>(GetPawnOwner());
+		if (Pawn)
+		{
+			Pawn->OnTravelTaskFinished.Broadcast(Pawn);
+		}
 	}
 
 	// Consume input for this frame. This could also cancel out this transition (if cancellable)
 	ConsumeInputVector();
 }
 
+// TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
 {
 	check(TrackedActor);
@@ -155,8 +172,14 @@ void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
 
 	FVector Displacement = TargetLocation - ComponentLocation;
 	
-	// Dividing by delta time here as later in TickComponent, velocity will get multiplied by it (which we want to negate)
-	Velocity = Displacement.GetClampedToMaxSize(GetMaxSpeed()) / DeltaTime;
+	float Distance = Displacement.Size();
+	float MaxSpeed = GetMaxSpeed();
+
+	// Travel faster if further away, but maintain focus if within range
+	const float TravelDilation = 3.f; // TODO: make this a variable?
+	float Scale = Distance > (MaxSpeed / 4.f) ? (MaxSpeed * TravelDilation) : (Distance / DeltaTime);
+	
+	Velocity = Displacement.GetSafeNormal() * Scale;
 
 	// Consume input for this frame
 	ConsumeInputVector();

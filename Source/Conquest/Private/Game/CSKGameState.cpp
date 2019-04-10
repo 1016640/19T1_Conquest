@@ -8,6 +8,8 @@
 #include "BoardManager.h"
 #include "BoardPathFollowingComponent.h"
 #include "CastleAIController.h"
+#include "Tower.h"
+#include "TowerConstructionData.h"
 #include "Engine/World.h"
 
 // for now
@@ -28,6 +30,13 @@ ACSKGameState::ACSKGameState()
 	ActivePhasePlayerID = -1;
 	ActionPhaseTimeRemaining = -1.f;
 	bFreezeActionPhaseTimer = false;
+
+	ActionPhaseTime = 90.f;
+	MaxNumTowers = 7;
+	MaxNumDuplicatedTowers = 2;
+	MaxNumLegendaryTowers = 1;
+	MinTileMovements = 1;
+	MaxTileMovements = 2;
 
 	RoundsPlayed = 0;
 }
@@ -56,6 +65,7 @@ void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
 		// We need to have a board manager, we will find one until we wait for the initial one to replicate
 		if (!BoardManager)
 		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: Board Manages has not been replicated to client. Finding the first available board managaer instead."));
 			BoardManager = UConquestFunctionLibrary::FindMatchBoardManager(this);
 		}
 	}
@@ -73,6 +83,15 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 
 	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
+
+	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
+	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
+	DOREPLIFETIME(ACSKGameState, MaxNumDuplicatedTowers);
+	DOREPLIFETIME(ACSKGameState, MaxNumLegendaryTowers);
+	DOREPLIFETIME(ACSKGameState, MaxBuildRange);
+	DOREPLIFETIME(ACSKGameState, AvailableTowers);
+	DOREPLIFETIME(ACSKGameState, MinTileMovements);
+	DOREPLIFETIME(ACSKGameState, MaxTileMovements);
 }
 
 void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
@@ -130,6 +149,10 @@ void ACSKGameState::NotifyWaitingForPlayers()
 {
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
+
+	// Capture rules set out by the game mode, as
+	// certain checks need to know about these values
+	UpdateRules();
 }
 
 void ACSKGameState::NotifyPerformCoinFlip()
@@ -145,6 +168,8 @@ void ACSKGameState::NotifyMatchStart()
 	{
 		bReplicatedHasBegunPlay = true;
 	}
+
+	RoundsPlayed = 0;
 }
 
 void ACSKGameState::NotifyMatchFinished()
@@ -165,6 +190,8 @@ void ACSKGameState::NotifyCollectionPhaseStart()
 
 void ACSKGameState::NotifyFirstCollectionPhaseStart()
 {
+	++RoundsPlayed;
+
 	// Game mode only exists on the server
 	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
 	if (GameMode)
@@ -174,11 +201,9 @@ void ACSKGameState::NotifyFirstCollectionPhaseStart()
 		{
 			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
 		}
-
-		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
 	}
 
-	SetFreezeActionPhaseTimer(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::NotifySecondCollectionPhaseStart()
@@ -192,16 +217,14 @@ void ACSKGameState::NotifySecondCollectionPhaseStart()
 		{
 			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
 		}
-
-		ActionPhaseTimeRemaining = GameMode->GetActionPhaseTime();
 	}
 
-	SetFreezeActionPhaseTimer(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::NotifyEndRoundPhaseStart()
 {
-	SetActorTickEnabled(false);
+	ResetActionPhaseProperties();
 }
 
 void ACSKGameState::OnRep_MatchState()
@@ -284,6 +307,40 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	// Setting it same as new state, as previous state will be valid
 	// after being replicated from the server (or before this call)
 	PreviousRoundState = NewState;
+
+	OnRoundStateChanged.Broadcast(NewState);
+}
+
+int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
+{
+	const int32* Num = TowerInstanceTable.Find(Tower);
+	if (Num != nullptr)
+	{
+		return *Num;
+	}
+
+	return 0;
+}
+
+void ACSKGameState::AddBonusActionPhaseTime()
+{
+	if (IsActionPhaseTimed())
+	{
+		// Game mode only exists on the server
+		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+		if (GameMode)
+		{
+			ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
+		}
+	}
+}
+
+void ACSKGameState::ResetActionPhaseProperties()
+{
+	ActionPhaseTimeRemaining = ActionPhaseTime;
+
+	// This will disable tick when entering end round phase
+	SetFreezeActionPhaseTimer(!IsActionPhaseActive());
 }
 
 void ACSKGameState::HandleMoveRequestConfirmed()
@@ -299,18 +356,147 @@ void ACSKGameState::HandleMoveRequestFinished()
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
-		if (IsActionPhaseTimed())
-		{
-			// Game mode only exists on the server
-			ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-			if (GameMode)
-			{
-				ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
-			}
-		}
+		AddBonusActionPhaseTime();
 
 		Multi_HandleMoveRequestFinished();
 	}
+}
+
+void ACSKGameState::HandleBuildRequestConfirmed(ATile* TargetTile)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		Multi_HandleBuildRequestConfirmed(TargetTile);
+	}
+}
+
+void ACSKGameState::HandleBuildRequestFinished(ATower* NewTower)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after an action is complete
+		AddBonusActionPhaseTime();
+
+		Multi_HandleBuildRequestFinished(NewTower);
+	}
+}
+
+bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const
+{
+	ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		return PlayerState->GetTilesTraversedThisRound() >= MinTileMovements;
+	}
+
+	return false;
+}
+
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+{
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		return CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy);
+	}
+
+	return false;
+}
+
+bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy) const
+{
+	// No towers might be in this match
+	if (AvailableTowers.Num() > 0)
+	{
+		const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+		if (PlayerState)
+		{
+			for (TSubclassOf<UTowerConstructionData> TowerTemplate : AvailableTowers)
+			{
+				if (CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy))
+				{
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+void ACSKGameState::UpdateRules()
+{
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		ActionPhaseTime = GameMode->GetActionPhaseTime();
+		MaxNumTowers = GameMode->GetMaxNumTowers();
+		MaxNumDuplicatedTowers = GameMode->GetMaxNumDuplicatedTowers();
+		MaxNumLegendaryTowers = GameMode->GetMaxNumLegendaryTowers();
+		MaxBuildRange = GameMode->GetMaxBuildRange();
+		MinTileMovements = GameMode->GetMinTileMovementsPerTurn();
+		MaxTileMovements = GameMode->GetMaxTileMovementsPerTurn();
+
+		AvailableTowers = GameMode->GetAvailableTowers();
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameState: Rules updated"));
+	}
+}
+
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+{
+	UTowerConstructionData* ConstructData = TowerTemplate.GetDefaultObject();
+	check(ConstructData);
+
+	if (!ConstructData->TowerClass)
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::CanPlayerBuildTower: Tower class for construction data %s is invalid."), *ConstructData->GetName());
+		return false;
+	}
+
+	// Is tower to expensive?
+	if (!PlayerState->HasRequiredGold(ConstructData->GoldCost) || !PlayerState->HasRequiredMana(ConstructData->ManaCost))
+	{
+		return false;
+	}
+
+	TSubclassOf<ATower> TowerClass = ConstructData->TowerClass;
+	ATower* DefaultTower = TowerClass.GetDefaultObject();
+	check(DefaultTower);
+
+	// Different cases depending on if tower is legendary
+	if (DefaultTower->IsLegendaryTower())
+	{
+		// Has player built max amount of legendary towers allowed?
+		if (PlayerState->GetNumLegendaryTowersOwned() >= MaxNumLegendaryTowers)
+		{
+			return false;
+		}
+
+		// There can only be one instance 
+		if (GetTowerInstanceCount(TowerClass) > 0)
+		{
+			return false;
+		}
+	}
+	else
+	{
+		// Has player built the max amount of normal towers allowed?
+		if (PlayerState->GetNumNormalTowersOwned() >= MaxNumTowers)
+		{
+			return false;
+		}
+
+		// Has player already built the max amount of duplicates?
+		if (PlayerState->GetNumOwnedTowerDuplicates(TowerClass) >= MaxNumDuplicatedTowers)
+		{
+			return false;
+		}
+	}
+
+	// If this point has been reached, it means the player is allowed to build this tower
+	return true;
 }
 
 void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
@@ -321,4 +507,32 @@ void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
 void ACSKGameState::Multi_HandleMoveRequestFinished_Implementation()
 {
 	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATile* TargetTile)
+{
+	SetFreezeActionPhaseTimer(true);
+}
+
+void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewTower)
+{
+	SetFreezeActionPhaseTimer(false);
+
+	if (ensure(NewTower))
+	{
+		// Update tower instance counters
+		TSubclassOf<ATower> TowerClass = NewTower->GetClass();
+		if (TowerInstanceTable.Contains(TowerClass))
+		{
+			TowerInstanceTable[TowerClass]++;
+		}
+		else
+		{
+			TowerInstanceTable.Add(TowerClass, 1);
+		}
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleBuildRequestFinished: NewTower is null"));
+	}
 }

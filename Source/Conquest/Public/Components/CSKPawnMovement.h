@@ -21,6 +21,7 @@ public:
 public:
 
 	// Begin UPawnMovementComponent Interface
+	virtual void AddInputVector(FVector WorldVector, bool bForce) override;
 	virtual FVector ConsumeInputVector() override;
 	virtual bool IsMoveInputIgnored() const override;
 	// End UPawnMovementComponent Interface

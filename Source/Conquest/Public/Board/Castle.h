@@ -26,9 +26,18 @@ public:
 public:
 
 	// Begin IBoardPiece Interface
+	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
+	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual void RemovedOffTile() override;
+	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
 	// End IBoardPiece Interface
+
+protected:
+
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
 
 public:
 
@@ -41,21 +50,44 @@ public:
 private:
 
 	/** Animated skeletal mesh */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* Mesh;
 
 	/** Basic Movement component */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
 	UFloatingPawnMovement* PawnMovement;
 
+	/** Health component */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UHealthComponent* HealthTracker;
+
+protected:
+
+	/** Event for when the castle has been placed on given tile */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Placed on Tile"))
+	void BP_OnPlacedOnTile(ATile* Tile);
+
+	/** Event for when the castle has moved off of given tile */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Removed from Tile"))
+	void BP_OnRemovedFromTile(ATile* Tile);
+
 public:
+
+	/** Get the player who owns this castle */
+	FORCEINLINE ACSKPlayerState* GetOwnerPlayerState() const { return OwnerPlayerState; }
 
 	/** Get the tile we are currently on */
 	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
 
+protected:
+
+	/** The player state of the player who owns this castle */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = BoardPiece)
+	ACSKPlayerState* OwnerPlayerState;
+
 private:
 
 	/** The tile we are currently on, this is cached for quick access to it */
-	UPROPERTY(Transient, DuplicateTransient)
+	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, meta = (AllowPrivateAccess = "true"))
 	ATile* CachedTile;
 };

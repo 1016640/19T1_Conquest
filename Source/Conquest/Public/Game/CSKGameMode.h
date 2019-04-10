@@ -10,7 +10,10 @@
 class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
+class ACSKPlayerState;
 class ATile;
+class ATower;
+class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
 
@@ -64,8 +67,8 @@ private:
 	/** Spawns default castle for given controller. Get the AI controller possessing the newly spawned castle */
 	ACastleAIController* SpawnDefaultCastleFor(ACSKPlayerController* NewPlayer) const;
 
-	/** Spawns a castle at portal corresponding with player ID */
-	ACastle* SpawnCastleAtPortal(int32 PlayerID, TSubclassOf<ACastle> Class) const;
+	/** Spawns a castle at portal corresponding with player*/
+	ACastle* SpawnCastleAtPortal(ACSKPlayerController* Controller, TSubclassOf<ACastle> Class) const;
 
 	/** Spawns the AI controller for given castle. Will auto possess the castle if successful */
 	ACastleAIController* SpawnCastleControllerFor(ACastle* Castle) const;
@@ -156,9 +159,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool HasMatchFinished() const;
 
+	/** Get if the collection phase is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsCollectionPhaseInProgress() const;
+
 	/** Get if an action phase is in progress */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsActionPhaseInProgress() const;
+
+	/** Get if the end round phase is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsEndRoundPhaseInProgress() const;
 
 protected:
 
@@ -177,6 +188,9 @@ protected:
 
 private:
 
+	/** Helper function for setting entering given round state after given delay */
+	void EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay);
+
 	/** Determines the match state change event to call based on previous and new match state */
 	void HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState);
 
@@ -193,14 +207,106 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient)
 	ECSKRoundState RoundState;
 
+private:
+
+	/** Timer handle to the small delay before entering a new round state */
+	FTimerHandle Handle_EnterRoundState;
+
+
+
+
 public:
+
+	/** Function called when deciding which player gets to go first.
+	True will result in Player 1 going first, false for player 2 */
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
+	bool CoinFlip() const;
+
+
+
+public:
+
+	/** Helper function for getting the player whose action phase it is based on starting player ID */
+	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
+
+private:
+
+	/** Helper function for initializing an action phase for given player */
+	void UpdateActivePlayerForActionPhase(int32 Phase);
+
+protected:
+
+	/** The ID of the player who goes first */
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
+	int32 StartingPlayerID;
+
+
+
+
+private:
+
+	/** Waits for an initial delay before starting collection phase sequence */
+	void DelayThenStartCollectionPhaseSequence();
+
+	/** Starts the collection phase resource sequence */
+	void StartCollectionPhaseSequence();
+
+	/** Timer callback that gets called when collection phase has been deemed to last to long. This is a
+	safety measure to avoid the potential case of NotifyCollectionPhaseSequenceFinished() not being called */
+	void ForceCollectionPhaseSequenceEnd();
+
+private:
+
+	/** Resets both players resources based on default resource settings */
+	void ResetResourcesForPlayers();
+
+	/** Updates both players resources based on default
+	resource collection and tower resource bonuses */
+	void CollectResourcesForPlayers();
+
+	/** Resets the resources player has to defaults.
+	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
+	void ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+
+	/** Gives player default resources, as well as any additional resources provided by towers.
+	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
+	void UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+
+public:
+
+	/** Notify that collection phase tallies have completed client side */
+	void NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* Player);
+
+private:
+
+	/** Bitset for tracking which players have finished collection phase tally event */
+	uint32 CollectionSequenceFinishedFlags : 2;
+
+	/** Timer handle for managing the collection phase sequences. This is both as an initial delay
+	before updating resources and a limit timer in-case clients take to long to finish their sequence */
+	FTimerHandle Handle_CollectionSequences;
+
+
+
+
+public:
+
+	/** Will attempt to end active players action phase if active player has fulfilled action requirements */
+	bool RequestEndActionPhase();
 
 	/** Will attempt to move active players castle towards given tile. Doing this will
 	lock the ability for any other action to be made until castle reaches it's destination */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestCastleMove(ATile* Goal);
 
+	/** Will attempt to build the given type of tower for active player at given tile */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	bool RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerData, ATile* Tile);
+
 private:
+
+	/** Disables the action mode for active player. Will end this phase if no actions remain */
+	void DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode);
 
 	/** Starts movement request for active player. The request still has the chance of failing */
 	bool ConfirmCastleMove(const FBoardPath& BoardPath);
@@ -220,14 +326,47 @@ private:
 	Will return true if the win condition has been met, false otherwise */
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
+	/** Finalizes build request for active player. The request still has a chance of failing */
+	bool ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstructionData* ConstructData);
+
+	/** Finishes the build request for active player. This is after the tower has finished its emerge sequence */
+	void FinishBuildTower();
+
+	/** Spawns a new tower of type for given player at tile */
+	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const;
+
+	/** Notify from timer that we should start tower build sequence */
+	void OnStartActivePlayersBuildSequence();
+
+	/** Notify from the active players pending tower that is has completed its build seuqence */
+	UFUNCTION()
+	void OnPendingTowerBuildSequenceComplete();
+
 public:
 
 	/** Get the controller for player whose action phase it is */
 	FORCEINLINE ACSKPlayerController* GetActionPhaseActiveController() const { return ActionPhaseActiveController; }
 
+	/** If we are waiting on an action request to finish */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsWaitingForAction() const { return IsWaitingForCastleMove() || IsWaitingForBuildTower(); }
+
 	/** If we are waiting on a move request to finsih */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool IsPendingCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
+	bool IsWaitingForCastleMove() const { return bWaitingOnActivePlayerMoveAction; }
+
+	/** If we are waiting on a build request to finish */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsWaitingForBuildTower() const { return bWaitingOnActivePlayerBuildAction; }
+
+private:
+
+	/** Resets all wait action flags */
+	FORCEINLINE void ResetWaitingOnActionFlags()
+	{
+		bWaitingOnActivePlayerMoveAction = false;
+		bWaitingOnActivePlayerBuildAction = false;
+	}
 
 protected:
 
@@ -240,49 +379,73 @@ private:
 	/** If we are waiting for active players move action to complete */
 	uint32 bWaitingOnActivePlayerMoveAction : 1;
 
+	/** If we are waiting for active players build action to complete */
+	uint32 bWaitingOnActivePlayerBuildAction : 1;
+
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
 
 	/** Delegate handle for when active players castle reaches its destination tile */
 	FDelegateHandle Handle_ActivePlayerPathComplete;
 
+	/** The tower that is in the process of being built. Keeping this here so we can
+	wait for it to initially replicate to all clients before placing on the board */
+	UPROPERTY()
+	ATower* ActivePlayerPendingTower;
+
+	/** The tile the pending tower needs to be palced on.  Keeping this here so we can
+	wait for it the tower to initially replicate to all clients before placing on the board */
+	UPROPERTY()
+	ATile* ActivePlayerPendingTowerTile;
+
+	/** Timer handle for when activating the build sequence for pending tower */
+	FTimerHandle Handle_ActivePlayerStartBuildSequence;
+
+	/** Delegate handle for when pending towers build sequence has completed */
+	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
+
 
 
 
 public:
 
-	/** Function called when deciding which player gets to go first.
-	True will result in Player 1 going first, false for player 2 */
-	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	bool CoinFlip() const;
-
-	/** Helper function for getting the player whose action phase it is based on starting player ID */
-	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
-
-protected:
-
-	/** The ID of the player who goes first */
-	UPROPERTY(BlueprintReadOnly, Category = CSK)
-	int32 StartingPlayerID;
-
-public:
-
-	/** Resets both players resources based on default resource settings */
-	void ResetResourcesForPlayers();
-	
-	/** Updates both players resources based on default 
-	resource collection and tower resource bonuses */
-	void CollectResourcesForPlayers();
+	/** Notify that tower running its end round phase event has finished */
+	void NotifyEndRoundActionFinished(ATower* Tower);
 
 private:
 
-	/** Resets the resources player has to defaults.
-	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
-	void ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+	/** Checks all towers determine order to execute end round actions. Get if any actions are ready to be performed */
+	bool PrepareEndRoundActionTowers();
 
-	/** Gives player default resources, as well as any additional resources provided by towers.
-	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
-	void UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+	/** Attempts to start the action for end round tower at given index. Get if starting the next towers action was successfull */
+	bool StartRunningTowersEndRoundAction(int32 Index);
+
+	/** Sets delay of given time before attempting to start next tower action */
+	void StartNextEndRoundActionAfterDelay(float Delay);
+
+	/** Callback from delay end round action */
+	void OnStartNextEndRoundAction();
+
+private:
+
+	/** The list of towers that will run the end round action during this end
+	round phase. This array is sorted by order of action priority (see Tower.h).*/
+	UPROPERTY()
+	TArray<ATower*> EndRoundActionTowers;
+
+	/** The index of the current tower running the end round action */
+	int32 EndRoundRunningTower;
+
+	/** If we are current initiating a towers action. This helps 
+	dealing with towers whose actions conclude immediately */
+	uint32 bInitiatingTowerEndRoundAction : 1;
+
+	/** If a tower is running its end round action event */
+	uint32 bRunningTowerEndRoundAction : 1;
+
+	/** Timer handle for creating small delays between end round actions */
+	FTimerHandle Handle_DelayEndRoundAction;
+
 
 public:
 
@@ -293,6 +456,21 @@ public:
 	/** Clamps value based on max mana allowed */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 ClampManaToLimit(int32 Mana) const { return FMath::Clamp(Mana, 0, MaxMana); }
+
+	/** Get the max number of NORMAL towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumTowers() const { return MaxNumTowers; }
+
+	/** Get the max number of duplicate NORMAL towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumDuplicatedTowers() const { return MaxNumDuplicatedTowers; }
+
+	/** Get the max number of LEGENDARY towers the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumLegendaryTowers() const { return MaxNumLegendaryTowers; }
+
+	/** Get the max range the player can build a tower away from their castle */
+	FORCEINLINE int32 GetMaxBuildRange() const { return MaxBuildRange; }
+
+	/** Get the towers available for use */
+	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
 
 protected:
 
@@ -332,6 +510,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumLegendaryTowers;
 
+	/** The max range players can be a tower away from their castle at */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
+	int32 MaxBuildRange;
+
+	/** The types of towers that can be built */
+	// TODO: replace this with primary asset IDs for towers, when game state gets it
+	// it will load them in manually via the asset manager
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
+
 public:
 
 	/** Get if given value is within the limit of tiles that can be traversed each round */
@@ -345,9 +533,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
 
+	/** Get the min amount of tiles that must be traversed per action phase */
+	FORCEINLINE int32 GetMinTileMovementsPerTurn() const { return MinTileMovements; }
+
 	/** Get the max amount of tiles that can be traversed per action phase */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
+	FORCEINLINE int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
 
 protected:
 
@@ -367,20 +557,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
 	int32 MaxTileMovements;
 
-	/** The limit to how many buildings can be constructed per action phase (zero means indefinite) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	int32 MaxTowerConstructs;
+	/** If players are only allowed to request one move action per turn */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	uint32 bLimitOneMoveActionPerTurn : 1;
 
 protected:
 
 	/** Notify that a client has disconnected */
 	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
-
-private:
-
-	UFUNCTION()
-	void GotoActionPhase1();
-
-	UFUNCTION()
-	void GototCollectPhase();
 };

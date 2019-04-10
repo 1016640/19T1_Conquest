@@ -13,6 +13,53 @@ class ACSKHUD;
 class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
+class ATower;
+class UTowerConstructionData;
+
+/** Struct containing tallied amount of resources to give to a player */
+USTRUCT()
+struct CONQUEST_API FCollectionPhaseResourcesTally
+{
+	GENERATED_BODY()
+
+public:
+
+	FCollectionPhaseResourcesTally()
+	{
+		Reset();
+	}
+
+	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, int32 InSpellUses)
+	{
+		Gold = InGold;
+		Mana = InMana;
+		SpellUses = InSpellUses;
+	}
+
+public:
+
+	/** Resets tally */
+	FORCEINLINE void Reset()
+	{
+		Gold = 0;
+		Mana = 0;
+		SpellUses = 0;
+	}
+
+public:
+
+	/** Gold tallied */
+	UPROPERTY()
+	int32 Gold;
+
+	/** Mana tallied */
+	UPROPERTY()
+	int32 Mana;
+
+	/** Additional spell uses tallied */
+	UPROPERTY()
+	int32 SpellUses;
+};
 
 /**
  * Controller for handling communication events between players and the server
@@ -33,6 +80,8 @@ public:
 	// End APlayerController Interface
 
 	// Begin AActor Interface
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 	// End AActor Interface
 
@@ -78,8 +127,11 @@ protected:
 
 private:
 
-	/** Sets the current tile we are hovering over as selected */
+	/** Attempts to perform an action using the current hovered tile */
 	void SelectTile();
+
+	/** Resets our camera to focus on our castle */
+	void ResetCamera();
 
 protected:
 
@@ -114,24 +166,60 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = CSK)
 	ACastle* CastlePawn;
 
+protected:
+
+	/** Notify that the round state has changed */
+	UFUNCTION()
+	void OnRoundStateChanged(ECSKRoundState NewState);
+
 public:
 
 	/** Called to inform player that coin flip is taking place */
-	void OnReadyForCoinFlip();
+	void OnReadyForCoinFlip(); // Refactor
 
 	/** Called by the game mode when transitioning to the board */
-	void OnTransitionToBoard();
+	void OnTransitionToBoard(); // Refactor
+
+public:
+
+	/** Notify that we have collected resources during collection phase */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCollectionPhaseResourcesTallied(FCollectionPhaseResourcesTally TalliedResources);
+
+protected:
+
+	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
+	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
+	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
+
+	/** Finishes the collection phase event. This must be called after collection resources tallied event */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void FinishCollectionSequenceEvent();
 
 private:
 
 	/** Handle transition to board client side */
 	UFUNCTION(Client, Reliable)
-	void Client_OnTransitionToBoard();
+	void Client_OnTransitionToBoard(); // TODO: refactor
+
+	/** Notifies server that local client has finished collecting resources */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_FinishCollecionSequence();
+
+private:
+
+	/** If we are waiting on the collection phase tally to conclude */
+	uint32 bWaitingOnTallyEvent : 1;
 
 public:
 
 	/** Enables/Disables this players action phase */
 	void SetActionPhaseEnabled(bool bEnabled);
+
+	/** Ends our action phase if we are allowed to */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void EndActionPhase();
 
 	/** Sets the action mode for this player */
 	void SetActionMode(ECSKActionPhaseMode NewMode, bool bClientOnly = false);
@@ -151,12 +239,19 @@ public:
 	/** If this player is currently performing their action phase */
 	FORCEINLINE bool IsPerformingActionPhase() const { return bIsActionPhase; }
 
+	/** If this player is allowed to end their action phase */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanEndActionPhase() const;
+
 	/** Get if this player cen enter given action mode */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool CanEnterActionMode(ECSKActionPhaseMode ActionMode) const;
 
-	/** If this castle is allowed to request a castle move */
+	/** If this player is allowed to request a castle move */
 	bool CanRequestCastleMoveAction() const;
+
+	/** If this player is allowed to request a tower construction */
+	bool CanRequestBuildTowerAction() const;
 
 protected:
 
@@ -188,7 +283,6 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
-
 public:
 
 	/** Notify that an action phase move request has been confirmed */
@@ -199,12 +293,34 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastleMoveRequestFinished();
 
-	/** Notify that our move request has finished */
-	void OnMoveActionFinished();
+	/** Notify that an action phase build request has been confirmed */
+	UFUNCTION(Client, Reliable)
+	void Client_OnTowerBuildRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that an action phase build request has finished */
+	UFUNCTION(Client, Reliable)
+	void Client_OnTowerBuildRequestFinished();
+
+	/** Disable the ability to use the given action mode for the rest of this round.
+	Get if no action remains (always returns false on client or if not in action phase) */
+	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
 
 protected:
+
+	/** Makes a request to the server to end our action phase */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_EndActionPhase();
 
 	/** Makes a request to move our castle towards the goal tile */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestCastleMoveAction(ATile* Goal);
+
+	/** Makes a request to build a tower at given tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestBuildTowerAction(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target);
+
+public:
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<UTowerConstructionData> TestTowerTemplate;
 };

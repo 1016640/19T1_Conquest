@@ -1,19 +1,24 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKPlayerState.h"
+#include "CSKPlayerController.h"
 #include "CSKGameMode.h"
+#include "Tower.h"
 
 ACSKPlayerState::ACSKPlayerState()
 {
 	CSKPlayerID = -1;
 	Castle = nullptr;
 
+	AssignedColor = FColor(80, 50, 20); // Bronze
 	Gold = 0;
 	Mana = 0;
-	AssignedColor = FColor(80, 50, 20); // Bronze
+	CachedNumLegendaryTowers = 0;
 
 	TilesTraversedThisRound = 0;
 	TotalTilesTraversed = 0;
+	TotalTowersBuilt = 0;
+	TotalLegendaryTowersBuilt = 0;
 }
 
 void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -28,6 +33,11 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
+}
+
+ACSKPlayerController* ACSKPlayerState::GetCSKPlayerController() const
+{
+	return CastChecked<ACSKPlayerController>(GetOwner());
 }
 
 void ACSKPlayerState::SetCSKPlayerID(int32 InPlayerID)
@@ -53,13 +63,8 @@ void ACSKPlayerState::GiveResources(int32 InGold, int32 InMana)
 
 void ACSKPlayerState::SetResources(int32 InGold, int32 InMana)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		Gold = GameMode->ClampGoldToLimit(InGold);
-		Mana = GameMode->ClampManaToLimit(InMana);
-	}
+	Gold = FMath::Max(0, InGold);
+	Mana = FMath::Max(0, InMana);
 }
 
 void ACSKPlayerState::AddGold(int32 Amount)
@@ -69,12 +74,7 @@ void ACSKPlayerState::AddGold(int32 Amount)
 
 void ACSKPlayerState::SetGold(int32 Amount)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		Gold = GameMode->ClampGoldToLimit(Amount);
-	}
+	Gold = FMath::Max(0, Amount);
 }
 
 void ACSKPlayerState::AddMana(int32 Amount)
@@ -84,11 +84,39 @@ void ACSKPlayerState::AddMana(int32 Amount)
 
 void ACSKPlayerState::SetMana(int32 Amount)
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
+	Mana = FMath::Max(0, Amount);
+}
+
+void ACSKPlayerState::AddTower(ATower* InTower)
+{
+	if (HasAuthority() && InTower)
 	{
-		Mana = GameMode->ClampManaToLimit(Amount);
+		OwnedTowers.Add(InTower);
+
+		// Recalculate the cached counts we have
+		UpdateTowerCounts();
+
+		if (InTower->IsLegendaryTower())
+		{
+			++TotalLegendaryTowersBuilt;
+		}
+		else
+		{
+			++TotalTowersBuilt;
+		}
+	}
+}
+
+void ACSKPlayerState::RemoveTower(ATower* InTower)
+{
+	if (HasAuthority())
+	{
+		// We can avoid recalc if we don't remove anything
+		if (OwnedTowers.Remove(InTower) > 0)
+		{
+			// Recalculate the cached counts we have
+			UpdateTowerCounts();
+		}
 	}
 }
 
@@ -102,11 +130,60 @@ bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount) const
 	return (Mana - RequiredAmount) >= 0;
 }
 
+int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const
+{
+	if (Tower)
+	{		
+		const int32* Num = CachedUniqueTowerCount.Find(Tower);
+		if (Num != nullptr)
+		{
+			return *Num;
+		}
+	}
+
+	return 0;
+}
+
+void ACSKPlayerState::OnRep_OwnedTowers()
+{
+	UpdateTowerCounts();
+}
+
+void ACSKPlayerState::UpdateTowerCounts()
+{
+	CachedNumLegendaryTowers = 0;
+	CachedUniqueTowerCount.Reset();
+
+	for (ATower* Tower : OwnedTowers)
+	{
+		if (!ensure(Tower))
+		{
+			continue;
+		}
+
+		if (Tower->IsLegendaryTower())
+		{
+			++CachedNumLegendaryTowers;
+		}
+
+		TSubclassOf<ATower> TowerClass = Tower->GetClass();
+		if (CachedUniqueTowerCount.Contains(TowerClass))
+		{
+			CachedUniqueTowerCount[TowerClass]++;
+		}
+		else
+		{
+			CachedUniqueTowerCount.Add(TowerClass, 1);
+		}
+	}
+}
+
 void ACSKPlayerState::IncrementTilesTraversed()
 {
 	if (HasAuthority())
 	{
 		++TilesTraversedThisRound;
+		++TotalTilesTraversed;
 
 		#if WITH_EDITOR
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
@@ -115,13 +192,11 @@ void ACSKPlayerState::IncrementTilesTraversed()
 			// Warning check
 			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound))
 			{
-				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed per round! "
+				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed this round! "
 					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
 			}
 		}
 		#endif
-
-		++TotalTilesTraversed;
 	}
 }
 

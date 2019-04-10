@@ -7,6 +7,8 @@
 #include "Containers/HexGrid.h"
 #include "BoardManager.generated.h"
 
+class ATower;
+
 struct CONQUEST_API FBoardInitData
 {
 public:
@@ -163,16 +165,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Board", meta = (DisplayName = "Board Tile Type"))
 	TSubclassOf<ATile> GridTileTemplate;
 	#endif
-	
-public:
-
-	/** Traces the board to get a tile (can return null) */
-	UFUNCTION(BlueprintCallable, Category = "Board")
-	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
-
-	/** Generates a path from the start tile to goal tile */
-	UFUNCTION(BlueprintCallable, Category = "Board")
-	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
 public:
 
@@ -212,6 +204,10 @@ public:
 	/** Get the tile at given location */
 	FORCEINLINE ATile* GetTileAtLocation(const FVector& Location) const;
 
+	/** If a tower is allowed to be placed on given tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	bool CanPlaceTowerOnTile(const ATile* Tile) const;
+
 private:
 
 	/** Hex value for the first players portal (starting tile) */
@@ -224,6 +220,16 @@ private:
 
 public:
 
+	/** Traces the board to get a tile (can return null) */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	ATile* TraceBoard(const FVector& Origin, const FVector& End) const;
+
+	/** Generates a path from the start tile to goal tile */
+	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay = 3))
+	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
+
+public:
+
 	/** Attempts to place the board piece on given tile. This only runs on the server */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
 	bool PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const;
@@ -231,5 +237,11 @@ public:
 	/** Clears the board piece set on given tile. This only runs on the server */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
 	bool ClearBoardPieceOnTile(ATile* Tile) const;
+
+public:
+
+	/** Moves a board piece under the board based on it's boundaries */
+	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay=1))
+	void MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale = 1.5f) const;
 };
 
