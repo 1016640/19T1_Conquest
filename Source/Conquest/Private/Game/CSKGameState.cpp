@@ -83,7 +83,6 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 
 	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
-	DOREPLIFETIME(ACSKGameState, TowerInstanceTable);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -363,33 +362,22 @@ void ACSKGameState::HandleMoveRequestFinished()
 	}
 }
 
-void ACSKGameState::HandleBuildRequestConfirmed(ATower* NewTower, ATile* TargetTile)
+void ACSKGameState::HandleBuildRequestConfirmed(ATile* TargetTile)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
-		// Update tower instance counters
-		TSubclassOf<ATower> TowerClass = NewTower->GetClass();
-		if (TowerInstanceTable.Contains(TowerClass))
-		{
-			TowerInstanceTable[TowerClass]++;
-		}
-		else
-		{
-			TowerInstanceTable.Add(TowerClass, 1);
-		}
-
 		Multi_HandleBuildRequestConfirmed(TargetTile);
 	}
 }
 
-void ACSKGameState::HandleBuildRequestFinished()
+void ACSKGameState::HandleBuildRequestFinished(ATower* NewTower)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
 		AddBonusActionPhaseTime();
 
-		Multi_HandleBuildRequestFinished();
+		Multi_HandleBuildRequestFinished(NewTower);
 	}
 }
 
@@ -526,7 +514,25 @@ void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATile* Targ
 	SetFreezeActionPhaseTimer(true);
 }
 
-void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation()
+void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewTower)
 {
 	SetFreezeActionPhaseTimer(false);
+
+	if (ensure(NewTower))
+	{
+		// Update tower instance counters
+		TSubclassOf<ATower> TowerClass = NewTower->GetClass();
+		if (TowerInstanceTable.Contains(TowerClass))
+		{
+			TowerInstanceTable[TowerClass]++;
+		}
+		else
+		{
+			TowerInstanceTable.Add(TowerClass, 1);
+		}
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleBuildRequestFinished: NewTower is null"));
+	}
 }

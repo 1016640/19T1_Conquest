@@ -380,6 +380,26 @@ void ACSKGameMode::EnterRoundState(ECSKRoundState NewState)
 	// Only enter new states once we have begun the game
 	if (NewState != RoundState && IsMatchInProgress())
 	{
+		if (Handle_EnterRoundState.IsValid())
+		{
+			// A new state might be delayed with this call interrupting it,
+			// we are disabling it to avoid rapid succession of state changes
+			FTimerManager& TimerManager = GetWorldTimerManager();
+			TimerManager.ClearTimer(Handle_EnterRoundState);
+
+			Handle_EnterRoundState.Invalidate();
+
+			// I wanted to add a log check here to inform developers if this function was
+			// called while a delay change was pending, but FTimerManager doesn't offer the
+			// ability to get a timers status, so .IsTimerActive() would return true even
+			// if the this function was being executed by the timer manager.
+
+			// TODO?
+			// Another option would be to make another function that the timer is set to call instead,
+			// where the timer is disabled before calling this function. This would result in the
+			// timer only be active in this function if a delayed change is pending.
+		}
+
 		#if WITH_EDITOR
 		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKRoundState"));
 		UE_LOG(LogConquest, Log, TEXT("Entering Round State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
@@ -463,11 +483,31 @@ bool ACSKGameMode::HasMatchFinished() const
 		MatchState == ECSKMatchState::Aborted;
 }
 
+bool ACSKGameMode::IsCollectionPhaseInProgress() const
+{
+	if (IsMatchInProgress())
+	{
+		return RoundState == ECSKRoundState::CollectionPhase;
+	}
+
+	return false;
+}
+
 bool ACSKGameMode::IsActionPhaseInProgress() const
 {
 	if (IsMatchInProgress())
 	{
 		return RoundState == ECSKRoundState::FirstActionPhase || RoundState == ECSKRoundState::SecondActionPhase;
+	}
+
+	return false;
+}
+
+bool ACSKGameMode::IsEndRoundPhaseInProgress() const
+{
+	if (IsMatchInProgress())
+	{
+		return RoundState == ECSKRoundState::EndRoundPhase;
 	}
 
 	return false;
@@ -531,38 +571,79 @@ void ACSKGameMode::OnMatchAbort()
 
 void ACSKGameMode::OnCollectionPhaseStart()
 {
-	CollectResourcesForPlayers();
+	CollectionSequenceFinishedFlags = 0;
+	DelayThenStartCollectionPhaseSequence();
 
 	UKismetSystemLibrary::PrintString(this, "Collection Phase Start", true, false, FLinearColor::Blue, 5.f);
 
-	FTimerHandle Temp;
-	GetWorldTimerManager().SetTimer(Temp, this, &ACSKGameMode::GotoActionPhase1, 2.f, false);
+	UE_LOG(LogConquest, Log, TEXT("Starting Collection Phase"));
 }
 
 void ACSKGameMode::OnFirstActionPhaseStart()
 {
-	UpdateActivePlayerForActionPhase(0);
+	Handle_CollectionSequences.Invalidate();
 
-	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
+	UpdateActivePlayerForActionPhase(0);
+	check(ActionPhaseActiveController);
+
+	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID + 1), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
+
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
 }
 
 void ACSKGameMode::OnSecondActionPhaseStart()
 {
 	UpdateActivePlayerForActionPhase(1);
+	check(ActionPhaseActiveController);
 
 	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
 	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);
+
+	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
 }
 
 void ACSKGameMode::OnEndRoundPhaseStart()
 {
+	// Resets action phase active controller
 	UpdateActivePlayerForActionPhase(-1);
 
 	UKismetSystemLibrary::PrintString(this, "End round Phase Start", true, false, FLinearColor::Blue, 5.f );
 
-	FTimerHandle Temp;
-	GetWorldTimerManager().SetTimer(Temp, this, &ACSKGameMode::GototCollectPhase, 2.f, false);
+	EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
+
+	UE_LOG(LogConquest, Log, TEXT("Starting End Round Phase"));
+}
+
+void ACSKGameMode::EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay)
+{
+	if (RoundState == NewState)
+	{
+		return;
+	}
+
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	if (TimerManager.IsTimerActive(Handle_EnterRoundState))
+	{
+		TimerManager.ClearTimer(Handle_EnterRoundState);
+
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::EnterRoundStateAfterDelay: Cancelling existing delay since "
+			"a new delay has been requested (This might be called during that delays execution though!)."));
+	}
+
+	// Create delegate with param state set
+	FTimerDelegate DelayedCallback;
+	DelayedCallback.BindUObject(this, &ACSKGameMode::EnterRoundState, NewState);
+
+	if (Delay > 0.f)
+	{
+		TimerManager.SetTimer(Handle_EnterRoundState, DelayedCallback, Delay, false);
+	}
+	else
+	{
+		TimerManager.SetTimerForNextTick(DelayedCallback);
+		Handle_EnterRoundState.Invalidate();
+	}
 }
 
 void ACSKGameMode::HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState)
@@ -631,6 +712,175 @@ void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundStat
 
 
 
+
+bool ACSKGameMode::CoinFlip_Implementation() const
+{
+	int32 RandomValue = FMath::Rand();
+	return (RandomValue % 2) == 1;
+}
+
+ACSKPlayerController* ACSKGameMode::GetActivePlayerForActionPhase(int32 Phase) const
+{
+	if (IsMatchInProgress())
+	{
+		// There are two action phases, one for each player.
+		if (Players.IsValidIndex(Phase))
+		{
+			return Players[Phase == 0 ? StartingPlayerID : FMath::Abs(StartingPlayerID - 1)];
+		}
+	}
+
+	return nullptr;
+}
+
+void ACSKGameMode::UpdateActivePlayerForActionPhase(int32 Phase)
+{
+	// Disable action phase for current active player
+	if (ActionPhaseActiveController)
+	{
+		ActionPhaseActiveController->SetActionPhaseEnabled(false);
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Disabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+	}
+
+	ActionPhaseActiveController = GetActivePlayerForActionPhase(Phase);
+	if (ActionPhaseActiveController)
+	{
+		ensure(IsActionPhaseInProgress());
+		ActionPhaseActiveController->SetActionPhaseEnabled(true);
+
+		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Enabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
+	}
+
+	ResetWaitingOnActionFlags();
+}
+
+void ACSKGameMode::DelayThenStartCollectionPhaseSequence()
+{
+	check(IsCollectionPhaseInProgress());
+
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_CollectionSequences, this, &ACSKGameMode::StartCollectionPhaseSequence, 2.f);
+}
+
+void ACSKGameMode::StartCollectionPhaseSequence()
+{
+	check(IsCollectionPhaseInProgress());
+
+	CollectResourcesForPlayers();
+
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_CollectionSequences, this, &ACSKGameMode::ForceCollectionPhaseSequenceEnd, 10.f);
+}
+
+void ACSKGameMode::ForceCollectionPhaseSequenceEnd()
+{
+	if (IsCollectionPhaseInProgress())
+	{
+		EnterRoundState(ECSKRoundState::FirstActionPhase);
+	}
+}
+
+void ACSKGameMode::ResetResourcesForPlayers()
+{
+	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	{
+		ResetPlayerResources(Players[i], i + 1);
+	}
+}
+
+void ACSKGameMode::CollectResourcesForPlayers()
+{
+	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	{
+		UpdatePlayerResources(Players[i], i + 1);
+	}
+}
+
+void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
+{
+	if (ensure(Controller))
+	{
+		ACSKPlayerState* State = Controller->GetCSKPlayerState();
+		if (!ensure(State))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as player state is invalid"), PlayerID);
+			return;
+		}
+
+		State->SetResources(StartingGold, StartingMana);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as controller was null!"), PlayerID);
+	}
+}
+
+void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
+{
+	if (ensure(Controller))
+	{
+		ACSKPlayerState* State = Controller->GetCSKPlayerState();
+		if (!ensure(State))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as player state is invalid"), PlayerID);
+			return;
+		}
+
+		int32 GoldToGive = CollectionPhaseGold;
+		int32 ManaToGive = CollectionPhaseMana;
+		int32 SpellUsesToGive = 1;
+
+		// Cycle through this players towers to collect any additional resources
+		// TODO: Designers want camera to pan to each tower as it shows how much resources it's given the player. This
+		// will force this function to be split up (not all resources have to be given at once)
+		TArray<ATower*> PlayersTowers = State->GetOwnedTowers();
+		for (ATower* Tower : PlayersTowers)
+		{
+			if (ensure(Tower) && Tower->WantsCollectionPhaseEvent())
+			{
+				int32 AdditionalGold = 0;
+				int32 AdditionalMana = 0;
+				int32 AdditionalSpellUses = 0;
+
+				Tower->BP_GetCollectionPhaseResources(Controller, AdditionalGold, AdditionalMana, AdditionalSpellUses);
+
+				GoldToGive += AdditionalGold;
+				ManaToGive += AdditionalMana;
+			}
+		}
+
+		int32 NewGold = ClampGoldToLimit(State->GetGold() + GoldToGive);
+		int32 NewMana = ClampManaToLimit(State->GetMana() + ManaToGive);
+		State->SetResources(NewGold, NewMana);
+
+		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, SpellUsesToGive);
+		Controller->Client_OnCollectionPhaseResourcesTallied(TalliedResults);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as controller was null!"), PlayerID);
+	}
+}
+
+void ACSKGameMode::NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* Player)
+{
+	if (IsCollectionPhaseInProgress())
+	{
+		CollectionSequenceFinishedFlags |= (1 << Player->CSKPlayerID);
+		if (CollectionSequenceFinishedFlags == 0b11)
+		{
+			FTimerManager& TimerManager = GetWorldTimerManager();
+			TimerManager.ClearTimer(Handle_CollectionSequences);
+
+			// Small delay between rounds
+			EnterRoundStateAfterDelay(ECSKRoundState::FirstActionPhase, 2.f);
+		}
+	}
+}
+
+
+
 bool ACSKGameMode::RequestEndActionPhase()
 {
 	// Player is not the active player
@@ -653,7 +903,7 @@ bool ACSKGameMode::RequestEndActionPhase()
 
 	ActionPhaseActiveController->SetActionPhaseEnabled(false);
 
-	// Move onto next phase (TODO: maybe delay?)
+	// Move onto next phase
 	EnterRoundState(RoundState == ECSKRoundState::FirstActionPhase ? ECSKRoundState::SecondActionPhase : ECSKRoundState::EndRoundPhase);
 	return true;
 }
@@ -1031,7 +1281,7 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstruct
 		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 		if (CSKGameState)
 		{
-			CSKGameState->HandleBuildRequestConfirmed(Tower, Tile);
+			CSKGameState->HandleBuildRequestConfirmed(Tile);
 		}
 	}
 
@@ -1053,9 +1303,9 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstruct
 	ActivePlayerPendingTower = Tower;
 	ActivePlayerPendingTowerTile = Tile;
 
-	// Give tower 1 second to replicate
+	// Give tower 2 seconds to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 1.f, false);
+	TimerManager.SetTimer(Handle_ActivePlayerStartBuildSequence, this, &ACSKGameMode::OnStartActivePlayersBuildSequence, 2.f, false);
 
 	return true;
 }
@@ -1080,7 +1330,7 @@ void ACSKGameMode::FinishBuildTower()
 	{
 		if (CSKGameState)
 		{
-			CSKGameState->HandleBuildRequestFinished();
+			CSKGameState->HandleBuildRequestFinished(ActivePlayerPendingTower);
 		}
 	}
 
@@ -1164,143 +1414,9 @@ void ACSKGameMode::OnPendingTowerBuildSequenceComplete()
 
 
 
-
-
-
-
-bool ACSKGameMode::CoinFlip_Implementation() const
-{
-	int32 RandomValue = FMath::Rand();
-	return (RandomValue % 2) == 1;
-}
-
-ACSKPlayerController* ACSKGameMode::GetActivePlayerForActionPhase(int32 Phase) const
-{
-	if (IsMatchInProgress())
-	{
-		// There are two action phases, one for each player.
-		if (Players.IsValidIndex(Phase))
-		{
-			return Players[Phase == 0 ? StartingPlayerID : FMath::Abs(StartingPlayerID - 1)];
-		}
-	}
-
-	return nullptr;
-}
-
-void ACSKGameMode::UpdateActivePlayerForActionPhase(int32 Phase)
-{
-	// Disable action phase for current active player
-	if (ActionPhaseActiveController)
-	{
-		ActionPhaseActiveController->SetActionPhaseEnabled(false);
-
-		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Disabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-	}
-
-	ActionPhaseActiveController = GetActivePlayerForActionPhase(Phase);
-	if (ActionPhaseActiveController)
-	{
-		ensure(IsActionPhaseInProgress());
-		ActionPhaseActiveController->SetActionPhaseEnabled(true);
-
-		UE_LOG(LogConquest, Log, TEXT("ACSKGameMode: Enabling action phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-	}
-
-	ResetWaitingOnActionFlags();
-}
-
-void ACSKGameMode::ResetResourcesForPlayers()
-{
-	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
-	{
-		ResetPlayerResources(Players[i], i + 1);
-	}
-}
-
-void ACSKGameMode::CollectResourcesForPlayers()
-{
-	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
-	{
-		UpdatePlayerResources(Players[i], i + 1);
-	}
-}
-
-void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
-{
-	if (ensure(Controller))
-	{
-		ACSKPlayerState* State = Controller->GetCSKPlayerState();
-		if (!ensure(State))
-		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as player state is invalid"), PlayerID);
-			return;
-		}
-
-		State->SetResources(StartingGold, StartingMana);
-	}
-	else
-	{
-		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::ResetPlayerResources: Unable to reset resources for player %i as controller was null!"), PlayerID);
-	}
-}
-
-void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID)
-{
-	if (ensure(Controller))
-	{
-		ACSKPlayerState* State = Controller->GetCSKPlayerState();
-		if (!ensure(State))
-		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as player state is invalid"), PlayerID);
-			return;
-		}
-
-		int32 GoldToGive = CollectionPhaseGold;
-		int32 ManaToGive = CollectionPhaseMana;
-		
-		// Cycle through this players towers to collect any additional resources
-		// TODO: Designers want camera to pan to each tower as it shows how much resources it's given the player. This
-		// will force this function to be split up (not all resources have to be given at once)
-		TArray<ATower*> PlayersTowers = State->GetOwnedTowers();
-		for (ATower* Tower : PlayersTowers)
-		{
-			if (ensure(Tower) && Tower->WantsCollectionPhaseEvent())
-			{
-				int32 AdditionalGold = 0;
-				int32 AdditionalMana = 0;
-				int32 AdditionalSpellUses = 0;
-
-				Tower->BP_GetCollectionPhaseResources(Controller, AdditionalGold, AdditionalMana, AdditionalSpellUses);
-
-				GoldToGive += AdditionalGold;
-				ManaToGive += AdditionalMana;
-			}
-		}
-
-		int32 NewGold = ClampGoldToLimit(State->GetGold() + GoldToGive);
-		int32 NewMana = ClampManaToLimit(State->GetMana() + ManaToGive);
-		State->GiveResources(NewGold, NewMana);
-	}
-	else
-	{
-		UE_LOG(LogConquest, Error, TEXT("ACSKGameMode::UpdatePlayerResources: Unable to update resources for player %i as controller was null!"), PlayerID);
-	}
-}
-
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 {
 	AbortMatch();
-}
-
-void ACSKGameMode::GotoActionPhase1()
-{
-	EnterRoundState(ECSKRoundState::FirstActionPhase);
-}
-
-void ACSKGameMode::GototCollectPhase()
-{
-	EnterRoundState(ECSKRoundState::CollectionPhase);
 }
 
 #undef LOCTEXT_NAMESPACE

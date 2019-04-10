@@ -159,9 +159,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool HasMatchFinished() const;
 
+	/** Get if the collection phase is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsCollectionPhaseInProgress() const;
+
 	/** Get if an action phase is in progress */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsActionPhaseInProgress() const;
+
+	/** Get if the end round phase is in progress */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsEndRoundPhaseInProgress() const;
 
 protected:
 
@@ -180,6 +188,9 @@ protected:
 
 private:
 
+	/** Helper function for setting entering given round state after given delay */
+	void EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay);
+
 	/** Determines the match state change event to call based on previous and new match state */
 	void HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchState NewState);
 
@@ -195,6 +206,75 @@ protected:
 	/** The current state of the round */
 	UPROPERTY(BlueprintReadOnly, Transient)
 	ECSKRoundState RoundState;
+
+private:
+
+	/** Timer handle to the small delay before entering a new round state */
+	FTimerHandle Handle_EnterRoundState;
+
+public:
+
+	/** Function called when deciding which player gets to go first.
+	True will result in Player 1 going first, false for player 2 */
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
+	bool CoinFlip() const;
+
+	/** Helper function for getting the player whose action phase it is based on starting player ID */
+	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
+
+private:
+
+	/** Helper function for initializing an action phase for given player */
+	void UpdateActivePlayerForActionPhase(int32 Phase);
+
+protected:
+
+	/** The ID of the player who goes first */
+	UPROPERTY(BlueprintReadOnly, Category = CSK)
+	int32 StartingPlayerID;
+
+private:
+
+	/** Waits for an initial delay before starting collection phase sequence */
+	void DelayThenStartCollectionPhaseSequence();
+
+	/** Starts the collection phase resource sequence */
+	void StartCollectionPhaseSequence();
+
+	/** Timer callback that gets called when collection phase has been deemed to last to long. This is a
+	safety measure to avoid the potential case of NotifyCollectionPhaseSequenceFinished() not being called */
+	void ForceCollectionPhaseSequenceEnd();
+
+private:
+
+	/** Resets both players resources based on default resource settings */
+	void ResetResourcesForPlayers();
+
+	/** Updates both players resources based on default
+	resource collection and tower resource bonuses */
+	void CollectResourcesForPlayers();
+
+	/** Resets the resources player has to defaults.
+	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
+	void ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+
+	/** Gives player default resources, as well as any additional resources provided by towers.
+	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
+	void UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
+
+public:
+
+	/** Notify that collection phase tallies have completed client side */
+	void NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* Player);
+
+private:
+
+	/** Bitset for tracking which players have finished collection phase tally event */
+	uint32 CollectionSequenceFinishedFlags : 2;
+
+	/** Timer handle for managing the collection phase sequences. This is both as an initial delay
+	before updating resources and a limit timer in-case clients take to long to finish their sequence */
+	FTimerHandle Handle_CollectionSequences;
 
 public:
 
@@ -310,46 +390,6 @@ private:
 
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
-
-public:
-
-	/** Function called when deciding which player gets to go first.
-	True will result in Player 1 going first, false for player 2 */
-	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	bool CoinFlip() const;
-
-	/** Helper function for getting the player whose action phase it is based on starting player ID */
-	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
-
-private:
-
-	/** Helper function for initializing an action phase for given player */
-	void UpdateActivePlayerForActionPhase(int32 Phase);
-
-protected:
-
-	/** The ID of the player who goes first */
-	UPROPERTY(BlueprintReadOnly, Category = CSK)
-	int32 StartingPlayerID;
-
-public:
-
-	/** Resets both players resources based on default resource settings */
-	void ResetResourcesForPlayers();
-	
-	/** Updates both players resources based on default 
-	resource collection and tower resource bonuses */
-	void CollectResourcesForPlayers();
-
-private:
-
-	/** Resets the resources player has to defaults.
-	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
-	void ResetPlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
-
-	/** Gives player default resources, as well as any additional resources provided by towers.
-	Player ID is passed for logging purposes only, it should not be used to determine which player is being updated */
-	void UpdatePlayerResources(ACSKPlayerController* Controller, int32 PlayerID);
 
 public:
 
@@ -469,12 +509,4 @@ protected:
 
 	/** Notify that a client has disconnected */
 	void OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver);
-
-private:
-
-	UFUNCTION()
-	void GotoActionPhase1();
-
-	UFUNCTION()
-	void GototCollectPhase();
 };

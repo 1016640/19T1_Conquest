@@ -196,7 +196,7 @@ protected:
 	uint32 bFreezeActionPhaseTimer : 1;
 
 	/** Lookup table for how many instances of a certain tower exists on the board */
-	UPROPERTY(Transient, Replicated)
+	UPROPERTY(Transient)
 	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
 
 public:
@@ -208,10 +208,10 @@ public:
 	void HandleMoveRequestFinished();
 
 	/** Notify that a new tower has been placed on the map */
-	void HandleBuildRequestConfirmed(ATower* NewTower, ATile* TargetTile);
+	void HandleBuildRequestConfirmed(ATile* TargetTile);
 
 	/** Notify that the current build request has finished */
-	void HandleBuildRequestFinished();
+	void HandleBuildRequestFinished(ATower* NewTower);
 
 private:
 
@@ -229,7 +229,7 @@ private:
 
 	/** Handle build request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleBuildRequestFinished();
+	void Multi_HandleBuildRequestFinished(ATower* NewTower);
 
 public:
 

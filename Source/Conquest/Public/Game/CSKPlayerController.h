@@ -29,6 +29,13 @@ public:
 		Reset();
 	}
 
+	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, int32 InSpellUses)
+	{
+		Gold = InGold;
+		Mana = InMana;
+		SpellUses = InSpellUses;
+	}
+
 public:
 
 	/** Resets tally */
@@ -73,6 +80,8 @@ public:
 	// End APlayerController Interface
 
 	// Begin AActor Interface
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 	// End AActor Interface
 
@@ -174,19 +183,19 @@ public:
 public:
 
 	/** Notify that we have collected resources during collection phase */
-	//UFUNCTION(Client, Reliable)
-	//void Client_OnCollectionPhaseResourcesTallied(FCollectionPhaseResourcesTally TalliedResources);
+	UFUNCTION(Client, Reliable)
+	void Client_OnCollectionPhaseResourcesTallied(FCollectionPhaseResourcesTally TalliedResources);
 
 protected:
 
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
-	UFUNCTION(BlueprintImplementableEvent, Category = CSK, meta = (DisplayName = "On Collection Resources Tallied"))
-	void BP_OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
+	UFUNCTION(BlueprintNativeEvent, Category = CSK, meta = (DisplayName = "On Collection Resources Tallied"))
+	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
 
-	/** Finishes the collection phase tallying process. This must be called after collection resources tallied event */
+	/** Finishes the collection phase event. This must be called after collection resources tallied event */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void FinishCollectionTallyEvent();
+	void FinishCollectionSequenceEvent();
 
 private:
 
@@ -196,7 +205,7 @@ private:
 
 	/** Notifies server that local client has finished collecting resources */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_FinishCollectingResources();
+	void Server_FinishCollecionSequence();
 
 private:
 
