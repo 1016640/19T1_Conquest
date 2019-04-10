@@ -5,6 +5,7 @@
 #include "Tile.h"
 
 DECLARE_CYCLE_STAT(TEXT("HexGrid FindPath"), STAT_HexGridFindPath, STATGROUP_Conquest);
+DECLARE_CYCLE_STAT(TEXT("HexGrid GetAllTilesWithinRange"), STAT_HexGridGetAllTilesWithinRange, STATGROUP_Conquest);
 
 const FHexGrid::FHex FHexGrid::DirectionTable[] =
 {
@@ -378,4 +379,37 @@ float FHexGrid::PathHeuristic(const ATile* T1, const ATile* T2)
 	}
 
 	return MAX_FLT;
+}
+
+bool FHexGrid::GetAllTilesWithinRange(const FHex& Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
+{
+	OutTiles.Empty();
+
+	// Invalid distance
+	if (Distance <= 0)
+	{
+		return false;
+	}
+
+	SCOPE_CYCLE_COUNTER(STAT_HexGridGetAllTilesWithinRange);
+
+	// Thanks to: https://www.redblobgames.com/grids/hexagons/#range for the fast for loop version
+	for (int32 x = -Distance; x <= Distance; ++x)
+	{
+		for (int32 y = FMath::Max(-Distance, -x - Distance); y <= FMath::Min(Distance, -x + Distance); ++y)
+		{
+			ATile* const* TilePtr = GridMap.Find(Origin + ConvertIndicesToHex(x, y));
+			if (TilePtr)
+			{
+				ATile* Tile = *TilePtr;
+
+				if (!bIgnoreOccupiedTiles || !Tile->IsTileOccupied())
+				{
+					OutTiles.Add(*TilePtr);
+				}
+			}
+		}
+	}
+
+	return OutTiles.Num() > 0;
 }

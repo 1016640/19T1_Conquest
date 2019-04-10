@@ -316,6 +316,11 @@ private:
 
 public:
 
+	/** Get all tiles within desired range of given hex. Get if at least one tile was in range */
+	bool GetAllTilesWithinRange(const FHex& Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles = true) const;
+
+public:
+
 	/** Map containing all tiles in the map */
 	UPROPERTY()
 	TMap<FIntVector, ATile*> GridMap;

@@ -228,6 +228,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay = 3))
 	bool FindPath(const ATile* Start, const ATile* Goal, FBoardPath& OutPath, bool bAllowPartial = true, int32 MaxDistance = 100) const;
 
+	/** Finds all the tiles that are within given amount of tiles from the origin */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	bool FindTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles = true) const;
+
 public:
 
 	/** Attempts to place the board piece on given tile. This only runs on the server */
