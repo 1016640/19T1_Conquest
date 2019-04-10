@@ -1550,6 +1550,9 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 		ATower* TowerToRun = EndRoundActionTowers[Index];
 		if (ensure(TowerToRun))
 		{
+			UE_LOG(LogConquest, Log, TEXT("Executing end round action for Tower %s. Action index = %i"), 
+				*TowerToRun->GetFName().ToString(), Index + 1);
+
 			TowerToRun->ExecuteEndRoundPhaseAction();
 			bRunningTowerEndRoundAction = true;
 
