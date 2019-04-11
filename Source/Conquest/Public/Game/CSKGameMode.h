@@ -311,7 +311,12 @@ public:
 	This function will return true even if we start waiting for the opposing player to select
 	a counter spell (Quick Effect) */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	bool RequestCallSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana = 0);
+	bool RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana = 0);
+
+public:
+
+	/** DO NOT CALL THIS. Notify that executing spell has finished */
+	void NotifyCastSpellFinished();
 
 private:
 
@@ -352,6 +357,18 @@ private:
 	UFUNCTION()
 	void OnPendingTowerBuildSequenceComplete();
 
+	/** Starts casting the spell for given player */
+	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile);
+
+	/** Finishes the spell currently be cast */
+	void FinishCastSpell();
+
+	/** Spawns the spell actor for given spell at tile */
+	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const;
+
+	/** Notify from timer that we should execute the spell cast */
+	void OnStartActivePlayersSpellCast();
+
 public:
 
 	/** Get the controller for player whose action phase it is */
@@ -380,6 +397,7 @@ private:
 	{
 		bWaitingOnActivePlayerMoveAction = false;
 		bWaitingOnActivePlayerBuildAction = false;
+		bWaitingOnActivePlayerSpellAction = false;
 	}
 
 protected:
@@ -421,17 +439,20 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
-	/** The spell being cast by active player */
+	/** The spell being cast by active player (Points to default object). */
 	UPROPERTY()
-	TSubclassOf<USpell> ActivePlayerSpell;
+	USpell* ActivePlayerSpell;
 
-	/** The spell card associated with the spell being cast */
+	/** The spell card associated with the spell being cast (Points to default object). */
 	UPROPERTY()
-	TSubclassOf<USpellCard> ActivePlayerSpellCard;
+	USpellCard* ActivePlayerSpellCard;
 
 	/** Instanced actor provided executing the spells logic */
 	UPROPERTY()
 	ASpellActor* ActivePlayerSpellActor;
+
+	/** Timer handle for when waiting for a spell to replicate before executing its effects */
+	FTimerHandle Handle_ActivePlayerExecuteSpellCast;
 
 public:
 

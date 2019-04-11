@@ -199,7 +199,7 @@ protected:
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
+	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard);
 
 	/** Finishes the collection phase event. This must be called after collection resources tallied event */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -262,7 +262,7 @@ public:
 	bool CanRequestBuildTowerAction() const;
 
 	/** If this player is allowed to request a spell cast */
-	bool CanRequestSpellCastAction() const;
+	bool CanRequestCastSpellAction() const;
 
 protected:
 
@@ -312,6 +312,14 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnTowerBuildRequestFinished();
 
+	/** Notify that an action phase spell cast has been confirmed */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCastSpellRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that an action phase spell cast has finished */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCastSpellRequestFinished();
+
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
@@ -330,8 +338,18 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestBuildTowerAction(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target);
 
+	/** Makes a request to cast a spell at given tile (with additional mana cost */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastSpellAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
+
 public:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<UTowerConstructionData> TestTowerTemplate;
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<USpellCard> TestSpellCardTemplate;
+
+	UPROPERTY(EditAnywhere)
+	int32 TestSpellCardSpellIndex = 0;
 };

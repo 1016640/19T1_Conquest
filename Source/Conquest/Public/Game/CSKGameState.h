@@ -213,6 +213,12 @@ public:
 	/** Notify that the current build request has finished */
 	void HandleBuildRequestFinished(ATower* NewTower);
 
+	/** Notify that a spell has been cast and will soon start */
+	void HandleSpellRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that the current spell request has finished */
+	void HandleSpellRequestFinished();
+
 private:
 
 	/** Handle movement request confirmation client side */
@@ -230,6 +236,14 @@ private:
 	/** Handle build request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleBuildRequestFinished(ATower* NewTower);
+
+	/** Handle spell request confirmation client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleSpellRequestConfirmed(ATile* TargetTile);
+
+	/** Handle spell request finished client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleSpellRequestFinished();
 
 public:
 

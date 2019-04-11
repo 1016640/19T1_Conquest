@@ -24,6 +24,18 @@ public:
 
 	/** Get all spells associated with the card */
 	FORCEINLINE const TArray<TSubclassOf<USpell>>& GetSpells() const { return Spells; }
+
+	/** Get spell at index */
+	FORCEINLINE TSubclassOf<USpell> GetSpellAtIndex(int32 Index) const
+	{
+		if (Spells.IsValidIndex(Index))
+		{
+			return Spells[Index];
+		}
+
+		// Implicit constructor
+		return nullptr;
+	}
 	
 protected:
 

@@ -14,6 +14,9 @@
 #include "Castle.h"
 #include "CastleAIController.h"
 #include "GameDelegates.h"
+#include "Spell.h"
+#include "SpellActor.h"
+#include "SpellCard.h"
 #include "Tile.h"
 #include "TimerManager.h"
 #include "Tower.h"
@@ -828,6 +831,9 @@ void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 
 		}
 
 		State->SetResources(StartingGold, StartingMana);
+
+		// temp
+		State->MaxNumSpellUses = -1;
 	}
 	else
 	{
@@ -1078,9 +1084,108 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 	return false;
 }
 
-bool ACSKGameMode::RequestCallSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana)
+bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana)
 {
+	if (!SpellCard.Get() || !TargetTile)
+	{
+		return false;
+	}
+
+	// Player is not the active player
+	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
+	{
+		return false;
+	}
+
+	// An action request might already be active
+	if (!IsActionPhaseInProgress() || IsWaitingForAction())
+	{
+		return false;
+	}
+
+	if (ActionPhaseActiveController->CanRequestCastSpellAction())
+	{
+		USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+		check(DefaultSpellCard);
+
+		// We were given invalid spell
+		TSubclassOf<USpell> SpellToActivate = DefaultSpellCard->GetSpellAtIndex(SpellIndex);
+		if (!SpellToActivate.Get())
+		{
+			return false;
+		}
+
+		USpell* DefaultSpell = SpellToActivate.GetDefaultObject();
+		check(DefaultSpell);
+
+		// Spell can't (or there is not point) be cast at tile
+		if (!DefaultSpell->CanActivateSpell(TargetTile))
+		{
+			return false;
+		}
+
+		// Default to the static cost
+		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
+
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (PlayerState)
+		{
+			// Player isn't able to cast another spell
+			if (!PlayerState->CanCastAnotherSpell())
+			{
+				return false;
+			}
+
+			// Re-calculate as spell might use additional mana
+			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
+			if (!PlayerState->HasRequiredMana(RequiredMana))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestCastSpell: Confirming spell request "
+				"without cost validation as player state is not of CSKPlayerState"));
+		}
+
+		// We have confirmed that the player can use their spell, but the opposing
+		// player might be able to counter it with a quick effect spell.
+		ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		check(OpposingPlayer);
+
+		ACSKPlayerState* OpposingPlayerState = OpposingPlayer->GetCSKPlayerState();
+		if (OpposingPlayerState)
+		{
+			const TArray<TSubclassOf<USpellCard>>& OpposingPlayersHand = OpposingPlayerState->GetSpellCardsInHand();
+			for (const TSubclassOf<USpellCard>& CounterSpell : OpposingPlayersHand)
+			{
+				USpellCard* DefaultCounterSpell = CounterSpell.GetDefaultObject();
+				if (ensure(DefaultCounterSpell) && DefaultCounterSpell->HasSpellOfType(ESpellType::QuickEffect))
+				{
+					// TODO: Allow opposing player to choose a counter spell
+					// End function here (still consume spell)
+				}
+			}
+		}
+
+		// Confirm request of spell was successfully spawn
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
+		if (SpellActor)
+		{
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, RequiredMana, TargetTile);
+		}
+	}
+
 	return false;
+}
+
+void ACSKGameMode::NotifyCastSpellFinished()
+{
+	if (IsActionPhaseInProgress() && IsWaitingForSpellCast())
+	{
+		FinishCastSpell();
+	}
 }
 
 void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode)
@@ -1442,6 +1547,140 @@ void ACSKGameMode::OnStartActivePlayersBuildSequence()
 void ACSKGameMode::OnPendingTowerBuildSequenceComplete()
 {
 	FinishBuildTower();
+}
+
+bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile)
+{
+	check(IsActionPhaseInProgress());
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	// Set states
+	{
+		bWaitingOnActivePlayerSpellAction = true;
+	}
+
+	// Consume mana from player
+	{
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (PlayerState)
+		{
+			PlayerState->SetMana(PlayerState->GetMana() - FinalCost);
+		}
+	}
+
+	// Inform game state
+	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+		if (CSKGameState)
+		{
+			CSKGameState->HandleSpellRequestConfirmed(Tile);
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			// We will pass the target tile so players can focus on the target point first
+			Controller->Client_OnCastSpellRequestConfirmed(Tile);
+		}
+	}
+
+	ActivePlayerSpell = Spell;
+	ActivePlayerSpellCard = SpellCard;
+	ActivePlayerSpellActor = SpellActor;
+
+	// Give tower half a second to replicate
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_ActivePlayerExecuteSpellCast, this, &ACSKGameMode::OnStartActivePlayersSpellCast, .5f, false);
+
+	return true;
+}
+
+void ACSKGameMode::FinishCastSpell()
+{
+	check(bWaitingOnActivePlayerSpellAction);
+	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+
+	// Restore states
+	{
+		bWaitingOnActivePlayerSpellAction = false;
+	}
+
+	// Inform game state
+	{
+		if (CSKGameState)
+		{
+			CSKGameState->HandleSpellRequestFinished();
+		}
+	}
+
+	// Inform clients
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnCastSpellRequestFinished();
+		}
+	}
+
+	ActivePlayerSpell = nullptr;
+	ActivePlayerSpellCard = false;
+	
+	// We no longer need the spell actor
+	if (ActivePlayerSpellActor && !ActivePlayerSpellActor->IsPendingKill())
+	{
+		ActivePlayerSpellActor->Destroy();
+	}
+
+	ActivePlayerSpellActor = nullptr;
+
+	// TODO: Check post win condition
+
+	// TODO: check if player can cast another spell
+	// for now
+	DisableActionModeForActivePlayer(ECSKActionPhaseMode::CastSpell);
+}
+
+ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const
+{
+	check(Tile);
+
+	if (!Spell || !Spell->GetSpellActorClass() || !PlayerState)
+	{
+		return nullptr;
+	}
+
+	TSubclassOf<ASpellActor> SpellActorClass = Spell->GetSpellActorClass();
+	FTransform TileTransform = Tile->GetTransform();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.bDeferConstruction = true;
+
+	ASpellActor* SpellActor = GetWorld()->SpawnActor<ASpellActor>(SpellActorClass, TileTransform, SpawnParams);
+	if (SpellActor)
+	{
+		// Set variables spells might need to know before replicating
+		SpellActor->SetActivationInfo(PlayerState, Spell, FinalCost, Tile);
+
+		SpellActor->FinishSpawning(TileTransform);
+	}
+
+	return SpellActor;
+}
+
+void ACSKGameMode::OnStartActivePlayersSpellCast()
+{
+	check(IsActionPhaseInProgress());
+	check(ActivePlayerSpellActor);
+
+	// Execute spells effect
+	{
+		ActivePlayerSpellActor->BeginExecution();
+	}
 }
 
 void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)

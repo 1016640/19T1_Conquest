@@ -53,11 +53,12 @@ void ASpellActor::BeginExecution()
 {
 	if (HasAuthority() && !bIsRunning)
 	{
+		bIsRunning = true;
 		OnActivateSpell();
 	}
 }
 
-void ASpellActor::OnActivateSpell()
+void ASpellActor::OnActivateSpell_Implementation()
 {
 	FTimerManager& TimerManager = GetWorldTimerManager();
 	TimerManager.SetTimerForNextTick(this, &ASpellActor::FinishSpell);
@@ -70,7 +71,9 @@ void ASpellActor::FinishSpell()
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
-			// TODO:
+			GameMode->NotifyCastSpellFinished();
 		}
+
+		bIsRunning = false;
 	}
 }

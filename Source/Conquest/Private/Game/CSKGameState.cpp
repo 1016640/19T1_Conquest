@@ -381,6 +381,25 @@ void ACSKGameState::HandleBuildRequestFinished(ATower* NewTower)
 	}
 }
 
+void ACSKGameState::HandleSpellRequestConfirmed(ATile* TargetTile)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		Multi_HandleSpellRequestConfirmed(TargetTile);
+	}
+}
+
+void ACSKGameState::HandleSpellRequestFinished()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after an action is complete
+		AddBonusActionPhaseTime();
+
+		Multi_HandleSpellRequestFinished();
+	}
+}
+
 bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const
 {
 	ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
@@ -535,4 +554,14 @@ void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewT
 	{
 		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleBuildRequestFinished: NewTower is null"));
 	}
+}
+
+void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* TargetTile)
+{
+	SetFreezeActionPhaseTimer(true);
+}
+
+void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
+{
+	SetFreezeActionPhaseTimer(false);
 }

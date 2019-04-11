@@ -149,6 +149,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = Board)
 	int32 GetNumTowersOwned() const { return OwnedTowers.Num(); }
 
+	/** Get spells in this players deck */
+	FORCEINLINE const TArray<TSubclassOf<USpellCard>>& GetSpellCardDeck() const { return SpellCardDeck; }
+	
+	/** Get spells in this players hand */
+	FORCEINLINE const TArray<TSubclassOf<USpellCard>>& GetSpellCardsInHand() const { return SpellCardsInHand; }
+
 	/** Get how many spells cards this player has in their hand */
 	UFUNCTION(BlueprintPure, Category = Spells)
 	int32 GetNumSpellsInHand() const { return SpellCardsInHand.Num(); }
@@ -208,7 +214,7 @@ protected:
 	/** The spells cards in the discard pile. This only exists on the server and the owners client */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Resources)
 	TArray<TSubclassOf<USpellCard>> DiscardPile;
-
+	public:
 	/** The number of spells this player is allowed to use. Set value to -1 for infinite spell uses */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
 	int32 MaxNumSpellUses;

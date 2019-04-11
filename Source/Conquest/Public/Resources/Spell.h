@@ -35,6 +35,10 @@ public:
 
 public:
 
+	/** Check if spell can be used on given tile */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	virtual bool CanActivateSpell(const ATile* TargetTile) const { return true; }
+
 	/** Calculates the final cost of this spell. Passes in the player casting the spell, the
 	tile they plan to cast it onto and how much additional mana they are willing to spend */
 	UFUNCTION(BlueprintPure, Category = Spells)

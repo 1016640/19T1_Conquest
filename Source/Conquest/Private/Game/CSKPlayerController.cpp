@@ -178,6 +178,11 @@ void ACSKPlayerController::SelectTile()
 			}
 			case ECSKActionPhaseMode::CastSpell:
 			{
+				// TODO: Move this to a function
+				if (HoveredTile)
+				{
+					Server_RequestCastSpellAction(TestSpellCardTemplate, TestSpellCardSpellIndex, HoveredTile, 0);
+				}
 				break;
 			}
 		}
@@ -300,10 +305,10 @@ void ACSKPlayerController::OnTransitionToBoard()
 void ACSKPlayerController::Client_OnCollectionPhaseResourcesTallied_Implementation(FCollectionPhaseResourcesTally TalliedResources)
 {
 	bWaitingOnTallyEvent = true;
-	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.SpellUses);
+	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.bDeckReshuffled, TalliedResources.SpellCard);
 }
 
-void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, int32 SpellUses)
+void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard)
 {
 	// Just end immediately if not implemented
 	FinishCollectionSequenceEvent();
@@ -350,8 +355,9 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 				SetActionMode(ECSKActionPhaseMode::None, true);
 			}
 
-			// If its our action phase, we should always be able to move and have at least one spell to cast.
+			// If its our action phase, we should always be able to move.
 			// We can check if we can build or destroy any towers before setting build actions
+			// TODO: Check if we have enough mana to cast at least one spell (and those spells can be used during action phase)
 			ECSKActionPhaseMode ModesToEnable = bEnabled ? ECSKActionPhaseMode::MoveCastle | ECSKActionPhaseMode::CastSpell : ECSKActionPhaseMode::None;
 
 			if (bEnabled)
@@ -475,12 +481,14 @@ bool ACSKPlayerController::CanRequestBuildTowerAction() const
 	return false;
 }
 
-bool ACSKPlayerController::CanRequestSpellCastAction() const
+bool ACSKPlayerController::CanRequestCastSpellAction() const
 {
 	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::CastSpell))
 	{
 		return true;
 	}
+
+	return false;
 }
 
 void ACSKPlayerController::OnRep_bIsActionPhase()
@@ -559,6 +567,25 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
+{
+	bCanSelectTile = true;
+	SetIgnoreMoveInput(false);
+}
+
+void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(ATile* TargetTile)
+{
+	bCanSelectTile = false;
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && TargetTile)
+	{
+		// Have players watch spell in action	
+		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		SetIgnoreMoveInput(true);
+	}
+}
+
+void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation()
 {
 	bCanSelectTile = true;
 	SetIgnoreMoveInput(false);
@@ -643,6 +670,31 @@ void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubcla
 		if (GameMode)
 		{
 			bSuccess = GameMode->RequestBuildTower(TowerConstructData, Target);
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_RequestCastSpellAction_Validate(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestCastSpellAction_Implementation(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	bool bSuccess = false;
+
+	if (CanRequestCastSpellAction())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestCastSpell(SpellCard, SpellIndex, Target, AdditionalMana);
 		}
 	}
 
