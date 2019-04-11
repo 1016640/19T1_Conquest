@@ -14,6 +14,7 @@ class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 class ATower;
+class USpellCard;
 class UTowerConstructionData;
 
 /** Struct containing tallied amount of resources to give to a player */
@@ -29,11 +30,12 @@ public:
 		Reset();
 	}
 
-	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, int32 InSpellUses)
+	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, bool bInDeckReshuffled, TSubclassOf<USpellCard> InSpellCard)
 	{
 		Gold = InGold;
 		Mana = InMana;
-		SpellUses = InSpellUses;
+		bDeckReshuffled = bInDeckReshuffled;
+		SpellCard = InSpellCard;
 	}
 
 public:
@@ -43,22 +45,28 @@ public:
 	{
 		Gold = 0;
 		Mana = 0;
-		SpellUses = 0;
+		bDeckReshuffled = false;
+		SpellCard = nullptr;
 	}
 
 public:
 
 	/** Gold tallied */
 	UPROPERTY()
-	int32 Gold;
+	int32 Gold; // (uint8?)
 
 	/** Mana tallied */
 	UPROPERTY()
-	int32 Mana;
+	int32 Mana; // (uint8?)
 
-	/** Additional spell uses tallied */
+	/** If spell deck was reshuffled */
 	UPROPERTY()
-	int32 SpellUses;
+	uint8 bDeckReshuffled : 1;
+
+	/** The spell card the player picked up.
+	Will be invalid if no card was picked up */
+	UPROPERTY()
+	TSubclassOf<USpellCard> SpellCard;
 };
 
 /**
@@ -252,6 +260,9 @@ public:
 
 	/** If this player is allowed to request a tower construction */
 	bool CanRequestBuildTowerAction() const;
+
+	/** If this player is allowed to request a spell cast */
+	bool CanRequestSpellCastAction() const;
 
 protected:
 

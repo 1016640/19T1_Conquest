@@ -11,8 +11,11 @@ class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
 class ACSKPlayerState;
+class ASpellActor;
 class ATile;
 class ATower;
+class USpell;
+class USpellCard;
 class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
@@ -303,6 +306,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerData, ATile* Tile);
 
+	/** Will attempt to cast the given type of spell for active player. This function should
+	not be used for quick effects, but only for players using spells during their action phase.
+	This function will return true even if we start waiting for the opposing player to select
+	a counter spell (Quick Effect) */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	bool RequestCallSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana = 0);
+
 private:
 
 	/** Disables the action mode for active player. Will end this phase if no actions remain */
@@ -349,7 +359,7 @@ public:
 
 	/** If we are waiting on an action request to finish */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool IsWaitingForAction() const { return IsWaitingForCastleMove() || IsWaitingForBuildTower(); }
+	bool IsWaitingForAction() const { return IsWaitingForCastleMove() || IsWaitingForBuildTower() || IsWaitingForSpellCast(); }
 
 	/** If we are waiting on a move request to finsih */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -358,6 +368,10 @@ public:
 	/** If we are waiting on a build request to finish */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsWaitingForBuildTower() const { return bWaitingOnActivePlayerBuildAction; }
+
+	/** If we are waiting on a spell action to finish */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsWaitingForSpellCast() const { return bWaitingOnActivePlayerSpellAction; }
 
 private:
 
@@ -382,6 +396,9 @@ private:
 	/** If we are waiting for active players build action to complete */
 	uint32 bWaitingOnActivePlayerBuildAction : 1;
 
+	/** If we are waiting for actives players spell action to complete */
+	uint32 bWaitingOnActivePlayerSpellAction : 1;
+
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
 
@@ -404,8 +421,17 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
+	/** The spell being cast by active player */
+	UPROPERTY()
+	TSubclassOf<USpell> ActivePlayerSpell;
 
+	/** The spell card associated with the spell being cast */
+	UPROPERTY()
+	TSubclassOf<USpellCard> ActivePlayerSpellCard;
 
+	/** Instanced actor provided executing the spells logic */
+	UPROPERTY()
+	ASpellActor* ActivePlayerSpellActor;
 
 public:
 
@@ -520,6 +546,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
 
+	/** The max amount of spells cards a player can have in their hand */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	int32 MaxSpellCardsInHand;
+
+	/** The spell cards that can be cast */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	TArray<TSubclassOf<USpellCard>> AvailableSpellCards;
+
 public:
 
 	/** Get if given value is within the limit of tiles that can be traversed each round */
@@ -560,6 +594,14 @@ protected:
 	/** If players are only allowed to request one move action per turn */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	uint32 bLimitOneMoveActionPerTurn : 1;
+
+	/** The max amount of spells a player can use per action phase */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	int32 MaxSpellUses;
+
+	/** The time the player has to select a quick effect spell when other player is casting a spell */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	float QuickEffectCounterTime;
 
 protected:
 

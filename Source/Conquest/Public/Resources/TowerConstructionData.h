@@ -28,7 +28,7 @@ public:
 	FName TowerName;
 
 	/** Description of this tower */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Description"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Description", MultiLine = "true"))
 	FText TowerDescription;
 
 	/** Template actor for this tower */

@@ -64,6 +64,8 @@ ACSKGameMode::ACSKGameMode()
 	MinTileMovements = 1;
 	MaxTileMovements = 2;
 	bLimitOneMoveActionPerTurn = false;
+	MaxSpellUses = 1;
+	QuickEffectCounterTime = 15.f;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -846,11 +848,8 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 
 		int32 GoldToGive = CollectionPhaseGold;
 		int32 ManaToGive = CollectionPhaseMana;
-		int32 SpellUsesToGive = 1;
 
 		// Cycle through this players towers to collect any additional resources
-		// TODO: Designers want camera to pan to each tower as it shows how much resources it's given the player. This
-		// will force this function to be split up (not all resources have to be given at once)
 		TArray<ATower*> PlayersTowers = State->GetOwnedTowers();
 		for (ATower* Tower : PlayersTowers)
 		{
@@ -867,11 +866,22 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 			}
 		}
 
+		// Update resources
 		int32 NewGold = ClampGoldToLimit(State->GetGold() + GoldToGive);
 		int32 NewMana = ClampManaToLimit(State->GetMana() + ManaToGive);
 		State->SetResources(NewGold, NewMana);
 
-		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, SpellUsesToGive);
+		// Pick up a spell from the deck (reshuffle the discard pile if required)
+		bool bDeckReshuffled = false;
+		if (State->NeedsSpellDeckReshuffle())
+		{
+			State->ResetSpellDeck(AvailableSpellCards);
+			bDeckReshuffled = true;
+		}
+
+		TSubclassOf<USpellCard> SpellCard = State->PickupCardFromDeck();
+
+		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, bDeckReshuffled, SpellCard);
 		Controller->Client_OnCollectionPhaseResourcesTallied(TalliedResults);
 	}
 	else
@@ -1065,6 +1075,11 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 		}
 	}
 
+	return false;
+}
+
+bool ACSKGameMode::RequestCallSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana)
+{
 	return false;
 }
 

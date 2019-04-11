@@ -9,6 +9,7 @@
 class ACastle;
 class ACSKPlayerController;
 class ATower;
+class USpellCard;
 
 /**
  * Tracks states and stats for a player
@@ -87,12 +88,18 @@ public:
 	void SetMana(int32 Amount);
 
 	/** Adds a tower to the list of towers this player owns */
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board, meta = (AdvancedDisplay=1))
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
 	void AddTower(ATower* InTower);
 	
 	/** Removes a tower from the list of towers this player owns */
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board, meta = (AdvancedDisplay = 1))
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
 	void RemoveTower(ATower* InTower);
+
+	/** Retrieves a spell card from the spell deck and places in the players hand */
+	TSubclassOf<USpellCard> PickupCardFromDeck();
+
+	/** Resets the spell deck by copying then shuffling given spells */
+	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells);
 
 public:
 
@@ -107,6 +114,14 @@ public:
 	/** Get how many of given type of tower this player owns */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const;
+
+	/** Get if this player is able to cast another spell */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool CanCastAnotherSpell() const { return HasInfiniteSpellUses() || MaxNumSpellUses < SpellsCastThisRound; }
+
+	/** Get if this player has infinite spell uses */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool HasInfiniteSpellUses() const { return MaxNumSpellUses == -1; }
 
 public:
 
@@ -133,6 +148,14 @@ public:
 	/** Get the total number of towers this player owns */
 	UFUNCTION(BlueprintPure, Category = Board)
 	int32 GetNumTowersOwned() const { return OwnedTowers.Num(); }
+
+	/** Get how many spells cards this player has in their hand */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	int32 GetNumSpellsInHand() const { return SpellCardsInHand.Num(); }
+
+	/** Get if this player needs to reshuffle and reset thier spell
+	deck. This is when all spell cards are in the discard pile */
+	bool NeedsSpellDeckReshuffle() const;
 
 protected:
 
@@ -171,7 +194,24 @@ protected:
 
 	// TODO: Rep spells here (only rep to owner though)
 	// Not in this section, but how many spells we can use this round (also only reped to owner)
-	
+
+	// TODO: Either replicate arrays (COND_OwnerOnly) or use RPC (via PlayerController) (maybe excluding DiscardPile)
+
+	/** The spells cards in the spell deck. This only exists on the server */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	TArray<TSubclassOf<USpellCard>> SpellCardDeck;
+
+	/** The spells in the players hand. This only exists on the server and the owners client */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Resources)
+	TArray<TSubclassOf<USpellCard>> SpellCardsInHand;
+
+	/** The spells cards in the discard pile. This only exists on the server and the owners client */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Resources)
+	TArray<TSubclassOf<USpellCard>> DiscardPile;
+
+	/** The number of spells this player is allowed to use. Set value to -1 for infinite spell uses */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	int32 MaxNumSpellUses;
 
 public:
 
@@ -181,10 +221,19 @@ public:
 	/** Resets the tiles traversed count for next round */
 	void ResetTilesTraversed();
 
+	/** Increments the spells we have cast this round */
+	void IncrementSpellsCast();
+
+	/** Resets the spells cast count for next round */
+	void ResetSpellsCast();
+
 public:
 
 	/** Get the amount of tiles this player has traversed this round */
 	FORCEINLINE int32 GetTilesTraversedThisRound() const { return TilesTraversedThisRound; }
+
+	/** Get the amount of spells this player has cast this round */
+	FORCEINLINE int32 GetSpellsCastThisRound() const { return SpellsCastThisRound; }
 
 protected:
 
@@ -203,4 +252,16 @@ protected:
 	/** The amount of LEGENDARY towers this player has built in total */
 	UPROPERTY(Transient)
 	int32 TotalLegendaryTowersBuilt;
+
+	/** The amount of spells this player has cast this turn */
+	UPROPERTY(Transient, Replicated)
+	int32 SpellsCastThisRound;
+
+	/** The total amount of action phase spells this player has cast */
+	UPROPERTY(Transient)
+	int32 TotalSpellsCast;
+
+	/** The total amount of quick effect spells this player has cast */
+	UPROPERTY(Transient)
+	int32 TotalQuickEffectSpellsCast;
 };

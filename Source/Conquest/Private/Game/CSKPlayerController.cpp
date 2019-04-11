@@ -339,7 +339,6 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 		if (bIsActionPhase != bEnabled)
 		{
 			bIsActionPhase = bEnabled;
-			RemainingActions = bEnabled ? ECSKActionPhaseMode::All : ECSKActionPhaseMode::None;
 
 			// Purposely calling on rep here to have pawn move back
 			if (IsLocalPlayerController())
@@ -351,15 +350,29 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 				SetActionMode(ECSKActionPhaseMode::None, true);
 			}
 
-			// Reset any variables associated with the last round
+			// If its our action phase, we should always be able to move and have at least one spell to cast.
+			// We can check if we can build or destroy any towers before setting build actions
+			ECSKActionPhaseMode ModesToEnable = bEnabled ? ECSKActionPhaseMode::MoveCastle | ECSKActionPhaseMode::CastSpell : ECSKActionPhaseMode::None;
+
 			if (bEnabled)
 			{
+				// Reset tiles traversed
 				ACSKPlayerState* PlayerState = GetCSKPlayerState();
 				if (PlayerState)
 				{
 					PlayerState->ResetTilesTraversed();
+					PlayerState->ResetSpellsCast();
+				}
+
+				// Check if we can build or destroy towers
+				ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+				if (GameState && GameState->CanPlayerBuildMoreTowers(this, true))
+				{
+					ModesToEnable |= ECSKActionPhaseMode::BuildTowers;
 				}
 			}
+
+			RemainingActions = ModesToEnable;
 		}
 	}
 }
@@ -460,6 +473,14 @@ bool ACSKPlayerController::CanRequestBuildTowerAction() const
 	}
 
 	return false;
+}
+
+bool ACSKPlayerController::CanRequestSpellCastAction() const
+{
+	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::CastSpell))
+	{
+		return true;
+	}
 }
 
 void ACSKPlayerController::OnRep_bIsActionPhase()

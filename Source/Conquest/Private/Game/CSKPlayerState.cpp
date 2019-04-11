@@ -19,6 +19,9 @@ ACSKPlayerState::ACSKPlayerState()
 	TotalTilesTraversed = 0;
 	TotalTowersBuilt = 0;
 	TotalLegendaryTowersBuilt = 0;
+	SpellsCastThisRound = 0;
+	TotalSpellsCast = 0;
+	TotalQuickEffectSpellsCast = 0;
 }
 
 void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -28,11 +31,16 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, CSKPlayerID);
 	DOREPLIFETIME(ACSKPlayerState, Castle);
 		
+	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
 	DOREPLIFETIME(ACSKPlayerState, Gold);
 	DOREPLIFETIME(ACSKPlayerState, Mana);
-	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellsCastThisRound, COND_OwnerOnly);
 }
 
 ACSKPlayerController* ACSKPlayerState::GetCSKPlayerController() const
@@ -120,6 +128,40 @@ void ACSKPlayerState::RemoveTower(ATower* InTower)
 	}
 }
 
+TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
+{
+	if (HasAuthority() && SpellCardDeck.IsValidIndex(0))
+	{
+		TSubclassOf<USpellCard> NextSpellCard = SpellCardDeck[0];
+		SpellCardDeck.RemoveAt(0);
+
+		return NextSpellCard;
+	}
+
+	// Implicit construction
+	return nullptr;
+}
+
+void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells)
+{
+	if (HasAuthority())
+	{
+		SpellCardsInHand.Reset();
+		SpellCardDeck = Spells;
+
+		// Shuffle deck (mimics UKismetArrayLibrary shuffle function)
+		int32 LastIndex = SpellCardDeck.Num() - 1;
+		for (int32 i = 0; i <= LastIndex; ++i)
+		{
+			int32 Index = FMath::RandRange(i, LastIndex);
+			if (i != Index)
+			{
+				SpellCardDeck.Swap(i, Index);
+			}
+		}
+	}
+}
+
 bool ACSKPlayerState::HasRequiredGold(int32 RequiredAmount) const
 {
 	return (Gold - RequiredAmount) >= 0;
@@ -142,6 +184,18 @@ int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) con
 	}
 
 	return 0;
+}
+
+bool ACSKPlayerState::NeedsSpellDeckReshuffle() const
+{
+	if (SpellCardDeck.Num() == 0 && SpellCardsInHand.Num() == 0)
+	{
+		// If discard pile isn't empty, it means this match is
+		// being played without the ability to use spell cards
+		return true;// DiscardPile.Num() != 0;
+	}
+
+	return false;
 }
 
 void ACSKPlayerState::OnRep_OwnedTowers()
@@ -205,5 +259,31 @@ void ACSKPlayerState::ResetTilesTraversed()
 	if (HasAuthority())
 	{
 		TilesTraversedThisRound = 0;
+	}
+}
+
+void ACSKPlayerState::IncrementSpellsCast()
+{
+	if (HasAuthority())
+	{
+		++SpellsCastThisRound;
+		++TotalSpellsCast;
+
+		#if WITH_EDITOR
+		// Warning check
+		if (MaxNumSpellUses >= 0 && SpellsCastThisRound > MaxNumSpellUses)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of spells they can ast this round! "
+				"Max Spell Uses per Turn = %i, Spells Cast this turn = %i"), *GetPlayerName(), MaxNumSpellUses, SpellsCastThisRound);
+		}
+		#endif
+	}
+}
+
+void ACSKPlayerState::ResetSpellsCast()
+{
+	if (HasAuthority())
+	{
+		SpellsCastThisRound = 0;
 	}
 }
