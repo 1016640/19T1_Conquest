@@ -13,7 +13,10 @@ ACSKPlayerState::ACSKPlayerState()
 	AssignedColor = FColor(80, 50, 20); // Bronze
 	Gold = 0;
 	Mana = 0;
+	BonusTileMovements = 0;
 	CachedNumLegendaryTowers = 0;
+	MaxNumSpellUses = 1;
+	bHasInfiniteSpellUses = false;
 
 	TilesTraversedThisRound = 0;
 	TotalTilesTraversed = 0;
@@ -34,10 +37,12 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, AssignedColor);
 	DOREPLIFETIME(ACSKPlayerState, Gold);
 	DOREPLIFETIME(ACSKPlayerState, Mana);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, BonusTileMovements, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, bHasInfiniteSpellUses, COND_OwnerOnly);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellsCastThisRound, COND_OwnerOnly);
@@ -71,8 +76,11 @@ void ACSKPlayerState::GiveResources(int32 InGold, int32 InMana)
 
 void ACSKPlayerState::SetResources(int32 InGold, int32 InMana)
 {
-	Gold = FMath::Max(0, InGold);
-	Mana = FMath::Max(0, InMana);
+	if (HasAuthority())
+	{
+		Gold = FMath::Max(0, InGold);
+		Mana = FMath::Max(0, InMana);
+	}
 }
 
 void ACSKPlayerState::AddGold(int32 Amount)
@@ -82,7 +90,10 @@ void ACSKPlayerState::AddGold(int32 Amount)
 
 void ACSKPlayerState::SetGold(int32 Amount)
 {
-	Gold = FMath::Max(0, Amount);
+	if (HasAuthority())
+	{
+		Gold = FMath::Max(0, Amount);
+	}
 }
 
 void ACSKPlayerState::AddMana(int32 Amount)
@@ -92,7 +103,23 @@ void ACSKPlayerState::AddMana(int32 Amount)
 
 void ACSKPlayerState::SetMana(int32 Amount)
 {
-	Mana = FMath::Max(0, Amount);
+	if (HasAuthority())
+	{
+		Mana = FMath::Max(0, Amount);
+	}
+}
+
+void ACSKPlayerState::AddBonusTileMovements(int32 Amount)
+{
+	SetBonusTileMovements(BonusTileMovements + Amount);
+}
+
+void ACSKPlayerState::SetBonusTileMovements(int32 Amount)
+{
+	if (HasAuthority())
+	{
+		BonusTileMovements = Amount;
+	}
 }
 
 void ACSKPlayerState::AddTower(ATower* InTower)
@@ -125,6 +152,27 @@ void ACSKPlayerState::RemoveTower(ATower* InTower)
 			// Recalculate the cached counts we have
 			UpdateTowerCounts();
 		}
+	}
+}
+
+void ACSKPlayerState::AddSpellUses(int32 Amount)
+{
+	SetSpellUses(MaxNumSpellUses + Amount);
+}
+
+void ACSKPlayerState::SetSpellUses(int32 Amount)
+{
+	if (HasAuthority())
+	{
+		MaxNumSpellUses = FMath::Max(0, Amount);
+	}
+}
+
+void ACSKPlayerState::SetHasInfiniteSpellUses(bool bEnable)
+{
+	if (HasAuthority() && bHasInfiniteSpellUses != bEnable)
+	{
+		bHasInfiniteSpellUses = bEnable;
 	}
 }
 
@@ -190,9 +238,7 @@ bool ACSKPlayerState::NeedsSpellDeckReshuffle() const
 {
 	if (SpellCardDeck.Num() == 0 && SpellCardsInHand.Num() == 0)
 	{
-		// If discard pile isn't empty, it means this match is
-		// being played without the ability to use spell cards
-		return true;// DiscardPile.Num() != 0;
+		return true;
 	}
 
 	return false;
@@ -244,7 +290,7 @@ void ACSKPlayerState::IncrementTilesTraversed()
 		if (GameMode)
 		{
 			// Warning check
-			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound))
+			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound, BonusTileMovements))
 			{
 				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed this round! "
 					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);

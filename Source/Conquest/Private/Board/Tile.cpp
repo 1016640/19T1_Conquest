@@ -144,16 +144,21 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 		AActor* BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
 		
 		// Execute any events before clearing (as at this point we are still technically occupied)
-		BP_OnBoardPieceCleared(BoardPiece);
+		BP_OnBoardPieceCleared();
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;
 	}
 }
 
-bool ATile::IsTileOccupied() const
+bool ATile::IsTileOccupied(bool bConsiderNull) const
 {
-	return bIsNullTile || PieceOccupant.GetInterface() != nullptr;
+	if (PieceOccupant.GetInterface() == nullptr)
+	{
+		return bConsiderNull && bIsNullTile;
+	}
+
+	return true;
 }
 
 bool ATile::CanPlaceTowersOn() const

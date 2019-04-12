@@ -14,6 +14,7 @@
 #include "Castle.h"
 #include "CastleAIController.h"
 #include "GameDelegates.h"
+#include "HealthComponent.h"
 #include "Spell.h"
 #include "SpellActor.h"
 #include "SpellCard.h"
@@ -23,9 +24,6 @@
 #include "TowerConstructionData.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-
-// temp
-#include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "CSKGameMode"
 
@@ -263,6 +261,12 @@ ACastle* ACSKGameMode::SpawnCastleAtPortal(ACSKPlayerController* Controller, TSu
 				// Initialize castle with the players state before spawning, so it gets sent with initial replication
 				Castle->SetBoardPieceOwnerPlayerState(Controller->GetCSKPlayerState());
 				Castle->FinishSpawning(TileTransform);
+
+				UHealthComponent* HealthComp = Castle->GetHealthComponent();
+				check(HealthComp)
+
+				// Listen out for when this castle takes damage
+				HealthComp->OnHealthChanged.AddDynamic(this, &ACSKGameMode::OnBoardPieceHealthChanged);
 			}
 			else
 			{
@@ -580,8 +584,6 @@ void ACSKGameMode::OnCollectionPhaseStart()
 
 	CollectionSequenceFinishedFlags = 0;
 	DelayThenStartCollectionPhaseSequence();
-
-	UKismetSystemLibrary::PrintString(this, "Collection Phase Start", true, false, FLinearColor::Blue, 5.f);
 }
 
 void ACSKGameMode::OnFirstActionPhaseStart()
@@ -592,9 +594,6 @@ void ACSKGameMode::OnFirstActionPhaseStart()
 	check(ActionPhaseActiveController);
 
 	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-
-	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID + 1), true, false, FLinearColor::Blue, 5.f);
-	UKismetSystemLibrary::PrintString(this, "First player action phase start", true, false, FLinearColor::Blue, 5.f);
 }
 
 void ACSKGameMode::OnSecondActionPhaseStart()
@@ -603,9 +602,6 @@ void ACSKGameMode::OnSecondActionPhaseStart()
 	check(ActionPhaseActiveController);
 
 	UE_LOG(LogConquest, Log, TEXT("Starting Action Phase for Player %i"), ActionPhaseActiveController->CSKPlayerID + 1);
-
-	UKismetSystemLibrary::PrintString(this, FString("Player ") + FString::FromInt(ActionPhaseActiveController->CSKPlayerID), true, false, FLinearColor::Blue, 5.f);
-	UKismetSystemLibrary::PrintString(this, "Second player action phase start", true, false, FLinearColor::Blue, 5.f);	
 }
 
 void ACSKGameMode::OnEndRoundPhaseStart()
@@ -633,8 +629,6 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 
 		EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
 	}
-
-	UKismetSystemLibrary::PrintString(this, "End round Phase Start", true, false, FLinearColor::Blue, 5.f );
 }
 
 void ACSKGameMode::EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay)
@@ -830,10 +824,11 @@ void ACSKGameMode::ResetPlayerResources(ACSKPlayerController* Controller, int32 
 			return;
 		}
 
+		// Default resources
 		State->SetResources(StartingGold, StartingMana);
 
-		// temp
-		State->MaxNumSpellUses = -1;
+		// Default spell uses
+		State->SetSpellUses(MaxSpellUses);
 	}
 	else
 	{
@@ -987,7 +982,7 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 				"max tile movements per turn as player state is not of CSKPlayerState"));
 		}
 
-		if (IsCountWithinTileTravelLimits(TileSegments))
+		if (IsCountWithinTileTravelLimits(TileSegments, PlayerState->GetBonusTileMovements()))
 		{
 			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 			check(BoardManager);
@@ -1193,6 +1188,17 @@ void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMo
 	if (IsActionPhaseInProgress())
 	{
 		check(ActionPhaseActiveController);
+
+		// Reset the bonus tiles a player can move at the end of a round
+		if (ActionMode == ECSKActionPhaseMode::MoveCastle)
+		{
+			ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+			if (PlayerState)
+			{
+				PlayerState->SetBonusTileMovements(0);
+			}
+		}
+
 		if (ActionPhaseActiveController->DisableActionMode(ActionMode))
 		{
 			// will also prob want to add some small delays here to make sure
@@ -1392,9 +1398,12 @@ bool ACSKGameMode::ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstruct
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
 
-	// TODO: hook callbacks (both in general and potential build anim)
+	// Hook callbacks
 	{
 		Handle_ActivePlayerBuildSequenceComplete = Tower->OnBuildSequenceComplete.AddUObject(this, &ACSKGameMode::OnPendingTowerBuildSequenceComplete);
+
+		UHealthComponent* HealthComp = Tower->GetHealthComponent();
+		HealthComp->OnHealthChanged.AddDynamic(this, &ACSKGameMode::OnBoardPieceHealthChanged);
 
 		bWaitingOnActivePlayerBuildAction = true;
 	}
@@ -1599,6 +1608,8 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 
 void ACSKGameMode::FinishCastSpell()
 {
+	// TODO: Need to also consider spells being auto cast (e.g. element bonus spells)
+
 	check(bWaitingOnActivePlayerSpellAction);
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
 
@@ -1860,6 +1871,29 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 }
 
 
+
+void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
+{
+	// Tower is dead
+	if (NewHealth == 0)
+	{
+		AActor* DeadActor = HealthComp->GetOwner();
+		if (DeadActor->IsA<ACastle>())
+		{
+			// TODO: Verify game over
+		}
+		else
+		{
+			ATower* DestroyedTower = CastChecked<ATower>(DeadActor);
+
+			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+			BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
+
+			// TODO: Might want to delay a bit, for now though
+			DestroyedTower->Destroy();
+		}
+	}
+}
 
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 {

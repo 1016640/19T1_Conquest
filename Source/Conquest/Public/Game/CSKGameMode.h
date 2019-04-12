@@ -14,6 +14,7 @@ class ACSKPlayerState;
 class ASpellActor;
 class ATile;
 class ATower;
+class UHealthComponent;
 class USpell;
 class USpellCard;
 class UTowerConstructionData;
@@ -228,6 +229,9 @@ public:
 
 
 public:
+
+	/** Get the starting players ID */
+	FORCEINLINE int32 GetStartingPlayersID() const { return StartingPlayerID; }
 
 	/** Helper function for getting the player whose action phase it is based on starting player ID */
 	ACSKPlayerController* GetActivePlayerForActionPhase(int32 Phase) const;
@@ -567,6 +571,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
 
+	/** The max amount of spells a player can use per turn with by default */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	int32 MaxSpellUses;
+
 	/** The max amount of spells cards a player can have in their hand */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	int32 MaxSpellCardsInHand;
@@ -575,10 +583,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	TArray<TSubclassOf<USpellCard>> AvailableSpellCards;
 
+	/** The spells that auto activate if a player casts a spell
+	with elements that match the tile their castle is on */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	TMap<ECSKElementType, TSubclassOf<USpell>> BonusElementalSpells;
+
 public:
 
 	/** Get if given value is within the limit of tiles that can be traversed each round */
-	FORCEINLINE bool IsCountWithinTileTravelLimits(int32 Count) const { return (MinTileMovements <= Count && Count <= MaxTileMovements); }
+	FORCEINLINE bool IsCountWithinTileTravelLimits(int32 Count, int32 Bonus) const { return (MinTileMovements <= Count && Count <= (MaxTileMovements + Bonus)); }
 
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
@@ -616,13 +629,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	uint32 bLimitOneMoveActionPerTurn : 1;
 
-	/** The max amount of spells a player can use per action phase */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
-	int32 MaxSpellUses;
-
 	/** The time the player has to select a quick effect spell when other player is casting a spell */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	float QuickEffectCounterTime;
+
+protected:
+
+	/** Callback for when a tower/castle has taken damage. This
+	function checks if given tower/castle has been destroyed */
+	UFUNCTION()
+	void OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta);
 
 protected:
 

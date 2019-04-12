@@ -11,6 +11,7 @@ USpell::USpell()
 	SpellDescription = LOCTEXT("SpellDescription", "Casts a spell");
 	SpellType = ESpellType::ActionPhase;
 	SpellStaticCost = 5;
+	bSpellRequiresTarget = true;
 
 	SpellActorClass = ASpellActor::StaticClass();
 }

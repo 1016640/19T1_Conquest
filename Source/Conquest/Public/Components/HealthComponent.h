@@ -72,7 +72,7 @@ public:
 public:
 
 	/** Event for when health has changed (either from damaged or healing) */
-	UPROPERTY(BlueprintAssignable, Category = "Health")
+	UPROPERTY(BlueprintAssignable, BlueprintAuthorityOnly, Category = "Health")
 	FHealthChangeSignature OnHealthChanged;
 
 protected:

@@ -42,24 +42,30 @@ void ACSKPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
-	if (GameState)
+	if (IsLocalPlayerController())
 	{
-		GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
-	}
-	else
-	{
-		UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
-			"change event as game state is not of CSKGameState"));
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
+				"change event as game state is not of CSKGameState"));
+		}
 	}
 }
 
 void ACSKPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
-	if (GameState)
+	if (IsLocalPlayerController())
 	{
-		GameState->OnRoundStateChanged.RemoveDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			GameState->OnRoundStateChanged.RemoveDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		}
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -274,8 +280,7 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 
 	if (CachedCSKHUD)
 	{
-		// TODO:
-		// Notify hud
+		CachedCSKHUD->OnRoundStateChanged(NewState);
 	}
 }
 

@@ -87,6 +87,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
 	void SetMana(int32 Amount);
 
+	/** Adds additional tiles this player is allowed to move over (can be negative) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
+	void AddBonusTileMovements(int32 Amount);
+
+	/** Overrides the addtional tiles this player is allowed to move over */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
+	void SetBonusTileMovements(int32 Amount);
+
 	/** Adds a tower to the list of towers this player owns */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
 	void AddTower(ATower* InTower);
@@ -94,6 +102,18 @@ public:
 	/** Removes a tower from the list of towers this player owns */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Board)
 	void RemoveTower(ATower* InTower);
+
+	/** Gives this player additional amount of spell uses per action phase (can be negative) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	void AddSpellUses(int32 Amount);
+
+	/** Overrides the amount of spells this player can use per action phase */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	void SetSpellUses(int32 Amount);
+
+	/** Set if this player has infinite spell uses */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	void SetHasInfiniteSpellUses(bool bEnable);
 
 	/** Retrieves a spell card from the spell deck and places in the players hand */
 	TSubclassOf<USpellCard> PickupCardFromDeck();
@@ -117,11 +137,11 @@ public:
 
 	/** Get if this player is able to cast another spell */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool CanCastAnotherSpell() const { return HasInfiniteSpellUses() || MaxNumSpellUses < SpellsCastThisRound; }
+	bool CanCastAnotherSpell() const { return bHasInfiniteSpellUses || SpellsCastThisRound < MaxNumSpellUses; }
 
 	/** Get if this player has infinite spell uses */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool HasInfiniteSpellUses() const { return MaxNumSpellUses == -1; }
+	bool HasInfiniteSpellUses() const { return bHasInfiniteSpellUses; }
 
 public:
 
@@ -133,6 +153,9 @@ public:
 
 	/** Get the amount of mana this player has */
 	FORCEINLINE int32 GetMana() const { return Mana; }
+
+	/** Get the bonus tiles this player is allwoed to move */
+	FORCEINLINE int32 GetBonusTileMovements() const { return BonusTileMovements; }
 
 	/** Get the towers this player owns */
 	FORCEINLINE const TArray<ATower*> GetOwnedTowers() const { return OwnedTowers; }
@@ -188,6 +211,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
 	int32 Mana;
 
+	/** The bonus amount of tiles this player is allowed to move */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Board)
+	int32 BonusTileMovements;
+
 	/** The towers this player owns */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_OwnedTowers, Category = Resources)
 	TArray<ATower*> OwnedTowers;
@@ -211,13 +238,13 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Resources)
 	TArray<TSubclassOf<USpellCard>> SpellCardsInHand;
 
-	/** The spells cards in the discard pile. This only exists on the server and the owners client */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Resources)
-	TArray<TSubclassOf<USpellCard>> DiscardPile;
-	public:
-	/** The number of spells this player is allowed to use. Set value to -1 for infinite spell uses */
+	/** The number of spells this player is allowed to use. Is overriden by HasInfiniteSpellUses */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
 	int32 MaxNumSpellUses;
+
+	/** If this player has infinite spell uses */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	uint8 bHasInfiniteSpellUses : 1;
 
 public:
 

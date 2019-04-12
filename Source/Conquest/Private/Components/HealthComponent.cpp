@@ -46,7 +46,7 @@ void UHealthComponent::InitHealth(int32 InHealth, int32 InMaxHealth)
 
 int32 UHealthComponent::ApplyDamage(int32 Amount)
 {
-	if (IsDead())
+	if (GetOwnerRole() == ROLE_Authority && IsDead())
 	{
 		if (Amount <= 0)
 		{
@@ -72,7 +72,7 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 
 int32 UHealthComponent::RestoreHealth(int32 Amount)
 {
-	if (IsDead())
+	if (GetOwnerRole() == ROLE_Authority && IsDead())
 	{
 		if (Amount <= 0)
 		{
@@ -94,7 +94,7 @@ int32 UHealthComponent::RestoreHealth(int32 Amount)
 
 void UHealthComponent::IncreaseMaxHealth(int32 Amount, bool bIncreaseHealth)
 {
-	if (Amount != 0)
+	if (GetOwnerRole() == ROLE_Authority && Amount != 0)
 	{
 		int32 NewMaxHealth = FMath::Max(1, MaxHealth + Amount);
 
@@ -125,7 +125,7 @@ void UHealthComponent::Kill()
 
 void UHealthComponent::Revive(float Percent)
 {
-	if (IsDead())
+	if (GetOwnerRole() == ROLE_Authority && IsDead())
 	{
 		// Keep alpha valid
 		Percent = FMath::Clamp(Percent, 0.f, 1.f);

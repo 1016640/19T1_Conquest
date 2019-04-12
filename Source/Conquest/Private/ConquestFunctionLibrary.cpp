@@ -7,6 +7,7 @@
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
 
+#include "UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -69,4 +70,20 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 	}
 
 	return nullptr;
+}
+
+void UConquestFunctionLibrary::AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder)
+{
+	if (Widget && !Widget->IsInViewport())
+	{
+		Widget->AddToViewport(ZOrder);
+	}
+}
+
+void UConquestFunctionLibrary::RemoveWidgetFromParent(UUserWidget* Widget)
+{
+	if (Widget && Widget->IsInViewport())
+	{
+		Widget->RemoveFromParent();
+	}
 }

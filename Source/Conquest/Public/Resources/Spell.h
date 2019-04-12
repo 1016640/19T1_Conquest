@@ -35,6 +35,11 @@ public:
 
 public:
 
+	/** If this spell requires a target tile in order to activate. If no
+	target is required, the target to use will default to the players castle */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	virtual bool RequiresTarget() const { return bSpellRequiresTarget; }
+
 	/** Check if spell can be used on given tile */
 	UFUNCTION(BlueprintPure, Category = Spells)
 	virtual bool CanActivateSpell(const ATile* TargetTile) const { return true; }
@@ -86,4 +91,8 @@ protected:
 	/** The spell actor to spawn. This actor handles casting the spell */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Actor Class"))
 	TSubclassOf<ASpellActor> SpellActorClass;
+
+	/** If this spell needs a target in order to activate */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Requires Target"))
+	uint8 bSpellRequiresTarget : 1;
 };

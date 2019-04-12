@@ -99,8 +99,8 @@ protected:
 
 	/** Round state notifies */
 	void NotifyCollectionPhaseStart();
-	void NotifyFirstCollectionPhaseStart();
-	void NotifySecondCollectionPhaseStart();
+	void NotifyFirstActionPhaseStart();
+	void NotifySecondActionPhaseStart();
 	void NotifyEndRoundPhaseStart();
 
 private:
@@ -153,12 +153,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
 
+	/** Get if counter effect time is timed */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsQuickEffectCounterTimed() const { return QuickEffectCounterTimeRemaining != -1.f; }
+
+	/** Get the player ID of whose action phase it is */
+	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
+
 protected:
 
 	/** Helper function for checking if action phase timer should count down */
 	FORCEINLINE bool ShouldCountdownActionPhase() const
 	{
-		if (IsActionPhaseActive() && IsActionPhaseTimed())
+		if (IsActionPhaseActive() && (IsActionPhaseTimed() || IsQuickEffectCounterTimed()))
 		{
 			return !bFreezeActionPhaseTimer;
 		}
@@ -183,9 +190,13 @@ private:
 
 protected:
 
-	/** ID of the player whose action phase it is */
+	/** ID of the player who won the coin toss */
 	UPROPERTY(Transient, Replicated)
-	int32 ActivePhasePlayerID;
+	int32 CoinTossWinnerPlayerID;
+
+	/** ID of the player whose action phase it is */
+	UPROPERTY(Transient)
+	int32 ActionPhasePlayerID;
 
 	/** Time remaining in this action phase */
 	UPROPERTY(Transient, Replicated)
@@ -198,6 +209,10 @@ protected:
 	/** Lookup table for how many instances of a certain tower exists on the board */
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
+
+	/** Time remaining for player to select a quick effect spell */
+	UPROPERTY(Transient, Replicated)
+	float QuickEffectCounterTimeRemaining;
 
 public:
 

@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "Spell.h"
+#include "BoardTypes.h"
 #include "SpellCard.generated.h"
 
 /**
@@ -36,10 +37,17 @@ public:
 		// Implicit constructor
 		return nullptr;
 	}
+
+	/** Get the element types of this spell card */
+	FORCEINLINE ECSKElementType GetElementalTypes() const { return static_cast<ECSKElementType>(ElementTypes); }
 	
 protected:
 
 	/** The spells associated with this spell card */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spell)
 	TArray<TSubclassOf<USpell>> Spells;
+
+	/** The elemental types of this spell card */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spell, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	uint8 ElementTypes;
 };

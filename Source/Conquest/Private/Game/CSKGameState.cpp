@@ -27,7 +27,7 @@ ACSKGameState::ACSKGameState()
 	PreviousMatchState = MatchState;
 	PreviousRoundState = RoundState;
 
-	ActivePhasePlayerID = -1;
+	CoinTossWinnerPlayerID = -1;
 	ActionPhaseTimeRemaining = -1.f;
 	bFreezeActionPhaseTimer = false;
 
@@ -47,14 +47,28 @@ void ACSKGameState::Tick(float DeltaTime)
 
 	if (ShouldCountdownActionPhase())
 	{
-		ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
-		if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
+		if (IsQuickEffectCounterTimed())
 		{
-			// TODO: inform game mode that time has run out
-		}
+			QuickEffectCounterTimeRemaining = FMath::Max(0.f, QuickEffectCounterTimeRemaining - DeltaTime);
+			if (HasAuthority() && QuickEffectCounterTimeRemaining == 0.f)
+			{
+				// TODO: inform game mode that time has run out
+			}
 
-		FString TimeRem = FString("Time Remaining for Action Phase: ") + FString::SanitizeFloat(ActionPhaseTimeRemaining);
-		UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
+			FString TimeRem = FString("Time Remaining for Quick Effect Counter: ") + FString::SanitizeFloat(QuickEffectCounterTimeRemaining);
+			UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
+		}
+		else
+		{
+			ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
+			if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
+			{
+				// TODO: inform game mode that time has run out
+			}
+
+			FString TimeRem = FString("Time Remaining for Action Phase: ") + FString::SanitizeFloat(ActionPhaseTimeRemaining);
+			UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
+		}
 	}
 }
 
@@ -81,7 +95,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, MatchState);
 	DOREPLIFETIME(ACSKGameState, RoundState);
 
-	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
+	DOREPLIFETIME(ACSKGameState, CoinTossWinnerPlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
@@ -186,39 +200,28 @@ void ACSKGameState::NotifyMatchAbort()
 
 void ACSKGameState::NotifyCollectionPhaseStart()
 {
-}
-
-void ACSKGameState::NotifyFirstCollectionPhaseStart()
-{
 	++RoundsPlayed;
-
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-	if (GameMode)
+	
+	// Only save on first round
+	if (RoundsPlayed == 1)
 	{
-		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
-		if (ActivePlayer)
+		// Game mode only exists on the server
+		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+		if (GameMode)
 		{
-			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
+			CoinTossWinnerPlayerID = GameMode->GetStartingPlayersID();
 		}
 	}
+}
 
+void ACSKGameState::NotifyFirstActionPhaseStart()
+{
+	++RoundsPlayed;
 	ResetActionPhaseProperties();
 }
 
-void ACSKGameState::NotifySecondCollectionPhaseStart()
+void ACSKGameState::NotifySecondActionPhaseStart()
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-	if (GameMode)
-	{
-		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
-		if (ActivePlayer)
-		{
-			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
-		}
-	}
-
 	ResetActionPhaseProperties();
 }
 
@@ -285,12 +288,12 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 		}
 		case ECSKRoundState::FirstActionPhase:
 		{
-			NotifyFirstCollectionPhaseStart();
+			NotifyFirstActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::SecondActionPhase:
 		{
-			NotifySecondCollectionPhaseStart();
+			NotifySecondActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::EndRoundPhase:
@@ -338,9 +341,20 @@ void ACSKGameState::AddBonusActionPhaseTime()
 void ACSKGameState::ResetActionPhaseProperties()
 {
 	ActionPhaseTimeRemaining = ActionPhaseTime;
+	QuickEffectCounterTimeRemaining = -1.f;
 
 	// This will disable tick when entering end round phase
 	SetFreezeActionPhaseTimer(!IsActionPhaseActive());
+
+	// Determine which players action phase it is
+	if (IsActionPhaseActive())
+	{
+		ActionPhasePlayerID = RoundState == ECSKRoundState::FirstActionPhase ? CoinTossWinnerPlayerID : FMath::Abs(CoinTossWinnerPlayerID - 1);
+	}
+	else
+	{
+		ActionPhasePlayerID = -1;
+	}
 }
 
 void ACSKGameState::HandleMoveRequestConfirmed()

@@ -96,7 +96,7 @@ protected:
 
 	/** Event for when the occupant board piece has been cleared */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName = "On Board Piece Cleared"))
-	void BP_OnBoardPieceCleared(AActor* OldBoardPiece);
+	void BP_OnBoardPieceCleared();
 
 	/** Sets the board piece to occupy this tile */
 	UFUNCTION(NetMulticast, Reliable)
@@ -108,9 +108,9 @@ protected:
 
 public:
 
-	/** If this tile is currently occupied. Null tiles are assumed to be occupied */
+	/** If this tile is currently occupied */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
-	virtual bool IsTileOccupied() const;
+	virtual bool IsTileOccupied(bool bConsiderNull = true) const;
 
 	/** If towers can be constructed on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
