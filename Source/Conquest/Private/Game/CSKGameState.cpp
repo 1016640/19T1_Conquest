@@ -12,9 +12,6 @@
 #include "TowerConstructionData.h"
 #include "Engine/World.h"
 
-// for now
-#include "Kismet/KismetSystemLibrary.h"
-
 ACSKGameState::ACSKGameState()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -45,6 +42,7 @@ void ACSKGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// TODO: Touch up
 	if (ShouldCountdownActionPhase())
 	{
 		if (IsQuickEffectCounterTimed())
@@ -54,9 +52,6 @@ void ACSKGameState::Tick(float DeltaTime)
 			{
 				// TODO: inform game mode that time has run out
 			}
-
-			FString TimeRem = FString("Time Remaining for Quick Effect Counter: ") + FString::SanitizeFloat(QuickEffectCounterTimeRemaining);
-			UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
 		}
 		else
 		{
@@ -65,9 +60,6 @@ void ACSKGameState::Tick(float DeltaTime)
 			{
 				// TODO: inform game mode that time has run out
 			}
-
-			FString TimeRem = FString("Time Remaining for Action Phase: ") + FString::SanitizeFloat(ActionPhaseTimeRemaining);
-			UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
 		}
 	}
 }
@@ -325,6 +317,27 @@ int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 	return 0;
 }
 
+float ACSKGameState::GetActionPhaseTimeRemaining(bool& bOutIsInfinite) const
+{
+	bOutIsInfinite = false;
+
+	if (IsActionPhaseActive())
+	{
+		// TODO: need a variable that informs us that quick effect counter is taking place
+		// for now, assume it's just action phase time
+		if (IsActionPhaseTimed())
+		{
+			return ActionPhaseTimeRemaining;
+		}
+		else
+		{
+			bOutIsInfinite = true;
+		}
+	}
+
+	return 0.f;
+}
+
 void ACSKGameState::AddBonusActionPhaseTime()
 {
 	if (IsActionPhaseTimed())
@@ -425,18 +438,18 @@ bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Cont
 	return false;
 }
 
-bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
 	if (PlayerState)
 	{
-		return CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy);
+		return CanPlayerBuildTower(PlayerState, TowerTemplate);
 	}
 
 	return false;
 }
 
-bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller) const
 {
 	// No towers might be in this match
 	if (AvailableTowers.Num() > 0)
@@ -446,7 +459,7 @@ bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Control
 		{
 			for (TSubclassOf<UTowerConstructionData> TowerTemplate : AvailableTowers)
 			{
-				if (CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy))
+				if (CanPlayerBuildTower(PlayerState, TowerTemplate))
 				{
 					return true;
 				}
@@ -455,6 +468,29 @@ bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Control
 	}
 
 	return false;
+}
+
+bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const
+{
+	OutTowers.Reset();
+
+	// No towers might be in this match
+	if (AvailableTowers.Num() > 0)
+	{
+		const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+		if (PlayerState)
+		{
+			for (TSubclassOf<UTowerConstructionData> TowerTemplate : AvailableTowers)
+			{
+				if (CanPlayerBuildTower(PlayerState, TowerTemplate))
+				{
+					OutTowers.Add(TowerTemplate);
+				}
+			}
+		}
+	}
+
+	return OutTowers.Num() > 0;
 }
 
 void ACSKGameState::UpdateRules()
@@ -477,10 +513,13 @@ void ACSKGameState::UpdateRules()
 	}
 }
 
-bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	UTowerConstructionData* ConstructData = TowerTemplate.GetDefaultObject();
-	check(ConstructData);
+	if (!ConstructData)
+	{
+		return false;
+	}
 
 	if (!ConstructData->TowerClass)
 	{

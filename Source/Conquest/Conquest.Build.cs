@@ -13,7 +13,12 @@ public class Conquest : ModuleRules
             "Conquest/Public"
         });
 
-		PublicDependencyModuleNames.AddRange(new string[] 
+        PrivateIncludePaths.AddRange(new string[]
+        {
+            "Conquest/Private"
+        });
+
+        PublicDependencyModuleNames.AddRange(new string[] 
         {
             "Core",
             "CoreUObject",

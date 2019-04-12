@@ -5,73 +5,72 @@
 #include "CSKGameState.h"
 
 #include "UserWidget.h"
+#include "Widgets/CSKHUDWidget.h"
 
 ACSKHUD::ACSKHUD()
 {
-	WidgetInViewport = nullptr;
+	CSKHUDInstance = nullptr;
 }
 
 void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)
 {
-	ReplaceWidgetInViewport(GetWidgetAssociatedWithState(NewState));
-}
-
-TSubclassOf<UUserWidget> ACSKHUD::GetWidgetAssociatedWithState(ECSKRoundState RoundState) const
-{
-	switch (RoundState)
+	if (!CSKHUDInstance)
 	{
-		case ECSKRoundState::CollectionPhase:
+		if (!CSKHUDTemplate)
 		{
-			return CollectionPhaseWidget;
+			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::OnRoundStateChanged: HUD template is null"));
+			return;
 		}
-		case ECSKRoundState::EndRoundPhase:
-		{
-			return EndRoundPhaseWidget;
-		}
-		// Intentional fallthrough
-		case ECSKRoundState::FirstActionPhase:
-		case ECSKRoundState::SecondActionPhase:
-		{
-			ACSKPlayerController* CSKController = CastChecked<ACSKPlayerController>(PlayerOwner);
 
+		CSKHUDInstance = CreateWidget<UCSKHUDWidget, APlayerController>(PlayerOwner, CSKHUDTemplate);
+		if (!CSKHUDInstance)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::OnRoundStateChanged: Failed to create Widget"));
+		}
+
+		// Handles null checks
+		UConquestFunctionLibrary::AddWidgetToViewport(CSKHUDInstance);
+	}
+
+	if (CSKHUDInstance)
+	{
+		bool bIsOwnersTurn = false;
+
+		// Determine if it's our owners turn
+		if (NewState == ECSKRoundState::FirstActionPhase || NewState == ECSKRoundState::SecondActionPhase)
+		{
 			ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
 			if (GameState)
 			{
-				if (GameState->GetActionPhasePlayerID() == CSKController->CSKPlayerID)
-				{
-					return PlayingActionPhaseWidget;
-				}
-				else
-				{
-					return WaitingActionPhaseWidget;
-				}
-			}
-			else
-			{
-				UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::GetWidgetAssociatedWithState: Game state is not of ACSKGameState."));
-				return nullptr;
+				ACSKPlayerController* Controller = CastChecked<ACSKPlayerController>(PlayerOwner);
+				bIsOwnersTurn = GameState->GetActionPhasePlayerID() == Controller->CSKPlayerID;
 			}
 		}
-	}
 
-	return nullptr;
+		CSKHUDInstance->OnRoundStateChanged(NewState, bIsOwnersTurn);
+	}
 }
 
-void ACSKHUD::ReplaceWidgetInViewport(TSubclassOf<UUserWidget> NewWidget)
+void ACSKHUD::OnActionStart()
 {
-	// This function handles null checks
-	UConquestFunctionLibrary::RemoveWidgetFromParent(WidgetInViewport);
-	WidgetInViewport = nullptr;
-
-	if (NewWidget)
+	if (CSKHUDInstance)
 	{
-		WidgetInViewport = CreateWidget<UUserWidget, APlayerController>(PlayerOwner, NewWidget);
-		if (!WidgetInViewport)
-		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::ReplaceWidgetInViewport: Failed to create Widget"));
-		}
-		
-		// This function handles null checks
-		UConquestFunctionLibrary::AddWidgetToViewport(WidgetInViewport);
+		CSKHUDInstance->OnActionStart();
+	}
+}
+
+void ACSKHUD::OnActionFinished()
+{
+	if (CSKHUDInstance)
+	{
+		CSKHUDInstance->OnActionFinished();
+	}
+}
+
+void ACSKHUD::RefreshTowerList()
+{
+	if (CSKHUDInstance)
+	{
+		CSKHUDInstance->RefreshTowerList();
 	}
 }

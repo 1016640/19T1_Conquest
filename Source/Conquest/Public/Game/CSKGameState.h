@@ -160,6 +160,11 @@ public:
 	/** Get the player ID of whose action phase it is */
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
+	/** Get the time remaining for current action taking place (this
+	can either action phase turn time, quick effect counter time) */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	float GetActionPhaseTimeRemaining(bool& bOutIsInfinite) const;
+
 protected:
 
 	/** Helper function for checking if action phase timer should count down */
@@ -268,11 +273,15 @@ public:
 
 	/** If given player can build or destroy the given tower */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy = false) const;
+	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const;
 
 	/** If given player can build or destroy anymore towers this turn */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy = false) const;
+	bool CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller) const;
+
+	/** Get all the towers the given player can build */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
 
 	/** Get all towers that can be built this match */
 	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
@@ -284,8 +293,7 @@ protected:
 	void UpdateRules();
 
 	/** Helper function for checking if given player can build or destroy given tower */
-	// TODO: Implement OrDestroy functionality
-	bool CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const;
+	bool CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate) const;
 	
 protected:
 

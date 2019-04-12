@@ -154,7 +154,7 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	if (false)//TODO: !bCanSelectTile)
+	if (!bCanSelectTile)
 	{
 		return;
 	}
@@ -175,11 +175,7 @@ void ACSKPlayerController::SelectTile()
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
-				// TODO: Move this to a function
-				if (HoveredTile)
-				{
-					Server_RequestBuildTowerAction(TestTowerTemplate, HoveredTile);
-				}
+				SelectedTile = HoveredTile;
 				break;
 			}
 			case ECSKActionPhaseMode::CastSpell:
@@ -201,6 +197,18 @@ void ACSKPlayerController::ResetCamera()
 	if (Pawn && CastlePawn)
 	{
 		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
+	}
+}
+
+void ACSKPlayerController::SetCanSelectTile(bool bEnable)
+{
+	if (bCanSelectTile != bEnable)
+	{
+		bCanSelectTile = bEnable;
+		if (!bCanSelectTile)
+		{
+			SelectedTile = nullptr;
+		}
 	}
 }
 
@@ -377,7 +385,7 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 
 				// Check if we can build or destroy towers
 				ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
-				if (GameState && GameState->CanPlayerBuildMoreTowers(this, true))
+				if (GameState && GameState->CanPlayerBuildMoreTowers(this))
 				{
 					ModesToEnable |= ECSKActionPhaseMode::BuildTowers;
 				}
@@ -508,6 +516,13 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		{
 			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
+
+		if (CachedCSKHUD)
+		{
+			CachedCSKHUD->RefreshTowerList();
+		}
+
+		SetCanSelectTile(true);
 	}
 }
 
@@ -538,29 +553,39 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 
 void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(ACastle* MovingCastle)
 {
-	bCanSelectTile = false;
+	SetCanSelectTile(false);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn)
 	{
 		Pawn->TrackActor(MovingCastle);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart();
+	}
 }
 
 void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 {
-	bCanSelectTile = true;
+	SetCanSelectTile(true);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn)
 	{
 		Pawn->TrackActor(nullptr);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished();
+	}
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
-	bCanSelectTile = false;
+	SetCanSelectTile(false);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn && TargetTile)
@@ -569,17 +594,32 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 		SetIgnoreMoveInput(true);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart();
+	}
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 {
-	bCanSelectTile = true;
+	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
+
+	if (IsPerformingActionPhase() && CachedCSKHUD)
+	{
+		CachedCSKHUD->RefreshTowerList();
+	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished();
+	}
 }
 
 void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(ATile* TargetTile)
 {
-	bCanSelectTile = false;
+	SetCanSelectTile(false);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn && TargetTile)
@@ -588,12 +628,22 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(ATi
 		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 		SetIgnoreMoveInput(true);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart();
+	}
 }
 
 void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation()
 {
-	bCanSelectTile = true;
+	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished();
+	}
 }
 
 bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
@@ -608,6 +658,23 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 	}
 
 	return false;
+}
+
+void ACSKPlayerController::BuildTowerAtTile(TSubclassOf<UTowerConstructionData> TowerConstructData)
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::BuildTowers)
+	{
+		if (SelectedTile)
+		{
+			Server_RequestBuildTowerAction(TowerConstructData, SelectedTile);
+		}
+	}
 }
 
 bool ACSKPlayerController::Server_EndActionPhase_Validate()
@@ -707,5 +774,14 @@ void ACSKPlayerController::Server_RequestCastSpellAction_Implementation(TSubclas
 	if (!bSuccess)
 	{
 
+	}
+}
+
+void ACSKPlayerController::GetBuildableTowers(TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const
+{
+	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (GameState)
+	{
+		GameState->GetTowersPlayerCanBuild(this, OutTowers);
 	}
 }

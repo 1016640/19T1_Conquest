@@ -1054,7 +1054,7 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 		if (CSKGameState)
 		{
 			// The player might not be able to build this tower
-			if (!CSKGameState->CanPlayerBuildTower(ActionPhaseActiveController, TowerTemplate, false))
+			if (!CSKGameState->CanPlayerBuildTower(ActionPhaseActiveController, TowerTemplate))
 			{
 				return false;
 			}
@@ -1492,7 +1492,7 @@ void ACSKGameMode::FinishBuildTower()
 	ActivePlayerPendingTowerTile = nullptr;
 
 	// Disable this action if player can't build or destroy any more towers this round
-	if (CSKGameState && !CSKGameState->CanPlayerBuildMoreTowers(ActionPhaseActiveController, true))
+	if (CSKGameState && !CSKGameState->CanPlayerBuildMoreTowers(ActionPhaseActiveController))
 	{
 		DisableActionModeForActivePlayer(ECSKActionPhaseMode::BuildTowers);
 	}

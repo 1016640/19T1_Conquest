@@ -106,7 +106,7 @@ protected:
 public:
 
 	/** This controllers player ID, this should never be altered */
-	UPROPERTY(Transient, DuplicateTransient, Replicated)
+	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, Replicated)
 	int32 CSKPlayerID;
 
 public:
@@ -141,11 +141,18 @@ private:
 	/** Resets our camera to focus on our castle */
 	void ResetCamera();
 
+	/** Sets whethere we can select tiles */
+	void SetCanSelectTile(bool bEnable);
+
 protected:
 
 	/** The tile we are currently hovering over (only valid on the client) */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
+
+	/** The tile we have selected (clicked on) */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
+	ATile* SelectedTile;
 
 	/** If we are accepting input via select tile (only valid on the client) */
 	UPROPERTY(Transient)
@@ -324,6 +331,13 @@ public:
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
 
+public:
+
+	/** Builds the request tower at the currently selected tile. 
+	This will only work if running on local players client */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void BuildTowerAtTile(TSubclassOf<UTowerConstructionData> TowerConstructData);
+
 protected:
 
 	/** Makes a request to the server to end our action phase */
@@ -352,4 +366,10 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	int32 TestSpellCardSpellIndex = 0;
+
+public:
+
+	/** Get the list of towers this player can build */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetBuildableTowers(TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
 };

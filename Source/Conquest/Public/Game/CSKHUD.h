@@ -6,6 +6,7 @@
 #include "GameFramework/HUD.h"
 #include "CSKHUD.generated.h"
 
+class UCSKHUDWidget;
 class UUserWidget;
 
 /**
@@ -25,35 +26,24 @@ public:
 	/** Notify from our owner that the round state has changed */
 	void OnRoundStateChanged(ECSKRoundState NewState);
 
-private:
+	/** Notify that an action or event is starting */
+	void OnActionStart();
 
-	/** Get the widget associated with the given round state */
-	TSubclassOf<UUserWidget> GetWidgetAssociatedWithState(ECSKRoundState RoundState) const;
+	/** Notify that an action or event has finished */
+	void OnActionFinished();
 
-	/** Removes current widget from viewport and replaces it with given one */
-	void ReplaceWidgetInViewport(TSubclassOf<UUserWidget> NewWidget);
+	/** Notify from our owner that we should refresh the tower list */
+	void RefreshTowerList();
 
 protected:
 
-	/** The widget currently in the viewport */
+	/** Instance of the CSKHUD widget */
 	UPROPERTY()
-	UUserWidget* WidgetInViewport;
+	UCSKHUDWidget* CSKHUDInstance;
 
 protected:
 	
-	/** The HUD widget to display during collection phase (Can be Null) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CSK)
-	TSubclassOf<UUserWidget> CollectionPhaseWidget;
-
-	/** The HUD widget to display when it's our owners action phase */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CSK)
-	TSubclassOf<UUserWidget> PlayingActionPhaseWidget;
-
-	/** The HUD widget to display when it's the opposing players action phase */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CSK)
-	TSubclassOf<UUserWidget> WaitingActionPhaseWidget;
-
-	/** The HUD widget to display during end round phase (Can be Null) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CSK)
-	TSubclassOf<UUserWidget> EndRoundPhaseWidget;
+	/** The widget to use when entering game loop */
+	UPROPERTY(EditAnywhere, Category = CSK)
+	TSubclassOf<UCSKHUDWidget> CSKHUDTemplate;
 };
