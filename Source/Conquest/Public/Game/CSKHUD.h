@@ -26,6 +26,9 @@ public:
 	/** Notify from our owner that the round state has changed */
 	void OnRoundStateChanged(ECSKRoundState NewState);
 
+	/** Notify from our owner that the selection action has changed */
+	void OnSelectedActionChanged(ECSKActionPhaseMode NewMode);
+
 	/** Notify that an action or event is starting */
 	void OnActionStart();
 
@@ -34,6 +37,11 @@ public:
 
 	/** Notify from our owner that we should refresh the tower list */
 	void RefreshTowerList();
+
+private:
+
+	/** Gets the HUD instance, creating it if desired */
+	UCSKHUDWidget* GetCSKHUDInstance(bool bCreateIfNull = true);
 
 protected:
 

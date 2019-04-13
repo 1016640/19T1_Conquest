@@ -529,7 +529,7 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 	WorldSettings->NotifyBeginPlay();
 }
 
-// TODO: Fixup this process once I get a better understanding
+// TODO: Fixup this process once I get a better understanding of how game mode initiates itself and clients
 void ACSKGameMode::OnMatchStart()
 {
 	// Restart all players (even those that aren't participating
@@ -617,6 +617,8 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 
 	if (PrepareEndRoundActionTowers())
 	{
+		// Attempts to startin running the end round action for tower with most priority. If either
+		// there are no towers or an error occurs, simply start the next round
 		if (!StartRunningTowersEndRoundAction(0))
 		{
 			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
@@ -644,7 +646,7 @@ void ACSKGameMode::EnterRoundStateAfterDelay(ECSKRoundState NewState, float Dela
 		TimerManager.ClearTimer(Handle_EnterRoundState);
 
 		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::EnterRoundStateAfterDelay: Cancelling existing delay since "
-			"a new delay has been requested (This might be called during that delays execution though!)."));
+			"a new delay has been requested (This might be called during that delays callback execution though!)."));
 	}
 
 	// Create delegate with param state set
@@ -1125,8 +1127,8 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (PlayerState)
 		{
-			// Player isn't able to cast another spell
-			if (!PlayerState->CanCastAnotherSpell())
+			// Player isn't able to cast another spell (we don't need to check costs)
+			if (!PlayerState->CanCastAnotherSpell(false))
 			{
 				return false;
 			}
@@ -1175,7 +1177,7 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 	return false;
 }
 
-void ACSKGameMode::NotifyCastSpellFinished()
+void ACSKGameMode::NotifyCastSpellFinished(bool bWasCancelled)
 {
 	if (IsActionPhaseInProgress() && IsWaitingForSpellCast())
 	{
@@ -1199,10 +1201,9 @@ void ACSKGameMode::DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMo
 			}
 		}
 
+		// Gets if player has no remaining actions
 		if (ActionPhaseActiveController->DisableActionMode(ActionMode))
 		{
-			// will also prob want to add some small delays here to make sure
-			// all changes reach all clients
 			if (RoundState == ECSKRoundState::FirstActionPhase)
 			{
 				EnterRoundState(ECSKRoundState::SecondActionPhase);
@@ -1326,7 +1327,7 @@ void ACSKGameMode::FinishCastleMove(ATile* DestinationTile)
 	{
 		// This player might be able to move again, check to see if they have moved the max amount of tiles
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
-		if (PlayerState && PlayerState->GetTilesTraversedThisRound() >= MaxTileMovements)
+		if (PlayerState && PlayerState->GetTilesTraversedThisRound() >= (MaxTileMovements + PlayerState->GetBonusTileMovements()))
 		{
 			DisableActionModeForActivePlayer(ECSKActionPhaseMode::MoveCastle);
 		}
@@ -1675,7 +1676,7 @@ ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 Fin
 	if (SpellActor)
 	{
 		// Set variables spells might need to know before replicating
-		SpellActor->SetActivationInfo(PlayerState, Spell, FinalCost, Tile);
+		SpellActor->InitSpellActor(PlayerState, Spell, FinalCost, Tile);
 
 		SpellActor->FinishSpawning(TileTransform);
 	}

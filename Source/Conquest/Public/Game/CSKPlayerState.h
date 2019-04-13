@@ -135,13 +135,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const;
 
-	/** Get if this player is able to cast another spell */
+	/** Get if this player is able to cast another spell based on how many spells we can use.
+	Can optionally check if we can afford to cast any of the spells currently in our hand */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool CanCastAnotherSpell() const { return bHasInfiniteSpellUses || SpellsCastThisRound < MaxNumSpellUses; }
+	bool CanCastAnotherSpell(bool bCheckCosts = true) const;
 
 	/** Get if this player has infinite spell uses */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool HasInfiniteSpellUses() const { return bHasInfiniteSpellUses; }
+
+	/** Get all the spells this player is able to cast */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	void GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
 
 public:
 

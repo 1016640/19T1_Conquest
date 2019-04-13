@@ -21,6 +21,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Spells)
 	bool HasSpellOfType(ESpellType SpellType) const;
 
+	/** Check if given player can afford at least one spell of this card */
+	UFUNCTION(BlueprintCallable, Category = Spells)
+	bool CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellType SpellType) const;
+
 public:
 
 	/** Get all spells associated with the card */

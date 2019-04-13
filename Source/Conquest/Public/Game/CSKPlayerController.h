@@ -372,4 +372,8 @@ public:
 	/** Get the list of towers this player can build */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	void GetBuildableTowers(TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
+
+	/** Get the list of spells this player can cast (in hand) */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
 };

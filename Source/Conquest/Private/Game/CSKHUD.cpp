@@ -14,27 +14,12 @@ ACSKHUD::ACSKHUD()
 
 void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)
 {
-	if (!CSKHUDInstance)
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
 	{
-		if (!CSKHUDTemplate)
-		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::OnRoundStateChanged: HUD template is null"));
-			return;
-		}
+		UConquestFunctionLibrary::AddWidgetToViewport(Widget);
 
-		CSKHUDInstance = CreateWidget<UCSKHUDWidget, APlayerController>(PlayerOwner, CSKHUDTemplate);
-		if (!CSKHUDInstance)
-		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::OnRoundStateChanged: Failed to create Widget"));
-		}
-
-		// Handles null checks
-		UConquestFunctionLibrary::AddWidgetToViewport(CSKHUDInstance);
-	}
-
-	if (CSKHUDInstance)
-	{
-		bool bIsOwnersTurn = false;
+		bool bIsOurTurn = false;
 
 		// Determine if it's our owners turn
 		if (NewState == ECSKRoundState::FirstActionPhase || NewState == ECSKRoundState::SecondActionPhase)
@@ -43,27 +28,38 @@ void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)
 			if (GameState)
 			{
 				ACSKPlayerController* Controller = CastChecked<ACSKPlayerController>(PlayerOwner);
-				bIsOwnersTurn = GameState->GetActionPhasePlayerID() == Controller->CSKPlayerID;
+				bIsOurTurn = GameState->GetActionPhasePlayerID() == Controller->CSKPlayerID;
 			}
 		}
 
-		CSKHUDInstance->OnRoundStateChanged(NewState, bIsOwnersTurn);
+		Widget->OnRoundStateChanged(NewState, bIsOurTurn);
+	}
+}
+
+void ACSKHUD::OnSelectedActionChanged(ECSKActionPhaseMode NewMode)
+{
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
+	{
+		Widget->OnSelectedActionChanged(NewMode);
 	}
 }
 
 void ACSKHUD::OnActionStart()
 {
-	if (CSKHUDInstance)
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
 	{
-		CSKHUDInstance->OnActionStart();
+		Widget->OnActionStart();
 	}
 }
 
 void ACSKHUD::OnActionFinished()
 {
-	if (CSKHUDInstance)
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
 	{
-		CSKHUDInstance->OnActionFinished();
+		Widget->OnActionFinished();
 	}
 }
 
@@ -73,4 +69,24 @@ void ACSKHUD::RefreshTowerList()
 	{
 		CSKHUDInstance->RefreshTowerList();
 	}
+}
+
+UCSKHUDWidget* ACSKHUD::GetCSKHUDInstance(bool bCreateIfNull)
+{
+	if (!CSKHUDInstance && bCreateIfNull)
+	{
+		if (!CSKHUDTemplate)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::GetCSKHUDInstance: HUD template is null"));
+			return nullptr;
+		}
+
+		CSKHUDInstance = CreateWidget<UCSKHUDWidget, APlayerController>(PlayerOwner, CSKHUDTemplate);
+		if (!CSKHUDInstance)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::GetCSKHUDInstance: Failed to create Widget"));
+		}
+	}
+
+	return CSKHUDInstance;
 }

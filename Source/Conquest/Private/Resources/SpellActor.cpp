@@ -6,10 +6,8 @@
 #include "TimerManager.h"
 #include "Components/SceneComponent.h"
 
-// Sets default values
 ASpellActor::ASpellActor()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
 
@@ -38,7 +36,7 @@ void ASpellActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME_CONDITION(ASpellActor, TargetedTile, COND_InitialOnly);
 }
 
-void ASpellActor::SetActivationInfo(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile)
+void ASpellActor::InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile)
 {
 	if (HasAuthority() && !HasActorBegunPlay())
 	{
@@ -51,29 +49,56 @@ void ASpellActor::SetActivationInfo(ACSKPlayerState* InCastingPlayer, USpell* In
 
 void ASpellActor::BeginExecution()
 {
-	if (HasAuthority() && !bIsRunning)
+	if (HasAuthority() && !bRunning)
 	{
-		bIsRunning = true;
+		bRunning = true;
 		OnActivateSpell();
+	}
+}
+
+bool ASpellActor::CheckSpellIsCancelled()
+{
+	bool bWasCancelled = bCancelled;
+
+	if (bCancelled && bRunning)
+	{
+		FinishSpell();
+	}
+
+	return bWasCancelled;
+}
+
+void ASpellActor::CancelExecution()
+{
+	if (bRunning)
+	{
+		bCancelled = true;
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("Spell actor %s has been cancelled before running"), *GetFName().ToString());
 	}
 }
 
 void ASpellActor::OnActivateSpell_Implementation()
 {
+	UE_LOG(LogConquest, Warning, TEXT("Spell Actor Class %s has no implementation for OnActivateSpell. Finishing spell next frame"), *GetName());
+
 	FTimerManager& TimerManager = GetWorldTimerManager();
 	TimerManager.SetTimerForNextTick(this, &ASpellActor::FinishSpell);
 }
 
 void ASpellActor::FinishSpell()
 {
-	if (bIsRunning)
+	if (bRunning)
 	{
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
-			GameMode->NotifyCastSpellFinished();
+			GameMode->NotifyCastSpellFinished(bCancelled);
 		}
 
-		bIsRunning = false;
+		bRunning = false;
+		bCancelled = false;
 	}
 }

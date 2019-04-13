@@ -369,9 +369,8 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 			}
 
 			// If its our action phase, we should always be able to move.
-			// We can check if we can build or destroy any towers before setting build actions
-			// TODO: Check if we have enough mana to cast at least one spell (and those spells can be used during action phase)
-			ECSKActionPhaseMode ModesToEnable = bEnabled ? ECSKActionPhaseMode::MoveCastle | ECSKActionPhaseMode::CastSpell : ECSKActionPhaseMode::None;
+			// We can check if we can build or destroy any towers before setting build actions. We can do the same with spells
+			ECSKActionPhaseMode ModesToEnable = bEnabled ? ECSKActionPhaseMode::MoveCastle : ECSKActionPhaseMode::None;
 
 			if (bEnabled)
 			{
@@ -381,6 +380,12 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 				{
 					PlayerState->ResetTilesTraversed();
 					PlayerState->ResetSpellsCast();
+
+					// Check not only if we can cast a spell, but if we can afford any of them
+					if (PlayerState->CanCastAnotherSpell(true))
+					{
+						ModesToEnable |= ECSKActionPhaseMode::CastSpell;
+					}
 				}
 
 				// Check if we can build or destroy towers
@@ -420,6 +425,11 @@ void ACSKPlayerController::SetActionMode(ECSKActionPhaseMode NewMode, bool bClie
 		if (IsLocalPlayerController())
 		{
 			OnSelectionModeChanged(NewMode);
+
+			if (CachedCSKHUD)
+			{
+				CachedCSKHUD->OnSelectedActionChanged(NewMode);
+			}
 		}
 
 		// We may be setting client side, we should also inform the server
@@ -783,5 +793,14 @@ void ACSKPlayerController::GetBuildableTowers(TArray<TSubclassOf<UTowerConstruct
 	if (GameState)
 	{
 		GameState->GetTowersPlayerCanBuild(this, OutTowers);
+	}
+}
+
+void ACSKPlayerController::GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	ACSKPlayerState* PlayerState = GetCSKPlayerState();
+	if (PlayerState)
+	{
+		PlayerState->GetSpellsPlayerCanCast(OutSpellCards);
 	}
 }

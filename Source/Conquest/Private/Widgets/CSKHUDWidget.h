@@ -7,6 +7,7 @@
 #include "CSKHUDWidget.generated.h"
 
 enum class ECSKRoundState : uint8;
+enum class ECSKActionPhaseMode : uint8;
 
 /**
  * Specialized HUD for the CSKHUD to interact with
@@ -22,6 +23,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnRoundStateChanged(ECSKRoundState NewState, bool bIsPlayersTurn);
 	
+	/** Notify that the player has selected the given action */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnSelectedActionChanged(ECSKActionPhaseMode NewMode);
+
 	/** Notify that an action (event) is starting */
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnActionStart();

@@ -320,7 +320,7 @@ public:
 public:
 
 	/** DO NOT CALL THIS. Notify that executing spell has finished */
-	void NotifyCastSpellFinished();
+	void NotifyCastSpellFinished(bool bWasCancelled);
 
 private:
 

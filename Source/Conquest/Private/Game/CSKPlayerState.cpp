@@ -3,6 +3,7 @@
 #include "CSKPlayerState.h"
 #include "CSKPlayerController.h"
 #include "CSKGameMode.h"
+#include "SpellCard.h"
 #include "Tower.h"
 
 ACSKPlayerState::ACSKPlayerState()
@@ -232,6 +233,43 @@ int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) con
 	}
 
 	return 0;
+}
+
+bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
+{
+	if (bHasInfiniteSpellUses || SpellsCastThisRound < MaxNumSpellUses)
+	{
+		if (!bCheckCost)
+		{
+			return true;
+		}
+
+		// Check if we can afford to cast at least one of the spell
+		for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
+		{
+			const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+			if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, ESpellType::ActionPhase))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	OutSpellCards.Empty();
+
+	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
+	{
+		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, ESpellType::ActionPhase))
+		{
+			OutSpellCards.Add(SpellCard);
+		}
+	}
 }
 
 bool ACSKPlayerState::NeedsSpellDeckReshuffle() const

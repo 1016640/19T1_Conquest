@@ -12,7 +12,9 @@ class USpell;
 
 /**
  * An actor that performs the actions of a spell. This actor gets spawned
- * in as a spell is being used then immediately destroyed afterwards
+ * in as a spell is being used then immediately destroyed afterwards. When
+ * executing the action, CheckSpellIsCancelled should be called before commiting
+ * to different stages of an action, with the action only progressing if it is cancelled.
  */
 UCLASS(abstract, notplaceable)
 class CONQUEST_API ASpellActor : public AActor
@@ -32,10 +34,13 @@ protected:
 public:
 
 	/** Sets all activation info */
-	void SetActivationInfo(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile);
+	void InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile);
 
 	/** Notify from game mode to begin execution of this spell */
 	void BeginExecution();
+
+	/** Notify from game mode to cancel execution of this spell */
+	void CancelExecution();
 
 protected:
 
@@ -44,11 +49,17 @@ protected:
 	UFUNCTION(BlueprintNativeEvent, Category = Spells)
 	void OnActivateSpell();
 
-	/** Finishes casting this spell. Only runs on the server and notifies game mode */
+	/** Finishes casting this spell. Only runs on the server and notifies game mode.
+	This does not need to be called if the spell was cancelled */
 	UFUNCTION(BlueprintCallable, Category = Spells)
 	void FinishSpell();
 
-protected:
+	/** Checks if this spell has been cancelled, calling fisish spell if the case.
+	Get if the spell was indeed cancelled and the spell has now finished */
+	UFUNCTION(BlueprintCallable, Category = Spells)
+	bool CheckSpellIsCancelled();
+
+public:
 
 	/** The player currently executing this event */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
@@ -69,5 +80,8 @@ protected:
 private:
 
 	/** If this spell is running */
-	uint8 bIsRunning : 1;
+	uint8 bRunning : 1;
+
+	/** If this spell has been cancelled */
+	uint8 bCancelled : 1;
 };
