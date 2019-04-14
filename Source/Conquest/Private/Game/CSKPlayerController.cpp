@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "SpellCard.h"
 #include "Tower.h"
 
 #include "Components/InputComponent.h"
@@ -118,6 +119,40 @@ void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(ACSKPlayerController, RemainingActions);
 }
 
+void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> InConstructData)
+{
+	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	{
+		SelectedTowerConstructionData = InConstructData;
+	}
+}
+
+void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
+{
+	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	{
+		SelectedSpellCard = InSpellCard;
+		
+		const USpellCard* DefaultSpellCard = SelectedSpellCard.GetDefaultObject();
+		if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(InSpellIndex))
+		{
+			SelectedSpellIndex = InSpellIndex;
+		}
+		else
+		{
+			SelectedSpellIndex = 0;
+		}
+	}
+}
+
+void ACSKPlayerController::SetSelectedAdditionalMana(int32 InAdditionalMana)
+{
+	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	{
+		SelectedSpellAdditionalMana = FMath::Max(0, InAdditionalMana);
+	}
+}
+
 ACSKPawn* ACSKPlayerController::GetCSKPawn() const
 {
 	return Cast<ACSKPawn>(GetPawn());
@@ -166,25 +201,17 @@ void ACSKPlayerController::SelectTile()
 		{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
-				// TODO: Move this to a function
-				if (HoveredTile)
-				{
-					Server_RequestCastleMoveAction(HoveredTile);
-				}
+				MoveCastleToHoveredTile();
 				break;
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
-				SelectedTile = HoveredTile;
+				BuildTowerAtHoveredTile(SelectedTowerConstructionData);
 				break;
 			}
 			case ECSKActionPhaseMode::CastSpell:
 			{
-				// TODO: Move this to a function
-				if (HoveredTile)
-				{
-					Server_RequestCastSpellAction(TestSpellCardTemplate, TestSpellCardSpellIndex, HoveredTile, 0);
-				}
+				CastSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 				break;
 			}
 		}
@@ -205,9 +232,10 @@ void ACSKPlayerController::SetCanSelectTile(bool bEnable)
 	if (bCanSelectTile != bEnable)
 	{
 		bCanSelectTile = bEnable;
+
 		if (!bCanSelectTile)
 		{
-			SelectedTile = nullptr;
+
 		}
 	}
 }
@@ -670,7 +698,24 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 	return false;
 }
 
-void ACSKPlayerController::BuildTowerAtTile(TSubclassOf<UTowerConstructionData> TowerConstructData)
+void ACSKPlayerController::MoveCastleToHoveredTile()
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::MoveCastle)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastleMoveAction(HoveredTile);
+		}
+	}
+}
+
+void ACSKPlayerController::BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructionData> TowerConstructData)
 {
 	// Only local players should build
 	if (!IsLocalPlayerController())
@@ -680,9 +725,26 @@ void ACSKPlayerController::BuildTowerAtTile(TSubclassOf<UTowerConstructionData> 
 
 	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::BuildTowers)
 	{
-		if (SelectedTile)
+		if (HoveredTile)
 		{
-			Server_RequestBuildTowerAction(TowerConstructData, SelectedTile);
+			Server_RequestBuildTowerAction(TowerConstructData, HoveredTile);
+		}
+	}
+}
+
+void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::CastSpell)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastSpellAction(SpellCard, SpellIndex, HoveredTile, AdditionalMana);
 		}
 	}
 }

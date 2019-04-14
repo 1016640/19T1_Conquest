@@ -1600,7 +1600,7 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 	ActivePlayerSpellCard = SpellCard;
 	ActivePlayerSpellActor = SpellActor;
 
-	// Give tower half a second to replicate
+	// Give spell half a second to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
 	TimerManager.SetTimer(Handle_ActivePlayerExecuteSpellCast, this, &ACSKGameMode::OnStartActivePlayersSpellCast, .5f, false);
 
@@ -1615,10 +1615,19 @@ void ACSKGameMode::FinishCastSpell()
 	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
 
 	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+	ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 
 	// Restore states
 	{
 		bWaitingOnActivePlayerSpellAction = false;
+	}
+
+	// Increment spells used
+	{
+		if (PlayerState)
+		{
+			PlayerState->IncrementSpellsCast();
+		}
 	}
 
 	// Inform game state
@@ -1648,11 +1657,11 @@ void ACSKGameMode::FinishCastSpell()
 
 	ActivePlayerSpellActor = nullptr;
 
-	// TODO: Check post win condition
-
-	// TODO: check if player can cast another spell
-	// for now
-	DisableActionModeForActivePlayer(ECSKActionPhaseMode::CastSpell);
+	// Disable this action if player can't cast any more spells this round
+	if (PlayerState && !PlayerState->CanCastAnotherSpell(true))
+	{
+		DisableActionModeForActivePlayer(ECSKActionPhaseMode::CastSpell);
+	}
 }
 
 ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const
@@ -1675,9 +1684,7 @@ ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 Fin
 	ASpellActor* SpellActor = GetWorld()->SpawnActor<ASpellActor>(SpellActorClass, TileTransform, SpawnParams);
 	if (SpellActor)
 	{
-		// Set variables spells might need to know before replicating
 		SpellActor->InitSpellActor(PlayerState, Spell, FinalCost, Tile);
-
 		SpellActor->FinishSpawning(TileTransform);
 	}
 

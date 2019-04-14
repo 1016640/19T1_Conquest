@@ -8,6 +8,7 @@
 class ACSKPlayerState;
 class ASpellActor;
 class ATile;
+class USpellWidget;
 
 /** Type used to indentify when a spell can be used */
 UENUM(BlueprintType)
@@ -63,6 +64,9 @@ public:
 	/** Get this spells static cost */
 	FORCEINLINE int32 GetSpellStaticCost() const { return SpellStaticCost; }
 
+	/** Get this spells override widget */
+	FORCEINLINE TSubclassOf<USpellWidget> GetSpellWidgetOverride() const { return SpellWidgetOverride; }
+
 	/** Get this spells actor class */
 	FORCEINLINE TSubclassOf<ASpellActor> GetSpellActorClass() const { return SpellActorClass; }
 
@@ -85,8 +89,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Cost"))
 	int32 SpellStaticCost;
 
-	// TODO: Widget to use instead of default one (this is required as some spells are
-	// dynamic based on how much mana can be set to use it)
+	/** The widget to use instead of a default details item widget. This should be
+	used for any spells that require additional data be passed (e.g. additional mana) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells)
+	TSubclassOf<USpellWidget> SpellWidgetOverride;
 
 	/** The spell actor to spawn. This actor handles casting the spell */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Actor Class"))

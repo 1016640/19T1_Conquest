@@ -17,6 +17,10 @@ class CONQUEST_API USpellCard : public UObject
 
 public:
 
+	USpellCard();
+
+public:
+
 	/** Get if this spell card has spells of given type */
 	UFUNCTION(BlueprintPure, Category = Spells)
 	bool HasSpellOfType(ESpellType SpellType) const;
@@ -47,11 +51,15 @@ public:
 	
 protected:
 
+	/** The name of this spell card */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells)
+	FName Name;
+
 	/** The spells associated with this spell card */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spell)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells)
 	TArray<TSubclassOf<USpell>> Spells;
 
 	/** The elemental types of this spell card */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spell, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
 	uint8 ElementTypes;
 };

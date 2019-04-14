@@ -3,6 +3,11 @@
 #include "SpellCard.h"
 #include "CSKPlayerState.h"
 
+USpellCard::USpellCard()
+{
+	Name = TEXT("Spell Card");
+}
+
 bool USpellCard::HasSpellOfType(ESpellType SpellType) const
 {
 	for (const TSubclassOf<USpell>& Spell : Spells)

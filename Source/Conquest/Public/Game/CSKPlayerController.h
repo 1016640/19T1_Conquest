@@ -111,6 +111,20 @@ public:
 
 public:
 
+	/** Set the tower this player wants to build */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedTower(TSubclassOf<UTowerConstructionData> InConstructData);
+
+	/** Set the spell this player wants to cast */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex);
+
+	/** Set the additional mana the player wants to spend for spells */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedAdditionalMana(int32 InAdditionalMana);
+		 
+public:
+
 	/** Get possessed pawn as a CSK pawn */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPawn* GetCSKPawn() const;
@@ -127,12 +141,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	ATile* GetTileUnderMouse() const;
 
-protected:
-
-	/** Our HUD class as a CSK HUD */
-	UPROPERTY()
-	ACSKHUD* CachedCSKHUD;
-
 private:
 
 	/** Attempts to perform an action using the current hovered tile */
@@ -146,17 +154,35 @@ private:
 
 protected:
 
+	/** Our HUD class as a CSK HUD */
+	UPROPERTY()
+	ACSKHUD* CachedCSKHUD;
+
+protected:
+
 	/** The tile we are currently hovering over (only valid on the client) */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
 	ATile* HoveredTile;
 
-	/** The tile we have selected (clicked on) */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = CSK)
-	ATile* SelectedTile;
-
 	/** If we are accepting input via select tile (only valid on the client) */
 	UPROPERTY(Transient)
 	uint32 bCanSelectTile : 1;
+
+	/** The tower the player has selected to build */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	TSubclassOf<UTowerConstructionData> SelectedTowerConstructionData;
+
+	/** The spell the player has selected to cast */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	TSubclassOf<USpellCard> SelectedSpellCard;
+
+	/** The index of the spell to use of the selected spell card */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	int32 SelectedSpellIndex;
+
+	/** The additional mana this player is willing to spend when casting spells */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	int32 SelectedSpellAdditionalMana;
 
 public:
 
@@ -333,10 +359,20 @@ public:
 
 public:
 
-	/** Builds the request tower at the currently selected tile. 
-	This will only work if running on local players client */
+	/** Moves our castle to the currently hovered tile.
+	This will only work if running on local players controller */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void BuildTowerAtTile(TSubclassOf<UTowerConstructionData> TowerConstructData);
+	void MoveCastleToHoveredTile();
+
+	/** Builds the given tower at the currently hovered tile. 
+	This will only work if running on local players controller */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructionData> TowerConstructData);
+
+	/** Casts the given spell (of spell card) at the currently hovered tile. 
+	This will only work if running on local players controller */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
 
 protected:
 
