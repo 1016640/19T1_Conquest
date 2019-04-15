@@ -87,3 +87,17 @@ void UConquestFunctionLibrary::RemoveWidgetFromParent(UUserWidget* Widget)
 		Widget->RemoveFromParent();
 	}
 }
+
+FString UConquestFunctionLibrary::GetSecondsAsHourString(float Seconds)
+{
+	// Number of hours
+	int32 NumHours = FMath::FloorToInt(Seconds / 3600.f);
+
+	// Number of minutes
+	int32 NumMinutes = FMath::FloorToInt(Seconds / 60.f);
+
+	// Number of seconds
+	int32 NumSeconds = FMath::FloorToInt(Seconds - static_cast<float>((NumMinutes * 60)));
+		
+	return FString::Printf(TEXT("%01d:%02d:%02d"), NumHours, NumMinutes, NumSeconds);
+}

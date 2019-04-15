@@ -19,6 +19,8 @@ ACSKPlayerState::ACSKPlayerState()
 	MaxNumSpellUses = 1;
 	bHasInfiniteSpellUses = false;
 
+	TotalGoldCollected = 0;
+	TotalManaCollected = 0;
 	TilesTraversedThisRound = 0;
 	TotalTilesTraversed = 0;
 	TotalTowersBuilt = 0;
@@ -47,6 +49,14 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellsCastThisRound, COND_OwnerOnly);
+
+	DOREPLIFETIME(ACSKPlayerState, TotalGoldCollected);
+	DOREPLIFETIME(ACSKPlayerState, TotalManaCollected);
+	DOREPLIFETIME(ACSKPlayerState, TotalTilesTraversed);
+	DOREPLIFETIME(ACSKPlayerState, TotalTowersBuilt);
+	DOREPLIFETIME(ACSKPlayerState, TotalLegendaryTowersBuilt);
+	DOREPLIFETIME(ACSKPlayerState, TotalSpellsCast);
+	DOREPLIFETIME(ACSKPlayerState, TotalQuickEffectSpellsCast);
 }
 
 ACSKPlayerController* ACSKPlayerState::GetCSKPlayerController() const
@@ -93,6 +103,7 @@ void ACSKPlayerState::SetGold(int32 Amount)
 {
 	if (HasAuthority())
 	{
+		TotalGoldCollected += FMath::Max(0, Amount - Gold);
 		Gold = FMath::Max(0, Amount);
 	}
 }
@@ -106,6 +117,7 @@ void ACSKPlayerState::SetMana(int32 Amount)
 {
 	if (HasAuthority())
 	{
+		TotalManaCollected += FMath::Max(0, Amount - Mana);
 		Mana = FMath::Max(0, Amount);
 	}
 }

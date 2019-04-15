@@ -12,6 +12,14 @@ ACSKHUD::ACSKHUD()
 	CSKHUDInstance = nullptr;
 }
 
+void ACSKHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+
+	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);
+	UConquestFunctionLibrary::RemoveWidgetFromParent(PostMatchWidgetInstance);
+}
+
 void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)
 {
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
@@ -60,6 +68,17 @@ void ACSKHUD::OnActionFinished()
 	if (Widget)
 	{
 		Widget->OnActionFinished();
+	}
+}
+
+void ACSKHUD::OnMatchFinished(bool bIsWinner)
+{
+	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);
+
+	if (PostMatchWidgetTemplate)
+	{
+		PostMatchWidgetInstance = CreateWidget<UUserWidget, APlayerController>(PlayerOwner, PostMatchWidgetTemplate);
+		UConquestFunctionLibrary::AddWidgetToViewport(PostMatchWidgetInstance);
 	}
 }
 

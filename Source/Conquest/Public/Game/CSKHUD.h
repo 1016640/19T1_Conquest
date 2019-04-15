@@ -20,6 +20,12 @@ class CONQUEST_API ACSKHUD : public AHUD
 public:
 
 	ACSKHUD();
+
+public:
+
+	// Begin AActor Interface
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	// End AActor Interface
 	
 public:
 
@@ -35,6 +41,11 @@ public:
 	/** Notify that an action or event has finished */
 	void OnActionFinished();
 
+public:
+
+	/** Notify that the match has finished and the post match widget should */
+	void OnMatchFinished(bool bIsWinner);
+
 private:
 
 	/** Gets the HUD instance, creating it if desired */
@@ -46,9 +57,17 @@ protected:
 	UPROPERTY()
 	UCSKHUDWidget* CSKHUDInstance;
 
+	/** Instance of the Post Match widget */
+	UPROPERTY()
+	UUserWidget* PostMatchWidgetInstance;
+
 protected:
 	
 	/** The widget to use when entering game loop */
 	UPROPERTY(EditAnywhere, Category = CSK)
 	TSubclassOf<UCSKHUDWidget> CSKHUDTemplate;
+
+	/** The widget to use during the post match phase */
+	UPROPERTY(EditAnywhere, Category = CSK)
+	TSubclassOf<UUserWidget> PostMatchWidgetTemplate;
 };

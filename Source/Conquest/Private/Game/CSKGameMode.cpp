@@ -69,6 +69,8 @@ ACSKGameMode::ACSKGameMode()
 	bLimitOneMoveActionPerTurn = false;
 	MaxSpellUses = 1;
 	QuickEffectCounterTime = 15.f;
+	InitialMatchDelay = 2.f;
+	PostMatchDelay = 15.f;
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -76,7 +78,7 @@ void ACSKGameMode::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	// Keep checking till we can start the match
-	if (GameState->GetServerWorldTimeSeconds() > 2.f && ShouldStartMatch())
+	if (GameState->GetServerWorldTimeSeconds() > InitialMatchDelay && ShouldStartMatch())
 	{
 		StartMatch();
 	}
@@ -444,6 +446,9 @@ void ACSKGameMode::EndMatch(ACSKPlayerController* WinningPlayer, ECSKMatchWinCon
 {
 	if (ShouldEndMatch())
 	{
+		MatchWinner = WinningPlayer;
+		MatchWinCondition = WinningPlayer ? MetCondition : ECSKMatchWinCondition::Unknown;
+
 		// End the match
 		EnterMatchState(ECSKMatchState::WaitingPostMatch);
 	}
@@ -569,10 +574,28 @@ void ACSKGameMode::OnMatchStart()
 
 void ACSKGameMode::OnMatchFinished()
 {
+	// Notify each client (let them handle post match screen locally)
+	for (ACSKPlayerController* Controller : Players)
+	{
+		Controller->Client_OnMatchFinished(Controller == MatchWinner);
+	}
+
+	// Delay exiting so players can read post match states
+	FTimerDelegate DelayedCallback;
+	DelayedCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::LeavingGame);
+
+	FTimerHandle TempHandle;
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(TempHandle, DelayedCallback, FMath::Max(1.f, PostMatchDelay), false);
 }
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
+	FString LevelName("L_Lobby");
+	TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
+
+	// Return to the lobby
+	UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
 }
 
 void ACSKGameMode::OnMatchAbort()
@@ -1345,9 +1368,9 @@ void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
 	}
 
 	// Check if active player has won
-	if (!PostCastleMoveCheckWinCondition(SegmentTile))
+	if (PostCastleMoveCheckWinCondition(SegmentTile))
 	{
-		// We prob don't need to do anything here (PostCastleMove should handle it)
+		// TODO: Stop movement of castle
 	}
 }
 
@@ -1361,7 +1384,11 @@ void ACSKGameMode::OnActivePlayersPathFollowComplete(ATile* DestinationTile)
 	}
 
 	// Check if activer player has won
-	if (!PostCastleMoveCheckWinCondition(DestinationTile))
+	if (PostCastleMoveCheckWinCondition(DestinationTile))
+	{
+		// TODO: Stop movement of castle
+	}
+	else
 	{
 		FinishCastleMove(DestinationTile);
 	}
@@ -1387,8 +1414,8 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 		int32 PlayerID = OpposingController->CSKPlayerID;
 		if (BoardManager->GetPlayerPortalTile(PlayerID) == SegmentTile)
 		{
-			// TODO: End game with winner (we would also want to stop movement for the castle)
-			return false;// true;
+			EndMatch(ActionPhaseActiveController, ECSKMatchWinCondition::PortalReached);
+			return true;
 		}
 	}
 

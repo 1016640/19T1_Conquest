@@ -78,20 +78,25 @@ void ACSKPlayerController::Tick(float DeltaTime)
 
 	if (IsLocalPlayerController())
 	{
-		// Get tile player is hovering over
-		ATile* TileUnderMouse = GetTileUnderMouse();
-		if (TileUnderMouse != HoveredTile)
+		// We only want to notify tiles once the game has actually begun (as is running)
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState && GameState->IsMatchInProgress())
 		{
-			if (HoveredTile)
+			// Get tile player is hovering over
+			ATile* TileUnderMouse = GetTileUnderMouse();
+			if (TileUnderMouse != HoveredTile)
 			{
-				HoveredTile->EndHoveringTile(this);
-			}
+				if (HoveredTile)
+				{
+					HoveredTile->EndHoveringTile(this);
+				}
 
-			HoveredTile = TileUnderMouse;
+				HoveredTile = TileUnderMouse;
 
-			if (HoveredTile)
-			{
-				HoveredTile->StartHoveringTile(this);
+				if (HoveredTile)
+				{
+					HoveredTile->StartHoveringTile(this);
+				}
 			}
 		}
 	}
@@ -340,6 +345,16 @@ void ACSKPlayerController::OnTransitionToBoard()
 
 		// Have client handle any local transition requirements
 		Client_OnTransitionToBoard();
+	}
+}
+
+void ACSKPlayerController::Client_OnMatchFinished_Implementation(bool bIsWinner)
+{
+	SetCanSelectTile(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnMatchFinished(bIsWinner);
 	}
 }
 

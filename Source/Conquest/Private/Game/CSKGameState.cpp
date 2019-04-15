@@ -23,6 +23,8 @@ ACSKGameState::ACSKGameState()
 	RoundState = ECSKRoundState::Invalid;
 	PreviousMatchState = MatchState;
 	PreviousRoundState = RoundState;
+	MatchWinnerPlayerID = -1;
+	MatchWinCondition = ECSKMatchWinCondition::Unknown;
 
 	CoinTossWinnerPlayerID = -1;
 	ActionPhaseTimeRemaining = -1.f;
@@ -163,6 +165,7 @@ void ACSKGameState::NotifyWaitingForPlayers()
 
 void ACSKGameState::NotifyPerformCoinFlip()
 {
+	MatchStartTime = GetWorld()->GetTimeSeconds();
 }
 
 void ACSKGameState::NotifyMatchStart()
@@ -180,6 +183,21 @@ void ACSKGameState::NotifyMatchStart()
 
 void ACSKGameState::NotifyMatchFinished()
 {
+	MatchEndTime = GetWorld()->GetTimeSeconds();
+
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		ACSKPlayerController* WinningPlayer = nullptr;
+		ECSKMatchWinCondition WinCondition = ECSKMatchWinCondition::Unknown;
+
+		// THere is a chance that there is no winner (e.g. match was abandoned)
+		ensure(GameMode->GetWinnerDetails(WinningPlayer, WinCondition));
+		int32 WinnerID = WinningPlayer ? WinningPlayer->CSKPlayerID : -1;
+
+		Multi_SetWinDetails(WinnerID, WinCondition);
+	}
 }
 
 void ACSKGameState::NotifyPlayersLeaving()
@@ -304,6 +322,12 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	PreviousRoundState = NewState;
 
 	OnRoundStateChanged.Broadcast(NewState);
+}
+
+void ACSKGameState::Multi_SetWinDetails_Implementation(int32 WinnerID, ECSKMatchWinCondition WinCondition)
+{
+	MatchWinnerPlayerID = WinnerID;
+	MatchWinCondition = WinCondition;
 }
 
 int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
@@ -496,7 +520,7 @@ bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controll
 void ACSKGameState::UpdateRules()
 {
 	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
 	if (GameMode)
 	{
 		ActionPhaseTime = GameMode->GetActionPhaseTime();
@@ -569,6 +593,21 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 
 	// If this point has been reached, it means the player is allowed to build this tower
 	return true;
+}
+
+float ACSKGameState::GetMatchTimeSeconds() const
+{
+	if (MatchState == ECSKMatchState::CoinFlip || MatchState == ECSKMatchState::Running)
+	{
+		float MatchCurrentTime = GetWorld()->GetTimeSeconds();
+		return MatchCurrentTime - MatchStartTime;
+	}
+	else if (MatchState == ECSKMatchState::WaitingPostMatch)
+	{
+		return MatchEndTime - MatchStartTime;
+	}
+
+	return 0.f;
 }
 
 void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()

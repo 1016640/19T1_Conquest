@@ -87,6 +87,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsActionPhaseActive() const;
 
+	/** Get the player ID of the winner */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	int32 GetMatchWinnerPlayerID() const { return MatchWinnerPlayerID; }
+
+	/** Get the win condition the player met to win the game */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ECSKMatchWinCondition GetMatchWinCondition() const { return MatchWinCondition; }
+
 protected:
 
 	/** Match state notifies */
@@ -119,6 +127,10 @@ private:
 	/** Determines which round state change notify to call */
 	void HandleRoundStateChange(ECSKRoundState NewState);
 
+	/** Set the match win details on all clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_SetWinDetails(int32 WinnerID, ECSKMatchWinCondition WinCondition);
+
 public:
 
 	/** Event called when the round state has changed */
@@ -142,6 +154,14 @@ protected:
 	/** The last round phase we were running (client side) */
 	UPROPERTY()
 	ECSKRoundState PreviousRoundState;
+
+	/** The ID of the player who won the match */
+	UPROPERTY()
+	int32 MatchWinnerPlayerID;
+
+	/** The condition the winner met to win the match */
+	UPROPERTY()
+	ECSKMatchWinCondition MatchWinCondition;
 
 public:
 
@@ -332,10 +352,21 @@ protected:
 
 public:
 
+	/** Get the total time of the match. If match is
+	still running, how long the match has been in session */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	float GetMatchTimeSeconds() const;
+
 	/** Get the current round being played */
 	FORCEINLINE int32 GetRound() const { return RoundsPlayed; }
 
 protected:
+
+	/** The time when the match started (Coin Flip) */
+	float MatchStartTime;
+
+	/** The time when the match finished */
+	float MatchEndTime;
 
 	/** How many rounds have been played */
 	UPROPERTY(BlueprintReadOnly, Category = Stats)

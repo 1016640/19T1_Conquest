@@ -275,31 +275,39 @@ public:
 
 protected:
 
+	/** The total amount of gold this player collected */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
+	int32 TotalGoldCollected;
+
+	/** The total amount of mana this player collected */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
+	int32 TotalManaCollected;
+
 	/** The amount of tiles this player has moved this turn */
-	UPROPERTY(Transient, Replicated)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TilesTraversedThisRound;
 
 	/** The amount of tiles this player has moved in total */
-	UPROPERTY(Transient)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TotalTilesTraversed;
 
 	/** The amount of NORMAL towers this player has built in total */
-	UPROPERTY(Transient)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TotalTowersBuilt;
 
 	/** The amount of LEGENDARY towers this player has built in total */
-	UPROPERTY(Transient)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TotalLegendaryTowersBuilt;
 
 	/** The amount of spells this player has cast this turn */
-	UPROPERTY(Transient, Replicated)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 SpellsCastThisRound;
 
 	/** The total amount of action phase spells this player has cast */
-	UPROPERTY(Transient)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TotalSpellsCast;
 
 	/** The total amount of quick effect spells this player has cast */
-	UPROPERTY(Transient)
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Stats)
 	int32 TotalQuickEffectSpellsCast;
 };

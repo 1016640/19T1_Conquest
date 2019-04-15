@@ -147,6 +147,20 @@ public:
 	/** Get the current state of the round */
 	FORCEINLINE ECSKRoundState GetRoundState() const { return IsMatchInProgress() ? RoundState : ECSKRoundState::Invalid; }
 
+	/** Get the details about the winner */
+	FORCEINLINE bool GetWinnerDetails(ACSKPlayerController*& OutWinner, ECSKMatchWinCondition& OutCondition) const
+	{
+		if (HasMatchFinished())
+		{
+			OutWinner = MatchWinner;
+			OutCondition = MatchWinCondition;
+
+			return true;
+		}
+
+		return false;
+	}
+
 	/** Get if we should start the match */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
 	bool ShouldStartMatch() const;
@@ -640,6 +654,15 @@ protected:
 	/** The time the player has to select a quick effect spell when other player is casting a spell */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	float QuickEffectCounterTime;
+
+	/** How long we wait before starting the match (starting the coin flip).
+	A delay of two seconds or greater is recommended to allow actors to replicate */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = Rules, meta = (ClampMin=1))
+	float InitialMatchDelay;
+
+	/** How long the post match phase should wait for before returning to lobby */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = Rules, meta = (ClampMin = 1))
+	float PostMatchDelay;
 
 protected:
 

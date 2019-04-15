@@ -221,6 +221,10 @@ public:
 	/** Called by the game mode when transitioning to the board */
 	void OnTransitionToBoard(); // Refactor
 
+	/** Notify that the match has concluded */
+	UFUNCTION(Client, Reliable)
+	void Client_OnMatchFinished(bool bIsWinner);
+
 public:
 
 	/** Notify that we have collected resources during collection phase */
@@ -391,17 +395,6 @@ protected:
 	/** Makes a request to cast a spell at given tile (with additional mana cost */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestCastSpellAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
-
-public:
-
-	UPROPERTY(EditAnywhere)
-	TSubclassOf<UTowerConstructionData> TestTowerTemplate;
-
-	UPROPERTY(EditAnywhere)
-	TSubclassOf<USpellCard> TestSpellCardTemplate;
-
-	UPROPERTY(EditAnywhere)
-	int32 TestSpellCardSpellIndex = 0;
 
 public:
 
