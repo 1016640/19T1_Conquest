@@ -131,9 +131,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void StartMatch();
 
-	/** Ends the match only if allowed */
+	/** Ends the match */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void EndMatch();
+	void EndMatch(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition);
 
 	/** Forcefully ends the match with no winner decided */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -210,6 +210,14 @@ protected:
 	/** The current state of the round */
 	UPROPERTY(BlueprintReadOnly, Transient)
 	ECSKRoundState RoundState;
+
+	/** The winner of the game when match has finished */
+	UPROPERTY()
+	ACSKPlayerController* MatchWinner;
+
+	/** The condition the winner met in order to win */
+	UPROPERTY()
+	ECSKMatchWinCondition MatchWinCondition;
 
 private:
 

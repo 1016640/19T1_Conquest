@@ -34,8 +34,4 @@ public:
 	/** Notify that an action (event) has finished */
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnActionFinished();
-
-	/** Notify that we should refresh the tower list */
-	UFUNCTION(BlueprintImplementableEvent)
-	void RefreshTowerList();
 };

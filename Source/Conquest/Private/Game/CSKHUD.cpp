@@ -63,14 +63,6 @@ void ACSKHUD::OnActionFinished()
 	}
 }
 
-void ACSKHUD::RefreshTowerList()
-{
-	if (CSKHUDInstance)
-	{
-		CSKHUDInstance->RefreshTowerList();
-	}
-}
-
 UCSKHUDWidget* ACSKHUD::GetCSKHUDInstance(bool bCreateIfNull)
 {
 	if (!CSKHUDInstance && bCreateIfNull)

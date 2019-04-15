@@ -46,7 +46,7 @@ void UHealthComponent::InitHealth(int32 InHealth, int32 InMaxHealth)
 
 int32 UHealthComponent::ApplyDamage(int32 Amount)
 {
-	if (GetOwnerRole() == ROLE_Authority && IsDead())
+	if (GetOwnerRole() == ROLE_Authority && !IsDead())
 	{
 		if (Amount <= 0)
 		{
@@ -59,12 +59,14 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 		// Subtract the new health from current health to get the correct delta,
 		// we want the delta health change for damage to be negative, so if our
 		// health was 5 and is now 2, the delta should be -3 (2 - 5 = -3)
-		int32 Delta = NewHealth - Health;
+		int32 Delta = Health - NewHealth;
 
 		Health = NewHealth;
 
+		// Send a negative delta to specify damage, but return 
+		// positive as we return the amount of damage dealt
 		OnHealthChanged.Broadcast(this, NewHealth, Delta);
-		return Delta;
+		return FMath::Abs(Delta);
 	}
 
 	return 0;
@@ -72,7 +74,7 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 
 int32 UHealthComponent::RestoreHealth(int32 Amount)
 {
-	if (GetOwnerRole() == ROLE_Authority && IsDead())
+	if (GetOwnerRole() == ROLE_Authority && !IsDead())
 	{
 		if (Amount <= 0)
 		{

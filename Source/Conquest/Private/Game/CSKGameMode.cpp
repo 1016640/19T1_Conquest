@@ -47,6 +47,8 @@ ACSKGameMode::ACSKGameMode()
 
 	MatchState = ECSKMatchState::EnteringGame;
 	RoundState = ECSKRoundState::Invalid;
+	MatchWinner = nullptr;
+	MatchWinCondition = ECSKMatchWinCondition::Unknown;
 
 	StartingGold = 5;
 	StartingMana = 3;
@@ -438,7 +440,7 @@ void ACSKGameMode::StartMatch()
 	}
 }
 
-void ACSKGameMode::EndMatch()
+void ACSKGameMode::EndMatch(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition)
 {
 	if (ShouldEndMatch())
 	{
@@ -475,8 +477,7 @@ bool ACSKGameMode::ShouldStartMatch_Implementation() const
 
 bool ACSKGameMode::ShouldEndMatch_Implementation() const
 {
-	// TODO: Check match state
-	return false;
+	return IsMatchInProgress();
 }
 
 bool ACSKGameMode::IsMatchInProgress() const
@@ -1011,7 +1012,7 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 	// We don't build base towers
 	if (!TowerTemplate.Get() || TowerTemplate->HasAnyClassFlags(CLASS_Abstract))
 	{
-		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTowe: Tower Template "
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::RequestBuildTower: Tower Template "
 			"is invalid. Tower template was either null or was marked as abstract"));
 	}
 
@@ -1790,7 +1791,7 @@ bool ACSKGameMode::PrepareEndRoundActionTowers()
 		}
 		else
 		{
-			ACSKPlayerState* T1PlayerState = lhs.GetOwnerPlayerState();
+			ACSKPlayerState* T1PlayerState = lhs.GetBoardPieceOwnerPlayerState();
 			if (T1PlayerState->GetCSKPlayerID() == PlayerWithPriority)
 			{
 				// Starting player always takes priority
@@ -1798,7 +1799,7 @@ bool ACSKGameMode::PrepareEndRoundActionTowers()
 			}
 			else
 			{
-				ACSKPlayerState* T2PlayerState = lhs.GetOwnerPlayerState();
+				ACSKPlayerState* T2PlayerState = lhs.GetBoardPieceOwnerPlayerState();
 				return T2PlayerState->GetCSKPlayerID() != PlayerWithPriority;
 			}
 		}
@@ -1882,23 +1883,57 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
-	// Tower is dead
-	if (NewHealth == 0)
+	if (HealthComp->IsDead())
 	{
-		AActor* DeadActor = HealthComp->GetOwner();
-		if (DeadActor->IsA<ACastle>())
+		AActor* DeadPiece = HealthComp->GetOwner();
+		if (DeadPiece->IsA<ACastle>())
 		{
 			// TODO: Verify game over
 		}
 		else
 		{
-			ATower* DestroyedTower = CastChecked<ATower>(DeadActor);
+			// TODO: Move to function
+			{
+				ATower* DestroyedTower = CastChecked<ATower>(DeadPiece);
 
-			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-			BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
+				// Remove references from both board and player
+				ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+				BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
 
-			// TODO: Might want to delay a bit, for now though
-			DestroyedTower->Destroy();
+				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
+				PlayerState->RemoveTower(DestroyedTower);
+
+				DestroyedTower->SetActorHiddenInGame(true);
+				
+				// Destroy after small delay (so any RPCs can get executed)
+				FTimerHandle TempHandle;
+				FTimerManager& TimerManager = GetWorldTimerManager();
+				TimerManager.SetTimer(TempHandle, DestroyedTower, &AActor::K2_DestroyActor, 2.f);
+			}
+		}
+	}
+	else
+	{
+		// Get script interface as damage board piece could either be a castle or tower
+		AActor* HealthCompOwner = HealthComp->GetOwner();
+		TScriptInterface<IBoardPieceInterface> BoardPieice(HealthCompOwner);
+
+		if (BoardPieice)
+		{
+			ACSKPlayerState* PlayerState = BoardPieice->GetBoardPieceOwnerPlayerState();
+			check(PlayerState);
+			
+			// Positive delta = Healing, Negative delta = Damage
+			if (Delta > 0)
+			{
+				UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recovered %i health"), 
+					*HealthCompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
+			}
+			else
+			{
+				UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recieved %i damage"),
+					*HealthCompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
+			}
 		}
 	}
 }

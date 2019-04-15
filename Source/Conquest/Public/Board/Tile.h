@@ -9,6 +9,7 @@
 class ACSKPlayerController;
 class ACSKPlayerState;
 class IBoardPieceInterface;
+class UHealthComponent;
 
 /**
  * Actor for managing an individual tile on the board. Will track
@@ -116,9 +117,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	bool CanPlaceTowersOn() const;
 
+public:
+
+	/** Get the board piece placed on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	AActor* GetBoardPiece() const;
+
 	/** Get the player state for the player whose board piece is on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	ACSKPlayerState* GetBoardPiecesOwner() const;
+
+	/** Get the health component of the board piece on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	UHealthComponent* GetBoardPieceHealthComponent() const;
 
 private:
 

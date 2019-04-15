@@ -38,17 +38,17 @@ public:
 
 	/** If this spell requires a target tile in order to activate. If no
 	target is required, the target to use will default to the players castle */
-	UFUNCTION(BlueprintPure, Category = Spells)
-	virtual bool RequiresTarget() const { return bSpellRequiresTarget; }
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
+	bool RequiresTarget() const;
 
 	/** Check if spell can be used on given tile */
-	UFUNCTION(BlueprintPure, Category = Spells)
-	virtual bool CanActivateSpell(const ATile* TargetTile) const { return true; }
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
+	bool CanActivateSpell(const ATile* TargetTile) const;
 
 	/** Calculates the final cost of this spell. Passes in the player casting the spell, the
 	tile they plan to cast it onto and how much additional mana they are willing to spend */
-	UFUNCTION(BlueprintPure, Category = Spells)
-	virtual int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const;
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
+	int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const;
 
 public:
 

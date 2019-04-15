@@ -236,7 +236,7 @@ protected:
 	// TODO: Either replicate arrays (COND_OwnerOnly) or use RPC (via PlayerController) (maybe excluding DiscardPile)
 
 	/** The spells cards in the spell deck. This only exists on the server */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources)/*Replicated,*/ 
 	TArray<TSubclassOf<USpellCard>> SpellCardDeck;
 
 	/** The spells in the players hand. This only exists on the server and the owners client */

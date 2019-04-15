@@ -22,7 +22,7 @@ class USpellWidget : public UUserWidget
 public:
 
 	/** Event that is called when a spell has been selected */
-	UPROPERTY(BlueprintAssignable)
+	UPROPERTY(BlueprintAssignable, BlueprintCallable)
 	FSpellSelected OnSpellSelected;
 
 private:

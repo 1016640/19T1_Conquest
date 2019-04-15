@@ -61,9 +61,6 @@ private:
 
 public:
 
-	/** Get the player who owns this tower */
-	FORCEINLINE ACSKPlayerState* GetOwnerPlayerState() const { return OwnerPlayerState; }
-
 	/** Get the tile we are currently on */
 	FORCEINLINE ATile* GetCachedTile() const { return CachedTile; }
 

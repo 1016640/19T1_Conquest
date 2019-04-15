@@ -35,9 +35,6 @@ public:
 	/** Notify that an action or event has finished */
 	void OnActionFinished();
 
-	/** Notify from our owner that we should refresh the tower list */
-	void RefreshTowerList();
-
 private:
 
 	/** Gets the HUD instance, creating it if desired */

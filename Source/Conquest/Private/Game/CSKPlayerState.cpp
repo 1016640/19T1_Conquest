@@ -40,7 +40,7 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, Mana);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, BonusTileMovements, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
+	//DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, bHasInfiniteSpellUses, COND_OwnerOnly);
@@ -182,6 +182,7 @@ TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
 	if (HasAuthority() && SpellCardDeck.IsValidIndex(0))
 	{
 		TSubclassOf<USpellCard> NextSpellCard = SpellCardDeck[0];
+		SpellCardsInHand.Add(NextSpellCard);
 		SpellCardDeck.RemoveAt(0);
 
 		return NextSpellCard;

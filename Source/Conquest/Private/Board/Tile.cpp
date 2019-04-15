@@ -167,11 +167,31 @@ bool ATile::CanPlaceTowersOn() const
 	return BoardManager ? BoardManager->CanPlaceTowerOnTile(this) : false;
 }
 
+AActor* ATile::GetBoardPiece() const
+{
+	if (IsTileOccupied())
+	{
+		return CastChecked<AActor>(PieceOccupant.GetObject());
+	}
+
+	return nullptr;
+}
+
 ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 {
 	if (IsTileOccupied())
 	{
 		return PieceOccupant->GetBoardPieceOwnerPlayerState();
+	}
+
+	return nullptr;
+}
+
+UHealthComponent* ATile::GetBoardPieceHealthComponent() const
+{
+	if (IsTileOccupied())
+	{
+		return PieceOccupant->GetHealthComponent();
 	}
 
 	return nullptr;

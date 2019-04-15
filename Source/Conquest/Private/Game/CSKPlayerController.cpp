@@ -555,11 +555,6 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
 
-		if (CachedCSKHUD)
-		{
-			CachedCSKHUD->RefreshTowerList();
-		}
-
 		SetCanSelectTile(true);
 	}
 }
@@ -643,11 +638,6 @@ void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 {
 	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
-
-	if (IsPerformingActionPhase() && CachedCSKHUD)
-	{
-		CachedCSKHUD->RefreshTowerList();
-	}
 
 	if (CachedCSKHUD)
 	{

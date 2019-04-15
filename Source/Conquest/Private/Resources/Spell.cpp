@@ -16,7 +16,17 @@ USpell::USpell()
 	SpellActorClass = ASpellActor::StaticClass();
 }
 
-int32 USpell::CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const
+bool USpell::RequiresTarget_Implementation() const 
+{ 
+	return bSpellRequiresTarget; 
+}
+
+bool USpell::CanActivateSpell_Implementation(const ATile* TargetTile) const
+{
+	return true;
+}
+
+int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const
 {
 	return SpellStaticCost;
 }
