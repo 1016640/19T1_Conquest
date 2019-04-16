@@ -173,7 +173,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
 
-	/** Get if counter effect time is timed */
+	/** Get if quick effect time is timed */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	bool IsQuickEffectCounterTimed() const { return QuickEffectCounterTimeRemaining != -1.f; }
 
@@ -183,14 +183,14 @@ public:
 	/** Get the time remaining for current action taking place (this
 	can either action phase turn time, quick effect counter time) */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetActionPhaseTimeRemaining(bool& bOutIsInfinite) const;
+	float GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
 
 protected:
 
-	/** Helper function for checking if action phase timer should count down */
-	FORCEINLINE bool ShouldCountdownActionPhase() const
+	/** Helper function for checking if phase timer should count down */
+	FORCEINLINE bool ShouldCountdownPhaseTimer() const
 	{
-		if (IsActionPhaseActive() && (IsActionPhaseTimed() || IsQuickEffectCounterTimed()))
+		if (IsActionPhaseActive())
 		{
 			return !bFreezeActionPhaseTimer;
 		}
@@ -235,6 +235,10 @@ protected:
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
 
+	/** If we should countdown the quick effect counter time */
+	UPROPERTY(Transient)
+	uint32 bCountdownQuickEffectTimer : 1;
+
 	/** Time remaining for player to select a quick effect spell */
 	UPROPERTY(Transient, Replicated)
 	float QuickEffectCounterTimeRemaining;
@@ -258,6 +262,9 @@ public:
 
 	/** Notify that the current spell request has finished */
 	void HandleSpellRequestFinished();
+
+	/** Notify that a quick effect is being selected */
+	void HandleQuickEffectSelectionStart();
 
 private:
 
@@ -284,6 +291,10 @@ private:
 	/** Handle spell request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleSpellRequestFinished();
+
+	/** Handle quick effect selection client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleQuickEffectSelection();
 
 public:
 

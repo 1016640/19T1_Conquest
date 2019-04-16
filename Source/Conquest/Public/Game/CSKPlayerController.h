@@ -14,6 +14,7 @@ class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 class ATower;
+class USpell;
 class USpellCard;
 class UTowerConstructionData;
 
@@ -273,6 +274,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (DisplayName="Set Action Mode"))
 	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
+	/** Enables/Disables this players quick effect ussage */
+	void SetQuickEffectUsageEnabled(bool bEnable);
+
+	/** Skips our quick effect counter selection if we are allowed to */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SkipQuickEffectSelection();
+
 private:
 
 	/** Set action mode on the server */
@@ -317,6 +325,10 @@ private:
 	UFUNCTION()
 	void OnRep_RemainingActions();
 
+	/** Notify that can use quick effect has been replicated */
+	UFUNCTION()
+	void OnRep_bCanUseQuickEffect();
+
 protected:
 
 	/** If it is our action phase */
@@ -330,6 +342,10 @@ protected:
 	/** The actions we can still during our action phase */
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
+
+	/** If this player is allowed to select a counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanUseQuickEffect)
+	uint32 bCanUseQuickEffect : 1;
 
 public:
 
@@ -357,6 +373,14 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestFinished();
 
+	/** Notify that this player is able to counter an incoming spell cast */
+	UFUNCTION(Client, Reliable)
+	void Client_OnSelectCounterSpell(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
+
+	/** Notify that this players spell request is pending as the opposing player is selecting a counter */
+	UFUNCTION(Client, Reliable)
+	void Client_OnWaitForCounterSpell();
+
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
@@ -378,6 +402,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
 
+	/** Casts the given spell (of spell card) as a quick effect at the currently hovered tile */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
+
 protected:
 
 	/** Makes a request to the server to end our action phase */
@@ -392,9 +420,17 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestBuildTowerAction(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target);
 
-	/** Makes a request to cast a spell at given tile (with additional mana cost */
+	/** Makes a request to cast a spell at given tile (with additional mana cost) */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestCastSpellAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
+
+	/** Makes a request to cast a counter spell at given tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastQuickEffectAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
+
+	/** Makes a request to skip selecting a counter spell */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SkipQuickEffectSelection();
 
 public:
 
@@ -405,4 +441,8 @@ public:
 	/** Get the list of spells this player can cast (in hand) */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	void GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+	/** Get the list of quick effect spells this player can cast (in hand) */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
 };

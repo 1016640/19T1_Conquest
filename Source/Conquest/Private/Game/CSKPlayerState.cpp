@@ -257,28 +257,49 @@ bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
 			return true;
 		}
 
-		// Check if we can afford to cast at least one of the spell
-		for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
+		return CanAffordSpellOfType(ESpellType::ActionPhase);
+	}
+
+	return false;
+}
+
+bool ACSKPlayerState::CanCastQuickEffectSpell() const
+{
+	return CanAffordSpellOfType(ESpellType::QuickEffect);
+}
+
+void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	GetAffordableSpells(OutSpellCards, ESpellType::ActionPhase);
+}
+
+void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect);
+}
+
+bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const
+{
+	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
+	{
+		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
 		{
-			const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-			if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, ESpellType::ActionPhase))
-			{
-				return true;
-			}
+			return true;
 		}
 	}
 
 	return false;
 }
 
-void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+void ACSKPlayerState::GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const
 {
 	OutSpellCards.Empty();
 
 	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
 	{
 		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, ESpellType::ActionPhase))
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
 		{
 			OutSpellCards.Add(SpellCard);
 		}

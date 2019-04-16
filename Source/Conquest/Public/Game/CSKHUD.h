@@ -6,8 +6,10 @@
 #include "GameFramework/HUD.h"
 #include "CSKHUD.generated.h"
 
+class ATile;
 class UCSKHUDWidget;
 class UUserWidget;
+class USpell;
 
 /**
  * Manages the widgets and details displayed on screen during CSK
@@ -40,6 +42,10 @@ public:
 
 	/** Notify that an action or event has finished */
 	void OnActionFinished();
+
+	/** Notify that the opposing player (to whose action phase it is) has started to select a counter spell.
+	Passes in if our owner is the one instigating this selection (the one who can counter the spell) */
+	void OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile);
 
 public:
 

@@ -10,6 +10,7 @@ class ACastle;
 class ACSKPlayerController;
 class ATower;
 class USpellCard;
+enum class ESpellType : uint8;
 
 /**
  * Tracks states and stats for a player
@@ -140,6 +141,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool CanCastAnotherSpell(bool bCheckCosts = true) const;
 
+	/** Get if this player is able to cast a quick effect spell. This checks for the cost of the spell */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool CanCastQuickEffectSpell() const;
+
 	/** Get if this player has infinite spell uses */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool HasInfiniteSpellUses() const { return bHasInfiniteSpellUses; }
@@ -147,6 +152,18 @@ public:
 	/** Get all the spells this player is able to cast */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	void GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+	/** Get all the quick effect spells this player is able to cast */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+private:
+
+	/** Get if this player is able to afford any spell of type */
+	bool CanAffordSpellOfType(ESpellType SpellType) const;
+
+	/** Get the spells of type this player can afford */
+	void GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const;
 
 public:
 

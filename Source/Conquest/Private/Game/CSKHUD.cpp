@@ -71,6 +71,15 @@ void ACSKHUD::OnActionFinished()
 	}
 }
 
+void ACSKHUD::OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile)
+{
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
+	{
+		Widget->OnQuickEffectSelection(bInstigator, SpellToCounter, TargetTile);
+	}
+}
+
 void ACSKHUD::OnMatchFinished(bool bIsWinner)
 {
 	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);

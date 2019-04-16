@@ -44,23 +44,41 @@ void ACSKGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// TODO: Touch up
-	if (ShouldCountdownActionPhase())
+	if (ShouldCountdownPhaseTimer())
 	{
-		if (IsQuickEffectCounterTimed())
+		// Quick effect selection
+		if (bCountdownQuickEffectTimer)
 		{
-			QuickEffectCounterTimeRemaining = FMath::Max(0.f, QuickEffectCounterTimeRemaining - DeltaTime);
-			if (HasAuthority() && QuickEffectCounterTimeRemaining == 0.f)
+			if (!IsQuickEffectCounterTimed())
 			{
-				// TODO: inform game mode that time has run out
+				return;
+			}
+
+			QuickEffectCounterTimeRemaining = FMath::Max(0.f, QuickEffectCounterTimeRemaining - DeltaTime);
+			if (QuickEffectCounterTimeRemaining == 0.f)
+			{
+				// Game mode only exists on the server
+				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+				if (GameMode)
+				{
+					// Default to player not selecting to counter
+					GameMode->RequestSkipQuickEffect();
+				}
 			}
 		}
-		else
+		// Action phase timer
+		else if (IsActionPhaseTimed())
 		{
 			ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
 			if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
 			{
-				// TODO: inform game mode that time has run out
+				// Game mode only exists on the server
+				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+				if (GameMode)
+				{
+					// TODO: notify game mode that time has run out
+					// Game mode should then auto path closer to opponents portal (if player hasn't moved)
+				}
 			}
 		}
 	}
@@ -341,7 +359,7 @@ int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 	return 0;
 }
 
-float ACSKGameState::GetActionPhaseTimeRemaining(bool& bOutIsInfinite) const
+float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
 
@@ -451,6 +469,23 @@ void ACSKGameState::HandleSpellRequestFinished()
 	}
 }
 
+void ACSKGameState::HandleQuickEffectSelectionStart()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		ACSKGameMode* GameMode = CastChecked<ACSKGameMode>(AuthorityGameMode);
+
+		// Zero means indefinite
+		QuickEffectCounterTimeRemaining = GameMode->GetQuickEffectCounterTime();
+		if (QuickEffectCounterTimeRemaining == 0.f)
+		{
+			QuickEffectCounterTimeRemaining = -1.f;
+		}
+
+		Multi_HandleQuickEffectSelection();
+	}
+}
+
 bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const
 {
 	ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
@@ -532,6 +567,12 @@ void ACSKGameState::UpdateRules()
 		MaxTileMovements = GameMode->GetMaxTileMovementsPerTurn();
 
 		AvailableTowers = GameMode->GetAvailableTowers();
+		
+		// Zero means indefinite
+		if (ActionPhaseTime == 0.f)
+		{
+			ActionPhaseTime = -1.f;
+		}
 
 		UE_LOG(LogConquest, Log, TEXT("ACSKGameState: Rules updated"));
 	}
@@ -655,5 +696,11 @@ void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* Targ
 
 void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
 {
+	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
+{
+	// We want to count down the quick effect selection time
 	SetFreezeActionPhaseTimer(false);
 }

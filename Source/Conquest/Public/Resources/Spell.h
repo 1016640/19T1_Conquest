@@ -18,7 +18,12 @@ enum class ESpellType : uint8
 	ActionPhase,
 
 	/** This spell can be used to counter an opponents spell */
-	QuickEffect
+	QuickEffect,
+
+	/** This spell is a bonus spell for using a spell card that has
+	the same element as the tile the players castle is currently on.
+	These spells can not be cast by players and only manually by the game, thus they have no cost */
+	ElementBonus
 };
 
 /**

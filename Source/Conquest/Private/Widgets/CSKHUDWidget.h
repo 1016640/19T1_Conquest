@@ -6,6 +6,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CSKHUDWidget.generated.h"
 
+class USpell;
 enum class ECSKRoundState : uint8;
 enum class ECSKActionPhaseMode : uint8;
 
@@ -34,4 +35,9 @@ public:
 	/** Notify that an action (event) has finished */
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnActionFinished();
+
+	/** Notify that a player has started to select a spell to counter a pending request.
+	This gets called for either our owner selecting or our owner waiting */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnQuickEffectSelection(bool bIsSelecting, const USpell* SpellToCounter, ATile* TargetTile);
 };

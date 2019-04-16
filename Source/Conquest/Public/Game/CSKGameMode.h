@@ -28,6 +28,10 @@ UCLASS(config=Game, ClassGroup = (CSK))
 class CONQUEST_API ACSKGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
+
+private:
+
+	enum class EActiveSpellContext : uint8;
 	
 public:
 
@@ -334,10 +338,17 @@ public:
 
 	/** Will attempt to cast the given type of spell for active player. This function should
 	not be used for quick effects, but only for players using spells during their action phase.
-	This function will return true even if we start waiting for the opposing player to select
-	a counter spell (Quick Effect) */
+	This function will return true even if we start waiting for the opposing player to select a counter spell (Quick Effect) */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana = 0);
+
+	/** Will attempt to cast the given spell as a counter to a pending spell cast. This function should
+	only be used for quick effects, for normal action phase spells, use RequestCastSpell */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	bool RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* TargetTile, int32 AdditionalMana = 0);
+
+	/** Will attempt to end the quick effect spell selection without casting a counter */
+	bool RequestSkipQuickEffect();
 
 public:
 
@@ -383,8 +394,8 @@ private:
 	UFUNCTION()
 	void OnPendingTowerBuildSequenceComplete();
 
-	/** Starts casting the spell for given player */
-	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile);
+	/** Starts casting the spell. Will determine the instigator based on passed context */
+	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile, EActiveSpellContext Context);
 
 	/** Finishes the spell currently be cast */
 	void FinishCastSpell();
@@ -393,7 +404,10 @@ private:
 	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const;
 
 	/** Notify from timer that we should execute the spell cast */
-	void OnStartActivePlayersSpellCast();
+	void OnStartActiveSpellCast();
+
+	/** Saves the incoming spell request and informs opposing player to choose a counter */
+	void SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
 
 public:
 
@@ -414,16 +428,35 @@ public:
 
 	/** If we are waiting on a spell action to finish */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool IsWaitingForSpellCast() const { return bWaitingOnActivePlayerSpellAction; }
+	bool IsWaitingForSpellCast() const { return bWaitingOnSpellAction; }
 
 private:
+
+	/** If we should allow any action requests */
+	FORCEINLINE bool ShouldAcceptRequests() const
+	{
+		return !(IsWaitingForAction() || !bWaitingOnQuickEffectSelection);
+	}
 
 	/** Resets all wait action flags */
 	FORCEINLINE void ResetWaitingOnActionFlags()
 	{
 		bWaitingOnActivePlayerMoveAction = false;
 		bWaitingOnActivePlayerBuildAction = false;
-		bWaitingOnActivePlayerSpellAction = false;
+		bWaitingOnSpellAction = false;
+
+		ActivePlayerPendingTower = nullptr;
+		ActivePlayerPendingTowerTile = nullptr;
+		
+		bWaitingOnQuickEffectSelection = false;
+		ActiveSpellContext = EActiveSpellContext::None;
+		ActiveSpellRequestSpellCard = nullptr;
+		ActiveSpellRequestSpellIndex = 0;
+		ActiveSpellRequestSpellTile = nullptr;
+		ActiveSpellRequestCalculatedCost = 0;
+		ActivePlayerSpell = nullptr;
+		ActivePlayerSpellCard = nullptr;
+		ActivePlayerSpellActor = nullptr;
 	}
 
 protected:
@@ -434,6 +467,22 @@ protected:
 
 private:
 
+	/** The context for a spells activiation */
+	enum class EActiveSpellContext : uint8
+	{
+		/** No context */
+		None,
+
+		/** Active player casting spell during action phase */
+		Action,
+
+		/** Active players opponents countering with a quick effect spell */
+		Counter,
+
+		/** Bonus spell cast due to element match */
+		Bonus
+	};
+
 	/** If we are waiting for active players move action to complete */
 	uint32 bWaitingOnActivePlayerMoveAction : 1;
 
@@ -441,7 +490,7 @@ private:
 	uint32 bWaitingOnActivePlayerBuildAction : 1;
 
 	/** If we are waiting for actives players spell action to complete */
-	uint32 bWaitingOnActivePlayerSpellAction : 1;
+	uint32 bWaitingOnSpellAction : 1;
 
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
@@ -465,6 +514,30 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
+	/** The type of spell that is currently active */
+	EActiveSpellContext ActiveSpellContext;
+
+	/** If we are waiting on the opposing player (against active player) to select a quick effect counter */
+	uint32 bWaitingOnQuickEffectSelection : 1;
+
+	/** The spell card the active player attempted to cast. We track
+	this here in-case the opposing player decides not to counter */
+	UPROPERTY()
+	TSubclassOf<USpellCard> ActiveSpellRequestSpellCard;
+
+	/** The index of the spell the active player attempted to cast. We 
+	track this here in-case the opposing player decides not to counter */
+	int32 ActiveSpellRequestSpellIndex;
+
+	/** The tile the active player attempted to cast their spell on. We 
+	track this here in-case the opposing player decides not to counter */
+	UPROPERTY()
+	ATile* ActiveSpellRequestSpellTile;
+
+	/** The cost that was calculated or active players spell request. We 
+	track this here in-case the opposing player decides not to counter */
+	int32 ActiveSpellRequestCalculatedCost;
+
 	/** The spell being cast by active player (Points to default object). */
 	UPROPERTY()
 	USpell* ActivePlayerSpell;
@@ -478,7 +551,7 @@ private:
 	ASpellActor* ActivePlayerSpellActor;
 
 	/** Timer handle for when waiting for a spell to replicate before executing its effects */
-	FTimerHandle Handle_ActivePlayerExecuteSpellCast;
+	FTimerHandle Handle_ExecuteSpellCast;
 
 public:
 
@@ -518,7 +591,6 @@ private:
 
 	/** Timer handle for creating small delays between end round actions */
 	FTimerHandle Handle_DelayEndRoundAction;
-
 
 public:
 
@@ -629,6 +701,10 @@ public:
 	/** Get the max amount of tiles that can be traversed per action phase */
 	FORCEINLINE int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
 
+	/** Get the time a quick effect selection */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	float GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
+
 protected:
 
 	/** The amount of time (in seconds) an action phase lasts before forcing exit (zero means indefinite) */
@@ -651,8 +727,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	uint32 bLimitOneMoveActionPerTurn : 1;
 
-	/** The time the player has to select a quick effect spell when other player is casting a spell */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	float QuickEffectCounterTime;
 
 	/** How long we wait before starting the match (starting the coin flip).
