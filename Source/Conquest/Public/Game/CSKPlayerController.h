@@ -367,11 +367,11 @@ public:
 
 	/** Notify that an action phase spell cast has been confirmed */
 	UFUNCTION(Client, Reliable)
-	void Client_OnCastSpellRequestConfirmed(ATile* TargetTile);
+	void Client_OnCastSpellRequestConfirmed(EActiveSpellContext SpellContext, ATile* TargetTile);
 
 	/** Notify that an action phase spell cast has finished */
 	UFUNCTION(Client, Reliable)
-	void Client_OnCastSpellRequestFinished();
+	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
 
 	/** Notify that this player is able to counter an incoming spell cast */
 	UFUNCTION(Client, Reliable)

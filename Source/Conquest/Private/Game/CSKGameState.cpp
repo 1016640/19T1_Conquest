@@ -29,6 +29,7 @@ ACSKGameState::ACSKGameState()
 	CoinTossWinnerPlayerID = -1;
 	ActionPhaseTimeRemaining = -1.f;
 	bFreezeActionPhaseTimer = false;
+	bCountdownQuickEffectTimer = false;
 
 	ActionPhaseTime = 90.f;
 	MaxNumTowers = 7;
@@ -63,6 +64,7 @@ void ACSKGameState::Tick(float DeltaTime)
 				{
 					// Default to player not selecting to counter
 					GameMode->RequestSkipQuickEffect();
+					bCountdownQuickEffectTimer = false;
 				}
 			}
 		}
@@ -109,6 +111,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 
 	DOREPLIFETIME(ACSKGameState, CoinTossWinnerPlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
+	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -363,10 +366,19 @@ float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
 
-	if (IsActionPhaseActive())
+	if (bCountdownQuickEffectTimer)
 	{
-		// TODO: need a variable that informs us that quick effect counter is taking place
-		// for now, assume it's just action phase time
+		if (IsQuickEffectCounterTimed())
+		{
+			return QuickEffectCounterTimeRemaining;
+		}
+		else
+		{
+			bOutIsInfinite = true;
+		}
+	}
+	else if (IsActionPhaseActive())
+	{
 		if (IsActionPhaseTimed())
 		{
 			return ActionPhaseTimeRemaining;
@@ -692,6 +704,7 @@ void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewT
 void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* TargetTile)
 {
 	SetFreezeActionPhaseTimer(true);
+	bCountdownQuickEffectTimer = false;
 }
 
 void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
@@ -702,5 +715,6 @@ void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
 void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
 {
 	// We want to count down the quick effect selection time
+	bCountdownQuickEffectTimer = true;
 	SetFreezeActionPhaseTimer(false);
 }

@@ -38,10 +38,10 @@ public:
 	void OnSelectedActionChanged(ECSKActionPhaseMode NewMode);
 
 	/** Notify that an action or event is starting */
-	void OnActionStart();
+	void OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext);
 
 	/** Notify that an action or event has finished */
-	void OnActionFinished();
+	void OnActionFinished(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext);
 
 	/** Notify that the opposing player (to whose action phase it is) has started to select a counter spell.
 	Passes in if our owner is the one instigating this selection (the one who can counter the spell) */

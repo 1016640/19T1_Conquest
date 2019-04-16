@@ -36,6 +36,30 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnActionFinished();
 
+	/** Notify that a castle move action has started */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnMoveCastleActionStart();
+
+	/** Notify that a castle move action has finished */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnMoveCastleActionFinished();
+
+	/** Notify that a build tower action has started */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnBuildTowerActionStart();
+
+	/** Notify that a build tower action has finished */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnBuildTowerActionFinished();
+
+	/** Notify that a cast spell action has started */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnCastSpellActionStart(EActiveSpellContext Context);
+
+	/** Notify that a cast spell action has finished */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnCastSpellActionFinished(EActiveSpellContext Context);
+
 	/** Notify that a player has started to select a spell to counter a pending request.
 	This gets called for either our owner selecting or our owner waiting */
 	UFUNCTION(BlueprintImplementableEvent)

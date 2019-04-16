@@ -138,7 +138,7 @@ void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> 
 
 void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
 {
-	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	if (IsLocalPlayerController() && (IsPerformingActionPhase() || bCanUseQuickEffect))
 	{
 		SelectedSpellCard = InSpellCard;
 		
@@ -501,6 +501,11 @@ void ACSKPlayerController::SetQuickEffectUsageEnabled(bool bEnable)
 	if (HasAuthority() && bCanUseQuickEffect != bEnable)
 	{
 		bCanUseQuickEffect = bEnable;
+
+		if (IsLocalPlayerController())
+		{
+			OnRep_bCanUseQuickEffect();
+		}
 	}
 }
 
@@ -647,7 +652,7 @@ void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(AC
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionStart();
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
 	}
 }
 
@@ -663,7 +668,7 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionFinished();
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
 	}
 }
 
@@ -681,7 +686,7 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionStart();
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
 	}
 }
 
@@ -692,11 +697,11 @@ void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionFinished();
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
 	}
 }
 
-void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(ATile* TargetTile)
+void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EActiveSpellContext SpellContext, ATile* TargetTile)
 {
 	SetCanSelectTile(false);
 
@@ -710,18 +715,18 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(ATi
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionStart();
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::CastSpell, SpellContext);
 	}
 }
 
-void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation()
+void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EActiveSpellContext SpellContext)
 {
 	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnActionFinished();
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::CastSpell, SpellContext);
 	}
 }
 
@@ -751,6 +756,13 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 		if (ActionMode != ECSKActionPhaseMode::None || ActionMode != ECSKActionPhaseMode::All)
 		{
 			RemainingActions &= ~ActionMode;
+
+			// This is needed for listen server matches
+			if (IsLocalPlayerController())
+			{
+				OnRep_RemainingActions();
+			}
+
 			return RemainingActions == ECSKActionPhaseMode::None;
 		}
 	}

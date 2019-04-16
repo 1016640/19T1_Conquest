@@ -82,6 +82,24 @@ enum class ECSKActionPhaseMode : uint8
 
 ENUM_CLASS_FLAGS(ECSKActionPhaseMode);
 
+// TODO: This could be replaced by ESpellType
+/** The context for a spells activiation */
+UENUM(BlueprintType)
+enum class EActiveSpellContext : uint8
+{
+	/** No context */
+	None,
+
+	/** Active player casting spell during action phase */
+	Action,
+
+	/** Active players opponents countering with a quick effect spell */
+	Counter,
+
+	/** Bonus spell cast due to element match */
+	Bonus
+};
+
 /** The conditions to win a match of CSK */
 UENUM(BlueprintType)
 enum class ECSKMatchWinCondition : uint8

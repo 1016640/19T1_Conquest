@@ -34,4 +34,9 @@ private:
 	/** The index of this spell in the spell card */
 	UPROPERTY(BlueprintReadOnly, meta = (ExposeOnSpawn = "true", AllowPrivateAccess = "true"))
 	int32 SpellIndex;
+
+	/** If this particular spell should be selectable (This is required
+	so this spell still appears along side other spells on a spell card */
+	UPROPERTY(BlueprintReadOnly, meta = (ExposeOnSpawn = "true", AllowPrivateAccess = "true"))
+	uint8 bCanSelectSpell : 1;
 };

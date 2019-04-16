@@ -100,9 +100,7 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
 
 				OnSegmentFinished();
-				OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);
-
-				
+				OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);			
 			}
 			else
 			{

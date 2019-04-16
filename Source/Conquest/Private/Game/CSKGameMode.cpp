@@ -1735,13 +1735,14 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 		for (ACSKPlayerController* Controller : Players)
 		{
 			// We will pass the target tile so players can focus on the target point first
-			Controller->Client_OnCastSpellRequestConfirmed(Tile);
+			Controller->Client_OnCastSpellRequestConfirmed(Context, Tile);
 		}
 	}
 
 	ActivePlayerSpell = Spell;
 	ActivePlayerSpellCard = SpellCard;
 	ActivePlayerSpellActor = SpellActor;
+	ActivePlayerSpellContext = Context;
 
 	// Give spell half a second to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
@@ -1783,7 +1784,7 @@ void ACSKGameMode::FinishCastSpell()
 	{
 		for (ACSKPlayerController* Controller : Players)
 		{
-			Controller->Client_OnCastSpellRequestFinished();
+			Controller->Client_OnCastSpellRequestFinished(ActivePlayerSpellContext);
 		}
 	}
 	
@@ -1799,6 +1800,7 @@ void ACSKGameMode::FinishCastSpell()
 	ActivePlayerSpell = nullptr;
 	ActivePlayerSpellCard = false;
 	ActivePlayerSpellActor = nullptr;
+	ActivePlayerSpellContext = EActiveSpellContext::None;
 
 	// Disable this action if player can't cast any more spells this round
 	if (PlayerState && !PlayerState->CanCastAnotherSpell(true))
@@ -1855,6 +1857,7 @@ void ACSKGameMode::SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard>
 	ActiveSpellRequestSpellIndex = InSpellIndex;
 	ActiveSpellRequestSpellTile = InTargetTile;
 	ActiveSpellRequestCalculatedCost = InFinalCost;
+	bWaitingOnQuickEffectSelection = true;
 
 	const USpellCard* DefaultSpellCard = ActiveSpellRequestSpellCard.GetDefaultObject();
 	check(DefaultSpellCard);

@@ -29,10 +29,6 @@ class CONQUEST_API ACSKGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
-private:
-
-	enum class EActiveSpellContext : uint8;
-	
 public:
 
 	ACSKGameMode();
@@ -457,6 +453,7 @@ private:
 		ActivePlayerSpell = nullptr;
 		ActivePlayerSpellCard = nullptr;
 		ActivePlayerSpellActor = nullptr;
+		ActivePlayerSpellContext = EActiveSpellContext::None;
 	}
 
 protected:
@@ -466,22 +463,6 @@ protected:
 	ACSKPlayerController* ActionPhaseActiveController;
 
 private:
-
-	/** The context for a spells activiation */
-	enum class EActiveSpellContext : uint8
-	{
-		/** No context */
-		None,
-
-		/** Active player casting spell during action phase */
-		Action,
-
-		/** Active players opponents countering with a quick effect spell */
-		Counter,
-
-		/** Bonus spell cast due to element match */
-		Bonus
-	};
 
 	/** If we are waiting for active players move action to complete */
 	uint32 bWaitingOnActivePlayerMoveAction : 1;
@@ -549,6 +530,9 @@ private:
 	/** Instanced actor provided executing the spells logic */
 	UPROPERTY()
 	ASpellActor* ActivePlayerSpellActor;
+
+	/** The context of the spell being cast */
+	EActiveSpellContext ActivePlayerSpellContext;
 
 	/** Timer handle for when waiting for a spell to replicate before executing its effects */
 	FTimerHandle Handle_ExecuteSpellCast;

@@ -53,21 +53,67 @@ void ACSKHUD::OnSelectedActionChanged(ECSKActionPhaseMode NewMode)
 	}
 }
 
-void ACSKHUD::OnActionStart()
+void ACSKHUD::OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext)
 {
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
 		Widget->OnActionStart();
+
+		switch (Mode)
+		{
+			case ECSKActionPhaseMode::MoveCastle:
+			{
+				Widget->OnMoveCastleActionStart();
+				break;
+			}
+			case ECSKActionPhaseMode::BuildTowers:
+			{
+				Widget->OnBuildTowerActionStart();
+				break;
+			}
+			case ECSKActionPhaseMode::CastSpell:
+			{
+				Widget->OnCastSpellActionStart(SpellContext);
+				break;
+			}
+			default:
+			{
+				
+			}
+		}
 	}
 }
 
-void ACSKHUD::OnActionFinished()
+void ACSKHUD::OnActionFinished(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext)
 {
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
 		Widget->OnActionFinished();
+
+		switch (Mode)
+		{
+			case ECSKActionPhaseMode::MoveCastle:
+			{
+				Widget->OnMoveCastleActionFinished();
+				break;
+			}
+			case ECSKActionPhaseMode::BuildTowers:
+			{
+				Widget->OnBuildTowerActionFinished();
+				break;
+			}
+			case ECSKActionPhaseMode::CastSpell:
+			{
+				Widget->OnCastSpellActionFinished(SpellContext);
+				break;
+			}
+			default:
+			{
+				
+			}
+		}
 	}
 }
 
