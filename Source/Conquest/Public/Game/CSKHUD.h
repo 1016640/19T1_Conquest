@@ -2,16 +2,78 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "GameFramework/HUD.h"
 #include "CSKHUD.generated.h"
+
+class ATile;
+class UCSKHUDWidget;
+class UUserWidget;
+class USpell;
 
 /**
  * Manages the widgets and details displayed on screen during CSK
  */
-UCLASS()
+UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKHUD : public AHUD
 {
 	GENERATED_BODY()
+
+public:
+
+	ACSKHUD();
+
+public:
+
+	// Begin AActor Interface
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	// End AActor Interface
 	
+public:
+
+	/** Notify from our owner that the round state has changed */
+	void OnRoundStateChanged(ECSKRoundState NewState);
+
+	/** Notify from our owner that the selection action has changed */
+	void OnSelectedActionChanged(ECSKActionPhaseMode NewMode);
+
+	/** Notify that an action or event is starting */
+	void OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext);
+
+	/** Notify that an action or event has finished */
+	void OnActionFinished(ECSKActionPhaseMode Mode, EActiveSpellContext SpellContext);
+
+	/** Notify that the opposing player (to whose action phase it is) has started to select a counter spell.
+	Passes in if our owner is the one instigating this selection (the one who can counter the spell) */
+	void OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile);
+
+public:
+
+	/** Notify that the match has finished and the post match widget should */
+	void OnMatchFinished(bool bIsWinner);
+
+private:
+
+	/** Gets the HUD instance, creating it if desired */
+	UCSKHUDWidget* GetCSKHUDInstance(bool bCreateIfNull = true);
+
+protected:
+
+	/** Instance of the CSKHUD widget */
+	UPROPERTY()
+	UCSKHUDWidget* CSKHUDInstance;
+
+	/** Instance of the Post Match widget */
+	UPROPERTY()
+	UUserWidget* PostMatchWidgetInstance;
+
+protected:
+	
+	/** The widget to use when entering game loop */
+	UPROPERTY(EditAnywhere, Category = CSK)
+	TSubclassOf<UCSKHUDWidget> CSKHUDTemplate;
+
+	/** The widget to use during the post match phase */
+	UPROPERTY(EditAnywhere, Category = CSK)
+	TSubclassOf<UUserWidget> PostMatchWidgetTemplate;
 };

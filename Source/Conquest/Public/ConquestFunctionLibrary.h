@@ -10,6 +10,7 @@ class ABoardManager;
 class ACSKGameMode;
 class ACSKGameState;
 class UCSKGameInstance;
+class UUserWidget;
 
 /**
  * Blueprint function library containing helper functions for Conquest based functionality
@@ -50,4 +51,20 @@ public:
 	/** Get the first board manager found in the level */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
+
+public:
+
+	/** Adds widget to the viewport */
+	UFUNCTION(BlueprintCallable, Category = UMG)
+	static void AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder = 0);
+
+	/** Removes widget from its parent */
+	UFUNCTION(BlueprintCallable, Category = UMG)
+	static void RemoveWidgetFromParent(UUserWidget* Widget);
+
+public:
+
+	/** Converts seconds into an HH:MM:SS string */
+	UFUNCTION(BlueprintPure, Category = String)
+	static FString GetSecondsAsHourString(float Seconds);
 };

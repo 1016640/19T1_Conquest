@@ -12,9 +12,6 @@
 #include "TowerConstructionData.h"
 #include "Engine/World.h"
 
-// for now
-#include "Kismet/KismetSystemLibrary.h"
-
 ACSKGameState::ACSKGameState()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -26,10 +23,13 @@ ACSKGameState::ACSKGameState()
 	RoundState = ECSKRoundState::Invalid;
 	PreviousMatchState = MatchState;
 	PreviousRoundState = RoundState;
+	MatchWinnerPlayerID = -1;
+	MatchWinCondition = ECSKMatchWinCondition::Unknown;
 
-	ActivePhasePlayerID = -1;
+	CoinTossWinnerPlayerID = -1;
 	ActionPhaseTimeRemaining = -1.f;
 	bFreezeActionPhaseTimer = false;
+	bCountdownQuickEffectTimer = false;
 
 	ActionPhaseTime = 90.f;
 	MaxNumTowers = 7;
@@ -45,16 +45,44 @@ void ACSKGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (ShouldCountdownActionPhase())
+	if (ShouldCountdownPhaseTimer())
 	{
-		ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
-		if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
+		// Quick effect selection
+		if (bCountdownQuickEffectTimer)
 		{
-			// TODO: inform game mode that time has run out
-		}
+			if (!IsQuickEffectCounterTimed())
+			{
+				return;
+			}
 
-		FString TimeRem = FString("Time Remaining for Action Phase: ") + FString::SanitizeFloat(ActionPhaseTimeRemaining);
-		UKismetSystemLibrary::PrintString(this, TimeRem, true, false, FLinearColor::Green, 0.f);
+			QuickEffectCounterTimeRemaining = FMath::Max(0.f, QuickEffectCounterTimeRemaining - DeltaTime);
+			if (QuickEffectCounterTimeRemaining == 0.f)
+			{
+				// Game mode only exists on the server
+				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+				if (GameMode)
+				{
+					// Default to player not selecting to counter
+					GameMode->RequestSkipQuickEffect();
+					bCountdownQuickEffectTimer = false;
+				}
+			}
+		}
+		// Action phase timer
+		else if (IsActionPhaseTimed())
+		{
+			ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
+			if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
+			{
+				// Game mode only exists on the server
+				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+				if (GameMode)
+				{
+					// TODO: notify game mode that time has run out
+					// Game mode should then auto path closer to opponents portal (if player hasn't moved)
+				}
+			}
+		}
 	}
 }
 
@@ -81,8 +109,9 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, MatchState);
 	DOREPLIFETIME(ACSKGameState, RoundState);
 
-	DOREPLIFETIME(ACSKGameState, ActivePhasePlayerID);
+	DOREPLIFETIME(ACSKGameState, CoinTossWinnerPlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
+	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -157,6 +186,7 @@ void ACSKGameState::NotifyWaitingForPlayers()
 
 void ACSKGameState::NotifyPerformCoinFlip()
 {
+	MatchStartTime = GetWorld()->GetTimeSeconds();
 }
 
 void ACSKGameState::NotifyMatchStart()
@@ -174,6 +204,21 @@ void ACSKGameState::NotifyMatchStart()
 
 void ACSKGameState::NotifyMatchFinished()
 {
+	MatchEndTime = GetWorld()->GetTimeSeconds();
+
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		ACSKPlayerController* WinningPlayer = nullptr;
+		ECSKMatchWinCondition WinCondition = ECSKMatchWinCondition::Unknown;
+
+		// THere is a chance that there is no winner (e.g. match was abandoned)
+		ensure(GameMode->GetWinnerDetails(WinningPlayer, WinCondition));
+		int32 WinnerID = WinningPlayer ? WinningPlayer->CSKPlayerID : -1;
+
+		Multi_SetWinDetails(WinnerID, WinCondition);
+	}
 }
 
 void ACSKGameState::NotifyPlayersLeaving()
@@ -186,39 +231,28 @@ void ACSKGameState::NotifyMatchAbort()
 
 void ACSKGameState::NotifyCollectionPhaseStart()
 {
-}
-
-void ACSKGameState::NotifyFirstCollectionPhaseStart()
-{
 	++RoundsPlayed;
-
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-	if (GameMode)
+	
+	// Only save on first round
+	if (RoundsPlayed == 1)
 	{
-		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
-		if (ActivePlayer)
+		// Game mode only exists on the server
+		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+		if (GameMode)
 		{
-			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
+			CoinTossWinnerPlayerID = GameMode->GetStartingPlayersID();
 		}
 	}
+}
 
+void ACSKGameState::NotifyFirstActionPhaseStart()
+{
+	++RoundsPlayed;
 	ResetActionPhaseProperties();
 }
 
-void ACSKGameState::NotifySecondCollectionPhaseStart()
+void ACSKGameState::NotifySecondActionPhaseStart()
 {
-	// Game mode only exists on the server
-	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-	if (GameMode)
-	{
-		ACSKPlayerController* ActivePlayer = GameMode->GetActionPhaseActiveController();
-		if (ActivePlayer)
-		{
-			ActivePhasePlayerID = ActivePlayer->CSKPlayerID;
-		}
-	}
-
 	ResetActionPhaseProperties();
 }
 
@@ -285,12 +319,12 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 		}
 		case ECSKRoundState::FirstActionPhase:
 		{
-			NotifyFirstCollectionPhaseStart();
+			NotifyFirstActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::SecondActionPhase:
 		{
-			NotifySecondCollectionPhaseStart();
+			NotifySecondActionPhaseStart();
 			break;
 		}
 		case ECSKRoundState::EndRoundPhase:
@@ -311,6 +345,12 @@ void ACSKGameState::HandleRoundStateChange(ECSKRoundState NewState)
 	OnRoundStateChanged.Broadcast(NewState);
 }
 
+void ACSKGameState::Multi_SetWinDetails_Implementation(int32 WinnerID, ECSKMatchWinCondition WinCondition)
+{
+	MatchWinnerPlayerID = WinnerID;
+	MatchWinCondition = WinCondition;
+}
+
 int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 {
 	const int32* Num = TowerInstanceTable.Find(Tower);
@@ -320,6 +360,36 @@ int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 	}
 
 	return 0;
+}
+
+float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
+{
+	bOutIsInfinite = false;
+
+	if (bCountdownQuickEffectTimer)
+	{
+		if (IsQuickEffectCounterTimed())
+		{
+			return QuickEffectCounterTimeRemaining;
+		}
+		else
+		{
+			bOutIsInfinite = true;
+		}
+	}
+	else if (IsActionPhaseActive())
+	{
+		if (IsActionPhaseTimed())
+		{
+			return ActionPhaseTimeRemaining;
+		}
+		else
+		{
+			bOutIsInfinite = true;
+		}
+	}
+
+	return 0.f;
 }
 
 void ACSKGameState::AddBonusActionPhaseTime()
@@ -338,9 +408,20 @@ void ACSKGameState::AddBonusActionPhaseTime()
 void ACSKGameState::ResetActionPhaseProperties()
 {
 	ActionPhaseTimeRemaining = ActionPhaseTime;
+	QuickEffectCounterTimeRemaining = -1.f;
 
 	// This will disable tick when entering end round phase
 	SetFreezeActionPhaseTimer(!IsActionPhaseActive());
+
+	// Determine which players action phase it is
+	if (IsActionPhaseActive())
+	{
+		ActionPhasePlayerID = RoundState == ECSKRoundState::FirstActionPhase ? CoinTossWinnerPlayerID : FMath::Abs(CoinTossWinnerPlayerID - 1);
+	}
+	else
+	{
+		ActionPhasePlayerID = -1;
+	}
 }
 
 void ACSKGameState::HandleMoveRequestConfirmed()
@@ -381,6 +462,42 @@ void ACSKGameState::HandleBuildRequestFinished(ATower* NewTower)
 	}
 }
 
+void ACSKGameState::HandleSpellRequestConfirmed(ATile* TargetTile)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		Multi_HandleSpellRequestConfirmed(TargetTile);
+	}
+}
+
+void ACSKGameState::HandleSpellRequestFinished()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		// Add bonus time after an action is complete
+		AddBonusActionPhaseTime();
+
+		Multi_HandleSpellRequestFinished();
+	}
+}
+
+void ACSKGameState::HandleQuickEffectSelectionStart()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		ACSKGameMode* GameMode = CastChecked<ACSKGameMode>(AuthorityGameMode);
+
+		// Zero means indefinite
+		QuickEffectCounterTimeRemaining = GameMode->GetQuickEffectCounterTime();
+		if (QuickEffectCounterTimeRemaining == 0.f)
+		{
+			QuickEffectCounterTimeRemaining = -1.f;
+		}
+
+		Multi_HandleQuickEffectSelection();
+	}
+}
+
 bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const
 {
 	ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
@@ -392,18 +509,18 @@ bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Cont
 	return false;
 }
 
-bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
 	if (PlayerState)
 	{
-		return CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy);
+		return CanPlayerBuildTower(PlayerState, TowerTemplate);
 	}
 
 	return false;
 }
 
-bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller) const
 {
 	// No towers might be in this match
 	if (AvailableTowers.Num() > 0)
@@ -413,7 +530,7 @@ bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Control
 		{
 			for (TSubclassOf<UTowerConstructionData> TowerTemplate : AvailableTowers)
 			{
-				if (CanPlayerBuildTower(PlayerState, TowerTemplate, bOrDestroy))
+				if (CanPlayerBuildTower(PlayerState, TowerTemplate))
 				{
 					return true;
 				}
@@ -424,10 +541,33 @@ bool ACSKGameState::CanPlayerBuildMoreTowers(const ACSKPlayerController* Control
 	return false;
 }
 
+bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const
+{
+	OutTowers.Reset();
+
+	// No towers might be in this match
+	if (AvailableTowers.Num() > 0)
+	{
+		const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+		if (PlayerState)
+		{
+			for (TSubclassOf<UTowerConstructionData> TowerTemplate : AvailableTowers)
+			{
+				if (CanPlayerBuildTower(PlayerState, TowerTemplate))
+				{
+					OutTowers.Add(TowerTemplate);
+				}
+			}
+		}
+	}
+
+	return OutTowers.Num() > 0;
+}
+
 void ACSKGameState::UpdateRules()
 {
 	// Game mode only exists on the server
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
 	if (GameMode)
 	{
 		ActionPhaseTime = GameMode->GetActionPhaseTime();
@@ -439,15 +579,24 @@ void ACSKGameState::UpdateRules()
 		MaxTileMovements = GameMode->GetMaxTileMovementsPerTurn();
 
 		AvailableTowers = GameMode->GetAvailableTowers();
+		
+		// Zero means indefinite
+		if (ActionPhaseTime == 0.f)
+		{
+			ActionPhaseTime = -1.f;
+		}
 
 		UE_LOG(LogConquest, Log, TEXT("ACSKGameState: Rules updated"));
 	}
 }
 
-bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const
+bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	UTowerConstructionData* ConstructData = TowerTemplate.GetDefaultObject();
-	check(ConstructData);
+	if (!ConstructData)
+	{
+		return false;
+	}
 
 	if (!ConstructData->TowerClass)
 	{
@@ -499,6 +648,21 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	return true;
 }
 
+float ACSKGameState::GetMatchTimeSeconds() const
+{
+	if (MatchState == ECSKMatchState::CoinFlip || MatchState == ECSKMatchState::Running)
+	{
+		float MatchCurrentTime = GetWorld()->GetTimeSeconds();
+		return MatchCurrentTime - MatchStartTime;
+	}
+	else if (MatchState == ECSKMatchState::WaitingPostMatch)
+	{
+		return MatchEndTime - MatchStartTime;
+	}
+
+	return 0.f;
+}
+
 void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
 {
 	SetFreezeActionPhaseTimer(true);
@@ -535,4 +699,22 @@ void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewT
 	{
 		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleBuildRequestFinished: NewTower is null"));
 	}
+}
+
+void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* TargetTile)
+{
+	SetFreezeActionPhaseTimer(true);
+	bCountdownQuickEffectTimer = false;
+}
+
+void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
+{
+	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
+{
+	// We want to count down the quick effect selection time
+	bCountdownQuickEffectTimer = true;
+	SetFreezeActionPhaseTimer(false);
 }

@@ -125,8 +125,7 @@ void ABoardManager::CheckForErrors()
 		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
 		FMessageLog("MapCheck").Warning()
 			->AddToken(FUObjectToken::Create(this))
-			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoBoardGenerated", "{ActorName} : Board Manager exists but no grid has been generated."), Arguments)))
-			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoBoardGenerated", "{ActorName} : Board Manager exists but no grid has been generated."), Arguments)));
 
 		return;
 	}
@@ -137,8 +136,7 @@ void ABoardManager::CheckForErrors()
 		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
 		FMessageLog("MapCheck").Warning()
 			->AddToken(FUObjectToken::Create(this))
-			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 1."), Arguments)))
-			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 1."), Arguments)));
 	}
 
 	if (GetPlayer2PortalTile() == nullptr)
@@ -147,8 +145,7 @@ void ABoardManager::CheckForErrors()
 		Arguments.Add(TEXT("ActorName"), FText::FromString(GetPathName()));
 		FMessageLog("MapCheck").Warning()
 			->AddToken(FUObjectToken::Create(this))
-			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 2."), Arguments)))
-			->AddToken(FMapErrorToken::Create(FMapErrors::ActorIsObselete));
+			->AddToken(FTextToken::Create(FText::Format(LOCTEXT("MapCheck_Message_NoP1Spawn", "{ActorName} : Board Manager has an invalid spawn point for Player 2."), Arguments)));
 	}
 }
 

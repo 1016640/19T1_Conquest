@@ -89,7 +89,8 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 	// Are we allowed to control the agents movements?
 	if (bCanUpdateState && Status == EPathFollowingStatus::Moving)
 	{
-		const FVector CurrentSegmentLocation = BoardPath[CurrentTileIndex]->GetActorLocation();
+		ATile* CurrentTile = BoardPath[CurrentTileIndex];
+		const FVector CurrentSegmentLocation = CurrentTile->GetActorLocation();
 		const int32 LastSegment = BoardPath.Num() - 1;
 
 		if (FVector::DistSquaredXY(CurrentLocation, CurrentSegmentLocation) < 1.f)
@@ -99,9 +100,7 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				OnBoardPathFinished.Broadcast(BoardPath[LastSegment]);
 
 				OnSegmentFinished();
-				OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);
-
-				
+				OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);			
 			}
 			else
 			{
@@ -111,7 +110,7 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 				ATile* NextTargetTile = BoardPath[CurrentTileIndex];
 				if (!NextTargetTile)
 				{
-					OnBoardPathFinished.Broadcast(BoardPath[CurrentTileIndex]);
+					OnBoardPathFinished.Broadcast(CurrentTile);
 
 					OnPathFinished(EPathFollowingResult::Aborted, FPathFollowingResultFlags::InvalidPath);
 					return;
@@ -125,7 +124,7 @@ void UBoardPathFollowingComponent::UpdatePathSegment()
 
 				OnSegmentFinished();
 
-				OnBoardSegmentCompleted.Broadcast(NextTargetTile);
+				OnBoardSegmentCompleted.Broadcast(CurrentTile);
 			}
 		}
 	}

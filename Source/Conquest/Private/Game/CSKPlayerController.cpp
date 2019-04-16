@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "SpellCard.h"
 #include "Tower.h"
 
 #include "Components/InputComponent.h"
@@ -19,6 +20,7 @@
 ACSKPlayerController::ACSKPlayerController()
 {
 	bShowMouseCursor = true;
+
 	CachedCSKHUD = nullptr;
 	CastleController = nullptr;
 	CastlePawn = nullptr;
@@ -29,6 +31,7 @@ ACSKPlayerController::ACSKPlayerController()
 	bIsActionPhase = false;
 	SelectedAction = ECSKActionPhaseMode::None;
 	RemainingActions = ECSKActionPhaseMode::All;
+	bCanUseQuickEffect = false;
 }
 
 void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
@@ -42,24 +45,30 @@ void ACSKPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
-	if (GameState)
+	if (IsLocalPlayerController())
 	{
-		GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
-	}
-	else
-	{
-		UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
-			"change event as game state is not of CSKGameState"));
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
+				"change event as game state is not of CSKGameState"));
+		}
 	}
 }
 
 void ACSKPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
-	if (GameState)
+	if (IsLocalPlayerController())
 	{
-		GameState->OnRoundStateChanged.RemoveDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			GameState->OnRoundStateChanged.RemoveDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
+		}
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -71,20 +80,25 @@ void ACSKPlayerController::Tick(float DeltaTime)
 
 	if (IsLocalPlayerController())
 	{
-		// Get tile player is hovering over
-		ATile* TileUnderMouse = GetTileUnderMouse();
-		if (TileUnderMouse != HoveredTile)
+		// We only want to notify tiles once the game has actually begun (as is running)
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState && GameState->IsMatchInProgress())
 		{
-			if (HoveredTile)
+			// Get tile player is hovering over
+			ATile* TileUnderMouse = GetTileUnderMouse();
+			if (TileUnderMouse != HoveredTile)
 			{
-				HoveredTile->EndHoveringTile(this);
-			}
+				if (HoveredTile)
+				{
+					HoveredTile->EndHoveringTile(this);
+				}
 
-			HoveredTile = TileUnderMouse;
+				HoveredTile = TileUnderMouse;
 
-			if (HoveredTile)
-			{
-				HoveredTile->StartHoveringTile(this);
+				if (HoveredTile)
+				{
+					HoveredTile->StartHoveringTile(this);
+				}
 			}
 		}
 	}
@@ -106,10 +120,46 @@ void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	
+	// We don't need to specify Owner only as each client will only have access to their controller
 	DOREPLIFETIME(ACSKPlayerController, CSKPlayerID);
 	DOREPLIFETIME(ACSKPlayerController, CastlePawn);
 	DOREPLIFETIME(ACSKPlayerController, bIsActionPhase);
 	DOREPLIFETIME(ACSKPlayerController, RemainingActions);
+	DOREPLIFETIME(ACSKPlayerController, bCanUseQuickEffect);
+}
+
+void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> InConstructData)
+{
+	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	{
+		SelectedTowerConstructionData = InConstructData;
+	}
+}
+
+void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
+{
+	if (IsLocalPlayerController() && (IsPerformingActionPhase() || bCanUseQuickEffect))
+	{
+		SelectedSpellCard = InSpellCard;
+		
+		const USpellCard* DefaultSpellCard = SelectedSpellCard.GetDefaultObject();
+		if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(InSpellIndex))
+		{
+			SelectedSpellIndex = InSpellIndex;
+		}
+		else
+		{
+			SelectedSpellIndex = 0;
+		}
+	}
+}
+
+void ACSKPlayerController::SetSelectedAdditionalMana(int32 InAdditionalMana)
+{
+	if (IsLocalPlayerController() && IsPerformingActionPhase())
+	{
+		SelectedSpellAdditionalMana = FMath::Max(0, InAdditionalMana);
+	}
 }
 
 ACSKPawn* ACSKPlayerController::GetCSKPawn() const
@@ -148,7 +198,7 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	if (false)//TODO: !bCanSelectTile)
+	if (!bCanSelectTile)
 	{
 		return;
 	}
@@ -160,27 +210,24 @@ void ACSKPlayerController::SelectTile()
 		{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
-				// TODO: Move this to a function
-				if (HoveredTile)
-				{
-					Server_RequestCastleMoveAction(HoveredTile);
-				}
+				MoveCastleToHoveredTile();
 				break;
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
-				// TODO: Move this to a function
-				if (HoveredTile)
-				{
-					Server_RequestBuildTowerAction(TestTowerTemplate, HoveredTile);
-				}
+				BuildTowerAtHoveredTile(SelectedTowerConstructionData);
 				break;
 			}
 			case ECSKActionPhaseMode::CastSpell:
 			{
+				CastSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 				break;
 			}
 		}
+	}
+	else if (bCanUseQuickEffect)
+	{
+		CastQuickEffectSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 	}
 }
 
@@ -190,6 +237,19 @@ void ACSKPlayerController::ResetCamera()
 	if (Pawn && CastlePawn)
 	{
 		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
+	}
+}
+
+void ACSKPlayerController::SetCanSelectTile(bool bEnable)
+{
+	if (bCanSelectTile != bEnable)
+	{
+		bCanSelectTile = bEnable;
+
+		if (!bCanSelectTile)
+		{
+
+		}
 	}
 }
 
@@ -269,8 +329,7 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 
 	if (CachedCSKHUD)
 	{
-		// TODO:
-		// Notify hud
+		CachedCSKHUD->OnRoundStateChanged(NewState);
 	}
 }
 
@@ -297,13 +356,23 @@ void ACSKPlayerController::OnTransitionToBoard()
 	}
 }
 
+void ACSKPlayerController::Client_OnMatchFinished_Implementation(bool bIsWinner)
+{
+	SetCanSelectTile(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnMatchFinished(bIsWinner);
+	}
+}
+
 void ACSKPlayerController::Client_OnCollectionPhaseResourcesTallied_Implementation(FCollectionPhaseResourcesTally TalliedResources)
 {
 	bWaitingOnTallyEvent = true;
-	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.SpellUses);
+	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.bDeckReshuffled, TalliedResources.SpellCard);
 }
 
-void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, int32 SpellUses)
+void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard)
 {
 	// Just end immediately if not implemented
 	FinishCollectionSequenceEvent();
@@ -339,7 +408,6 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 		if (bIsActionPhase != bEnabled)
 		{
 			bIsActionPhase = bEnabled;
-			RemainingActions = bEnabled ? ECSKActionPhaseMode::All : ECSKActionPhaseMode::None;
 
 			// Purposely calling on rep here to have pawn move back
 			if (IsLocalPlayerController())
@@ -351,15 +419,35 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 				SetActionMode(ECSKActionPhaseMode::None, true);
 			}
 
-			// Reset any variables associated with the last round
+			// If its our action phase, we should always be able to move.
+			// We can check if we can build or destroy any towers before setting build actions. We can do the same with spells
+			ECSKActionPhaseMode ModesToEnable = bEnabled ? ECSKActionPhaseMode::MoveCastle : ECSKActionPhaseMode::None;
+
 			if (bEnabled)
 			{
+				// Reset tiles traversed
 				ACSKPlayerState* PlayerState = GetCSKPlayerState();
 				if (PlayerState)
 				{
 					PlayerState->ResetTilesTraversed();
+					PlayerState->ResetSpellsCast();
+
+					// Check not only if we can cast a spell, but if we can afford any of them
+					if (PlayerState->CanCastAnotherSpell(true))
+					{
+						ModesToEnable |= ECSKActionPhaseMode::CastSpell;
+					}
+				}
+
+				// Check if we can build or destroy towers
+				ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+				if (GameState && GameState->CanPlayerBuildMoreTowers(this))
+				{
+					ModesToEnable |= ECSKActionPhaseMode::BuildTowers;
 				}
 			}
+
+			RemainingActions = ModesToEnable;
 		}
 	}
 }
@@ -388,6 +476,11 @@ void ACSKPlayerController::SetActionMode(ECSKActionPhaseMode NewMode, bool bClie
 		if (IsLocalPlayerController())
 		{
 			OnSelectionModeChanged(NewMode);
+
+			if (CachedCSKHUD)
+			{
+				CachedCSKHUD->OnSelectedActionChanged(NewMode);
+			}
 		}
 
 		// We may be setting client side, we should also inform the server
@@ -401,6 +494,27 @@ void ACSKPlayerController::SetActionMode(ECSKActionPhaseMode NewMode, bool bClie
 void ACSKPlayerController::BP_SetActionMode(ECSKActionPhaseMode NewMode)
 {
 	SetActionMode(NewMode);
+}
+
+void ACSKPlayerController::SetQuickEffectUsageEnabled(bool bEnable)
+{
+	if (HasAuthority() && bCanUseQuickEffect != bEnable)
+	{
+		bCanUseQuickEffect = bEnable;
+
+		if (IsLocalPlayerController())
+		{
+			OnRep_bCanUseQuickEffect();
+		}
+	}
+}
+
+void ACSKPlayerController::SkipQuickEffectSelection()
+{
+	if (IsLocalPlayerController() && bCanUseQuickEffect)
+	{
+		Server_SkipQuickEffectSelection();
+	}
 }
 
 bool ACSKPlayerController::Server_SetActionMode_Validate(ECSKActionPhaseMode NewMode)
@@ -462,6 +576,16 @@ bool ACSKPlayerController::CanRequestBuildTowerAction() const
 	return false;
 }
 
+bool ACSKPlayerController::CanRequestCastSpellAction() const
+{
+	if (IsPerformingActionPhase() && EnumHasAnyFlags(SelectedAction, ECSKActionPhaseMode::CastSpell))
+	{
+		return true;
+	}
+
+	return false;
+}
+
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
@@ -474,6 +598,8 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		{
 			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
+
+		SetCanSelectTile(true);
 	}
 }
 
@@ -482,6 +608,18 @@ void ACSKPlayerController::OnRep_RemainingActions()
 	if (!EnumHasAllFlags(RemainingActions, SelectedAction))
 	{
 		SetActionMode(ECSKActionPhaseMode::None, true);
+	}
+}
+
+void ACSKPlayerController::OnRep_bCanUseQuickEffect()
+{
+	if (bCanUseQuickEffect)
+	{
+		SetCanSelectTile(true);
+	}
+	else if (ensure(!IsPerformingActionPhase()))
+	{
+		SetCanSelectTile(false);
 	}
 }
 
@@ -504,29 +642,39 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 
 void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(ACastle* MovingCastle)
 {
-	bCanSelectTile = false;
+	SetCanSelectTile(false);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn)
 	{
 		Pawn->TrackActor(MovingCastle);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
+	}
 }
 
 void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 {
-	bCanSelectTile = true;
+	SetCanSelectTile(true);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn)
 	{
 		Pawn->TrackActor(nullptr);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
+	}
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
-	bCanSelectTile = false;
+	SetCanSelectTile(false);
 
 	ACSKPawn* Pawn = GetCSKPawn();
 	if (Pawn && TargetTile)
@@ -535,12 +683,70 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 		SetIgnoreMoveInput(true);
 	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
+	}
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 {
-	bCanSelectTile = true;
+	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
+	}
+}
+
+void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EActiveSpellContext SpellContext, ATile* TargetTile)
+{
+	SetCanSelectTile(false);
+
+	ACSKPawn* Pawn = GetCSKPawn();
+	if (Pawn && TargetTile)
+	{
+		// Have players watch spell in action	
+		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		SetIgnoreMoveInput(true);
+	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::CastSpell, SpellContext);
+	}
+}
+
+void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EActiveSpellContext SpellContext)
+{
+	SetCanSelectTile(true);
+	SetIgnoreMoveInput(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::CastSpell, SpellContext);
+	}
+}
+
+void ACSKPlayerController::Client_OnSelectCounterSpell_Implementation(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile)
+{
+	if (CachedCSKHUD)
+	{
+		const USpell* DefaultSpell = SpellToCounter.GetDefaultObject();
+		CachedCSKHUD->OnQuickEffectSelection(true, DefaultSpell, TargetTile);
+	}
+}
+
+void ACSKPlayerController::Client_OnWaitForCounterSpell_Implementation()
+{
+	SetCanSelectTile(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnQuickEffectSelection(false, nullptr, nullptr);
+	}
 }
 
 bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
@@ -550,11 +756,86 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 		if (ActionMode != ECSKActionPhaseMode::None || ActionMode != ECSKActionPhaseMode::All)
 		{
 			RemainingActions &= ~ActionMode;
+
+			// This is needed for listen server matches
+			if (IsLocalPlayerController())
+			{
+				OnRep_RemainingActions();
+			}
+
 			return RemainingActions == ECSKActionPhaseMode::None;
 		}
 	}
 
 	return false;
+}
+
+void ACSKPlayerController::MoveCastleToHoveredTile()
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::MoveCastle)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastleMoveAction(HoveredTile);
+		}
+	}
+}
+
+void ACSKPlayerController::BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructionData> TowerConstructData)
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::BuildTowers)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestBuildTowerAction(TowerConstructData, HoveredTile);
+		}
+	}
+}
+
+void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::CastSpell)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastSpellAction(SpellCard, SpellIndex, HoveredTile, AdditionalMana);
+		}
+	}
+}
+
+void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
+{
+	// Only local players should build
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bCanUseQuickEffect)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastQuickEffectAction(SpellCard, SpellIndex, HoveredTile, AdditionalMana);
+		}
+	}
 }
 
 bool ACSKPlayerController::Server_EndActionPhase_Validate()
@@ -629,5 +910,107 @@ void ACSKPlayerController::Server_RequestBuildTowerAction_Implementation(TSubcla
 	if (!bSuccess)
 	{
 
+	}
+}
+
+bool ACSKPlayerController::Server_RequestCastSpellAction_Validate(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestCastSpellAction_Implementation(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	bool bSuccess = false;
+
+	if (CanRequestCastSpellAction())
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestCastSpell(SpellCard, SpellIndex, Target, AdditionalMana);
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_RequestCastQuickEffectAction_Validate(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestCastQuickEffectAction_Implementation(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana)
+{
+	bool bSuccess = false;
+
+	if (bCanUseQuickEffect)
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestCastQuickEffect(SpellCard, SpellIndex, Target, AdditionalMana);
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_SkipQuickEffectSelection_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_SkipQuickEffectSelection_Implementation()
+{
+	bool bSuccess = false;
+
+	if (bCanUseQuickEffect)
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestSkipQuickEffect();
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+void ACSKPlayerController::GetBuildableTowers(TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const
+{
+	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (GameState)
+	{
+		GameState->GetTowersPlayerCanBuild(this, OutTowers);
+	}
+}
+
+void ACSKPlayerController::GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	ACSKPlayerState* PlayerState = GetCSKPlayerState();
+	if (PlayerState)
+	{
+		PlayerState->GetSpellsPlayerCanCast(OutSpellCards);
+	}
+}
+
+void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+{
+	ACSKPlayerState* PlayerState = GetCSKPlayerState();
+	if (PlayerState)
+	{
+		PlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
 	}
 }

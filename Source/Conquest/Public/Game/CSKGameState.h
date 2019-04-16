@@ -87,6 +87,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsActionPhaseActive() const;
 
+	/** Get the player ID of the winner */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	int32 GetMatchWinnerPlayerID() const { return MatchWinnerPlayerID; }
+
+	/** Get the win condition the player met to win the game */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ECSKMatchWinCondition GetMatchWinCondition() const { return MatchWinCondition; }
+
 protected:
 
 	/** Match state notifies */
@@ -99,8 +107,8 @@ protected:
 
 	/** Round state notifies */
 	void NotifyCollectionPhaseStart();
-	void NotifyFirstCollectionPhaseStart();
-	void NotifySecondCollectionPhaseStart();
+	void NotifyFirstActionPhaseStart();
+	void NotifySecondActionPhaseStart();
 	void NotifyEndRoundPhaseStart();
 
 private:
@@ -118,6 +126,10 @@ private:
 
 	/** Determines which round state change notify to call */
 	void HandleRoundStateChange(ECSKRoundState NewState);
+
+	/** Set the match win details on all clients */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_SetWinDetails(int32 WinnerID, ECSKMatchWinCondition WinCondition);
 
 public:
 
@@ -143,6 +155,14 @@ protected:
 	UPROPERTY()
 	ECSKRoundState PreviousRoundState;
 
+	/** The ID of the player who won the match */
+	UPROPERTY()
+	int32 MatchWinnerPlayerID;
+
+	/** The condition the winner met to win the match */
+	UPROPERTY()
+	ECSKMatchWinCondition MatchWinCondition;
+
 public:
 
 	/** Get if action phase is timed */
@@ -153,12 +173,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
 
+	/** Get if quick effect time is timed */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsQuickEffectCounterTimed() const { return QuickEffectCounterTimeRemaining != -1.f; }
+
+	/** Get the player ID of whose action phase it is */
+	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
+
+	/** Get the time remaining for current action taking place (this
+	can either action phase turn time, quick effect counter time) */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	float GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
+
 protected:
 
-	/** Helper function for checking if action phase timer should count down */
-	FORCEINLINE bool ShouldCountdownActionPhase() const
+	/** Helper function for checking if phase timer should count down */
+	FORCEINLINE bool ShouldCountdownPhaseTimer() const
 	{
-		if (IsActionPhaseActive() && IsActionPhaseTimed())
+		if (IsActionPhaseActive())
 		{
 			return !bFreezeActionPhaseTimer;
 		}
@@ -183,9 +215,13 @@ private:
 
 protected:
 
-	/** ID of the player whose action phase it is */
+	/** ID of the player who won the coin toss */
 	UPROPERTY(Transient, Replicated)
-	int32 ActivePhasePlayerID;
+	int32 CoinTossWinnerPlayerID;
+
+	/** ID of the player whose action phase it is */
+	UPROPERTY(Transient)
+	int32 ActionPhasePlayerID;
 
 	/** Time remaining in this action phase */
 	UPROPERTY(Transient, Replicated)
@@ -198,6 +234,14 @@ protected:
 	/** Lookup table for how many instances of a certain tower exists on the board */
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
+
+	/** If we should countdown the quick effect counter time */
+	UPROPERTY(Transient)
+	uint32 bCountdownQuickEffectTimer : 1;
+
+	/** Time remaining for player to select a quick effect spell */
+	UPROPERTY(Transient, Replicated)
+	float QuickEffectCounterTimeRemaining;
 
 public:
 
@@ -212,6 +256,15 @@ public:
 
 	/** Notify that the current build request has finished */
 	void HandleBuildRequestFinished(ATower* NewTower);
+
+	/** Notify that a spell has been cast and will soon start */
+	void HandleSpellRequestConfirmed(ATile* TargetTile);
+
+	/** Notify that the current spell request has finished */
+	void HandleSpellRequestFinished();
+
+	/** Notify that a quick effect is being selected */
+	void HandleQuickEffectSelectionStart();
 
 private:
 
@@ -231,6 +284,18 @@ private:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleBuildRequestFinished(ATower* NewTower);
 
+	/** Handle spell request confirmation client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleSpellRequestConfirmed(ATile* TargetTile);
+
+	/** Handle spell request finished client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleSpellRequestFinished();
+
+	/** Handle quick effect selection client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleQuickEffectSelection();
+
 public:
 
 	/** If given player has moved the required amount of tiles this turn */
@@ -239,11 +304,15 @@ public:
 
 	/** If given player can build or destroy the given tower */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy = false) const;
+	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const;
 
 	/** If given player can build or destroy anymore towers this turn */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	bool CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller, bool bOrDestroy = false) const;
+	bool CanPlayerBuildMoreTowers(const ACSKPlayerController* Controller) const;
+
+	/** Get all the towers the given player can build */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
 
 	/** Get all towers that can be built this match */
 	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
@@ -255,8 +324,7 @@ protected:
 	void UpdateRules();
 
 	/** Helper function for checking if given player can build or destroy given tower */
-	// TODO: Implement OrDestroy functionality
-	bool CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate, bool bOrDestroy) const;
+	bool CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSubclassOf<UTowerConstructionData> TowerTemplate) const;
 	
 protected:
 
@@ -295,10 +363,21 @@ protected:
 
 public:
 
+	/** Get the total time of the match. If match is
+	still running, how long the match has been in session */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	float GetMatchTimeSeconds() const;
+
 	/** Get the current round being played */
 	FORCEINLINE int32 GetRound() const { return RoundsPlayed; }
 
 protected:
+
+	/** The time when the match started (Coin Flip) */
+	float MatchStartTime;
+
+	/** The time when the match finished */
+	float MatchEndTime;
 
 	/** How many rounds have been played */
 	UPROPERTY(BlueprintReadOnly, Category = Stats)

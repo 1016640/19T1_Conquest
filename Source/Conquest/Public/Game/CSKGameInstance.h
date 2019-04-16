@@ -13,5 +13,14 @@ UCLASS()
 class CONQUEST_API UCSKGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
-	
+
+public:
+
+	UCSKGameInstance();
+
+public:
+
+	/** Server travels to given level with options*/
+	UFUNCTION(BlueprintCallable, Category = CSK, meta = (WorldContext = "WorldContextObject"))
+	static bool ServerTravelToLevel(const UObject* WorldContextObject, FString LevelName, const TArray<FString>& Options);
 };

@@ -144,16 +144,21 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 		AActor* BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
 		
 		// Execute any events before clearing (as at this point we are still technically occupied)
-		BP_OnBoardPieceCleared(BoardPiece);
+		BP_OnBoardPieceCleared();
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;
 	}
 }
 
-bool ATile::IsTileOccupied() const
+bool ATile::IsTileOccupied(bool bConsiderNull) const
 {
-	return bIsNullTile || PieceOccupant.GetInterface() != nullptr;
+	if (PieceOccupant.GetInterface() == nullptr)
+	{
+		return bConsiderNull && bIsNullTile;
+	}
+
+	return true;
 }
 
 bool ATile::CanPlaceTowersOn() const
@@ -162,11 +167,31 @@ bool ATile::CanPlaceTowersOn() const
 	return BoardManager ? BoardManager->CanPlaceTowerOnTile(this) : false;
 }
 
+AActor* ATile::GetBoardPiece() const
+{
+	if (IsTileOccupied())
+	{
+		return CastChecked<AActor>(PieceOccupant.GetObject());
+	}
+
+	return nullptr;
+}
+
 ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 {
 	if (IsTileOccupied())
 	{
 		return PieceOccupant->GetBoardPieceOwnerPlayerState();
+	}
+
+	return nullptr;
+}
+
+UHealthComponent* ATile::GetBoardPieceHealthComponent() const
+{
+	if (IsTileOccupied())
+	{
+		return PieceOccupant->GetHealthComponent();
 	}
 
 	return nullptr;

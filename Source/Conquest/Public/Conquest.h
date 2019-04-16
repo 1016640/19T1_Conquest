@@ -13,9 +13,6 @@ DECLARE_STATS_GROUP(TEXT("Conquest"), STATGROUP_Conquest, STATCAT_Advanced);
 /** The max number of clients allowed in a session (including local host) */
 #define CSK_MAX_NUM_PLAYERS 2
 
-/** The max number of spectators that can watch the game */
-#define CSK_MAX_NUM_SPECTATORS 4
-
 /** The current state of the match taking place. This
 works similar to how AGameMode works (see GameMode.h) */
 UENUM(BlueprintType)
@@ -84,3 +81,38 @@ enum class ECSKActionPhaseMode : uint8
 };
 
 ENUM_CLASS_FLAGS(ECSKActionPhaseMode);
+
+// TODO: This could be replaced by ESpellType
+/** The context for a spells activiation */
+UENUM(BlueprintType)
+enum class EActiveSpellContext : uint8
+{
+	/** No context */
+	None,
+
+	/** Active player casting spell during action phase */
+	Action,
+
+	/** Active players opponents countering with a quick effect spell */
+	Counter,
+
+	/** Bonus spell cast due to element match */
+	Bonus
+};
+
+/** The conditions to win a match of CSK */
+UENUM(BlueprintType)
+enum class ECSKMatchWinCondition : uint8
+{
+	/** A player has reached their opponents portal */
+	PortalReached,
+
+	/** A player has destroyed their opponents castle */
+	CastleDestroyed,
+
+	/** A player has surrendered */
+	Surrender,
+
+	/** Condition is unknown */
+	Unknown
+};

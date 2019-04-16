@@ -14,6 +14,8 @@ class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 class ATower;
+class USpell;
+class USpellCard;
 class UTowerConstructionData;
 
 /** Struct containing tallied amount of resources to give to a player */
@@ -29,11 +31,12 @@ public:
 		Reset();
 	}
 
-	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, int32 InSpellUses)
+	FCollectionPhaseResourcesTally(int32 InGold, int32 InMana, bool bInDeckReshuffled, TSubclassOf<USpellCard> InSpellCard)
 	{
 		Gold = InGold;
 		Mana = InMana;
-		SpellUses = InSpellUses;
+		bDeckReshuffled = bInDeckReshuffled;
+		SpellCard = InSpellCard;
 	}
 
 public:
@@ -43,22 +46,28 @@ public:
 	{
 		Gold = 0;
 		Mana = 0;
-		SpellUses = 0;
+		bDeckReshuffled = false;
+		SpellCard = nullptr;
 	}
 
 public:
 
 	/** Gold tallied */
 	UPROPERTY()
-	int32 Gold;
+	int32 Gold; // (uint8?)
 
 	/** Mana tallied */
 	UPROPERTY()
-	int32 Mana;
+	int32 Mana; // (uint8?)
 
-	/** Additional spell uses tallied */
+	/** If spell deck was reshuffled */
 	UPROPERTY()
-	int32 SpellUses;
+	uint8 bDeckReshuffled : 1;
+
+	/** The spell card the player picked up.
+	Will be invalid if no card was picked up */
+	UPROPERTY()
+	TSubclassOf<USpellCard> SpellCard;
 };
 
 /**
@@ -98,9 +107,23 @@ protected:
 public:
 
 	/** This controllers player ID, this should never be altered */
-	UPROPERTY(Transient, DuplicateTransient, Replicated)
+	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, Replicated)
 	int32 CSKPlayerID;
 
+public:
+
+	/** Set the tower this player wants to build */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedTower(TSubclassOf<UTowerConstructionData> InConstructData);
+
+	/** Set the spell this player wants to cast */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex);
+
+	/** Set the additional mana the player wants to spend for spells */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SetSelectedAdditionalMana(int32 InAdditionalMana);
+		 
 public:
 
 	/** Get possessed pawn as a CSK pawn */
@@ -119,12 +142,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	ATile* GetTileUnderMouse() const;
 
-protected:
-
-	/** Our HUD class as a CSK HUD */
-	UPROPERTY()
-	ACSKHUD* CachedCSKHUD;
-
 private:
 
 	/** Attempts to perform an action using the current hovered tile */
@@ -132,6 +149,15 @@ private:
 
 	/** Resets our camera to focus on our castle */
 	void ResetCamera();
+
+	/** Sets whethere we can select tiles */
+	void SetCanSelectTile(bool bEnable);
+
+protected:
+
+	/** Our HUD class as a CSK HUD */
+	UPROPERTY()
+	ACSKHUD* CachedCSKHUD;
 
 protected:
 
@@ -142,6 +168,22 @@ protected:
 	/** If we are accepting input via select tile (only valid on the client) */
 	UPROPERTY(Transient)
 	uint32 bCanSelectTile : 1;
+
+	/** The tower the player has selected to build */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	TSubclassOf<UTowerConstructionData> SelectedTowerConstructionData;
+
+	/** The spell the player has selected to cast */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	TSubclassOf<USpellCard> SelectedSpellCard;
+
+	/** The index of the spell to use of the selected spell card */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	int32 SelectedSpellIndex;
+
+	/** The additional mana this player is willing to spend when casting spells */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = CSK)
+	int32 SelectedSpellAdditionalMana;
 
 public:
 
@@ -180,6 +222,10 @@ public:
 	/** Called by the game mode when transitioning to the board */
 	void OnTransitionToBoard(); // Refactor
 
+	/** Notify that the match has concluded */
+	UFUNCTION(Client, Reliable)
+	void Client_OnMatchFinished(bool bIsWinner);
+
 public:
 
 	/** Notify that we have collected resources during collection phase */
@@ -191,7 +237,7 @@ protected:
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, int32 SpellUses);
+	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard);
 
 	/** Finishes the collection phase event. This must be called after collection resources tallied event */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -228,6 +274,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (DisplayName="Set Action Mode"))
 	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
+	/** Enables/Disables this players quick effect ussage */
+	void SetQuickEffectUsageEnabled(bool bEnable);
+
+	/** Skips our quick effect counter selection if we are allowed to */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SkipQuickEffectSelection();
+
 private:
 
 	/** Set action mode on the server */
@@ -253,6 +306,9 @@ public:
 	/** If this player is allowed to request a tower construction */
 	bool CanRequestBuildTowerAction() const;
 
+	/** If this player is allowed to request a spell cast */
+	bool CanRequestCastSpellAction() const;
+
 protected:
 
 	/** Event for when the action phase mode has changed */
@@ -269,6 +325,10 @@ private:
 	UFUNCTION()
 	void OnRep_RemainingActions();
 
+	/** Notify that can use quick effect has been replicated */
+	UFUNCTION()
+	void OnRep_bCanUseQuickEffect();
+
 protected:
 
 	/** If it is our action phase */
@@ -282,6 +342,10 @@ protected:
 	/** The actions we can still during our action phase */
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
+
+	/** If this player is allowed to select a counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanUseQuickEffect)
+	uint32 bCanUseQuickEffect : 1;
 
 public:
 
@@ -301,9 +365,46 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnTowerBuildRequestFinished();
 
+	/** Notify that an action phase spell cast has been confirmed */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCastSpellRequestConfirmed(EActiveSpellContext SpellContext, ATile* TargetTile);
+
+	/** Notify that an action phase spell cast has finished */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
+
+	/** Notify that this player is able to counter an incoming spell cast */
+	UFUNCTION(Client, Reliable)
+	void Client_OnSelectCounterSpell(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
+
+	/** Notify that this players spell request is pending as the opposing player is selecting a counter */
+	UFUNCTION(Client, Reliable)
+	void Client_OnWaitForCounterSpell();
+
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
+
+public:
+
+	/** Moves our castle to the currently hovered tile.
+	This will only work if running on local players controller */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void MoveCastleToHoveredTile();
+
+	/** Builds the given tower at the currently hovered tile. 
+	This will only work if running on local players controller */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructionData> TowerConstructData);
+
+	/** Casts the given spell (of spell card) at the currently hovered tile. 
+	This will only work if running on local players controller */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
+
+	/** Casts the given spell (of spell card) as a quick effect at the currently hovered tile */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
 
 protected:
 
@@ -319,8 +420,29 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestBuildTowerAction(TSubclassOf<UTowerConstructionData> TowerConstructData, ATile* Target);
 
+	/** Makes a request to cast a spell at given tile (with additional mana cost) */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastSpellAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
+
+	/** Makes a request to cast a counter spell at given tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastQuickEffectAction(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, ATile* Target, int32 AdditionalMana);
+
+	/** Makes a request to skip selecting a counter spell */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SkipQuickEffectSelection();
+
 public:
 
-	UPROPERTY(EditAnywhere)
-	TSubclassOf<UTowerConstructionData> TestTowerTemplate;
+	/** Get the list of towers this player can build */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetBuildableTowers(TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
+
+	/** Get the list of spells this player can cast (in hand) */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+	/** Get the list of quick effect spells this player can cast (in hand) */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
 };

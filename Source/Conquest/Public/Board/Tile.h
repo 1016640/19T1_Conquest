@@ -9,6 +9,7 @@
 class ACSKPlayerController;
 class ACSKPlayerState;
 class IBoardPieceInterface;
+class UHealthComponent;
 
 /**
  * Actor for managing an individual tile on the board. Will track
@@ -96,7 +97,7 @@ protected:
 
 	/** Event for when the occupant board piece has been cleared */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName = "On Board Piece Cleared"))
-	void BP_OnBoardPieceCleared(AActor* OldBoardPiece);
+	void BP_OnBoardPieceCleared();
 
 	/** Sets the board piece to occupy this tile */
 	UFUNCTION(NetMulticast, Reliable)
@@ -108,17 +109,27 @@ protected:
 
 public:
 
-	/** If this tile is currently occupied. Null tiles are assumed to be occupied */
+	/** If this tile is currently occupied */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
-	virtual bool IsTileOccupied() const;
+	virtual bool IsTileOccupied(bool bConsiderNull = true) const;
 
 	/** If towers can be constructed on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	bool CanPlaceTowersOn() const;
 
+public:
+
+	/** Get the board piece placed on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	AActor* GetBoardPiece() const;
+
 	/** Get the player state for the player whose board piece is on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	ACSKPlayerState* GetBoardPiecesOwner() const;
+
+	/** Get the health component of the board piece on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	UHealthComponent* GetBoardPieceHealthComponent() const;
 
 private:
 

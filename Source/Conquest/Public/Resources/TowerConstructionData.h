@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "UObject/NoExportTypes.h"
+#include "Styling/SlateBrush.h"
 #include "TowerConstructionData.generated.h"
 
 class ATower;
@@ -28,8 +29,12 @@ public:
 	FName TowerName;
 
 	/** Description of this tower */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Description"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Description", MultiLine = "true"))
 	FText TowerDescription;
+
+	/** Image of this tower */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Icon"))
+	FSlateBrush TowerIcon;
 
 	/** Template actor for this tower */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Tower, meta = (DisplayName = "Class"))

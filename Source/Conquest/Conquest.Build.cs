@@ -13,23 +13,28 @@ public class Conquest : ModuleRules
             "Conquest/Public"
         });
 
-		PublicDependencyModuleNames.AddRange(new string[] 
+        PrivateIncludePaths.AddRange(new string[]
+        {
+            "Conquest/Private"
+        });
+
+        PublicDependencyModuleNames.AddRange(new string[] 
         {
             "Core",
             "CoreUObject",
             "Engine",
-            "InputCore"
+            "InputCore",
+            "UMG"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] 
         {
             "AIModule",
-            "OnlineSubsystem"
+            "OnlineSubsystem",
+            "Slate",
+            "SlateCore"
         });
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 

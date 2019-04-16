@@ -7,6 +7,7 @@
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
 
+#include "UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -69,4 +70,34 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 	}
 
 	return nullptr;
+}
+
+void UConquestFunctionLibrary::AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder)
+{
+	if (Widget && !Widget->IsInViewport())
+	{
+		Widget->AddToViewport(ZOrder);
+	}
+}
+
+void UConquestFunctionLibrary::RemoveWidgetFromParent(UUserWidget* Widget)
+{
+	if (Widget && Widget->IsInViewport())
+	{
+		Widget->RemoveFromParent();
+	}
+}
+
+FString UConquestFunctionLibrary::GetSecondsAsHourString(float Seconds)
+{
+	// Number of hours
+	int32 NumHours = FMath::FloorToInt(Seconds / 3600.f);
+
+	// Number of minutes
+	int32 NumMinutes = FMath::FloorToInt(Seconds / 60.f);
+
+	// Number of seconds
+	int32 NumSeconds = FMath::FloorToInt(Seconds - static_cast<float>((NumMinutes * 60)));
+		
+	return FString::Printf(TEXT("%01d:%02d:%02d"), NumHours, NumMinutes, NumSeconds);
 }
