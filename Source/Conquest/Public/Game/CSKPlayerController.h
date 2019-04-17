@@ -277,9 +277,8 @@ public:
 	/** Enables/Disables this players quick effect ussage */
 	void SetQuickEffectUsageEnabled(bool bEnable);
 
-	/** Skips our quick effect counter selection if we are allowed to */
-	UFUNCTION(BlueprintCallable, Category = CSK)
-	void SkipQuickEffectSelection();
+	/** Enables/Disables this players bonus spell selection */
+	void SetBonusSpellSelectionEnabled(bool bEnable);
 
 private:
 
@@ -329,6 +328,10 @@ private:
 	UFUNCTION()
 	void OnRep_bCanUseQuickEffect();
 
+	/** Notify than can select bonus spell target has been replicated */
+	UFUNCTION()
+	void OnRep_bCanSelectBonusSpellTarget();
+
 protected:
 
 	/** If it is our action phase */
@@ -346,6 +349,10 @@ protected:
 	/** If this player is allowed to select a counter spell */
 	UPROPERTY(ReplicatedUsing = OnRep_bCanUseQuickEffect)
 	uint32 bCanUseQuickEffect : 1;
+
+	/** If this player can select a bonus spell target */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectBonusSpellTarget)
+	uint32 bCanSelectBonusSpellTarget : 1;
 
 public:
 
@@ -365,11 +372,11 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnTowerBuildRequestFinished();
 
-	/** Notify that an action phase spell cast has been confirmed */
+	/** Notify that a spell cast has been confirmed */
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestConfirmed(EActiveSpellContext SpellContext, ATile* TargetTile);
 
-	/** Notify that an action phase spell cast has finished */
+	/** Notify that a spell cast has finished */
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
 
@@ -380,6 +387,10 @@ public:
 	/** Notify that this players spell request is pending as the opposing player is selecting a counter */
 	UFUNCTION(Client, Reliable)
 	void Client_OnWaitForCounterSpell();
+
+	/** Notify that this player is able to select a tile to use bonus spell on */
+	UFUNCTION(Client, Reliable)
+	void Client_OnSelectBonusSpellTarget(TSubclassOf<USpell> BonusSpell);
 
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
@@ -405,6 +416,24 @@ public:
 	/** Casts the given spell (of spell card) as a quick effect at the currently hovered tile */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana = 0);
+
+	/** Skips the opportunity to cast a quick effect spell */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SkipQuickEffectSpell();
+
+	/** Casts the pending bonus spell at the currently hovered tile */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void CastBonusElementalSpellAtHoveredTile();
+
+	/** Skips the opportunity to cast a bonus elemental spell */
+	UFUNCTION(BlueprintCallable, Category = CSK)
+	void SkipBonusElementalSpell();
+
+private:
+
+	/** The bonus spell we are allowed to cast. This is only valid on the client */
+	UPROPERTY()
+	TSubclassOf<USpell> PendingBonusSpell;
 
 protected:
 
@@ -432,6 +461,14 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SkipQuickEffectSelection();
 
+	/** Makes a request to use bonus spell at selected tile */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestCastBonusSpellAction(ATile* Target);
+
+	/** Makes a request to skip using a bonus elemental spell */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SkipBonusSpellSelection();
+
 public:
 
 	/** Get the list of towers this player can build */
@@ -445,4 +482,8 @@ public:
 	/** Get the list of quick effect spells this player can cast (in hand) */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+	/** Get the bonus elemental spell this player can cast */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	TSubclassOf<USpell> GetCastableBonusElementalSpell() const { return PendingBonusSpell; }
 };

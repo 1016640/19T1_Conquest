@@ -64,4 +64,8 @@ public:
 	This gets called for either our owner selecting or our owner waiting */
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnQuickEffectSelection(bool bIsSelecting, const USpell* SpellToCounter, ATile* TargetTile);
+
+	/** Notify that the player is allowed to select a target for bonus spell */
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnBonusSpellSelection(const USpell* BonusSpell);
 };

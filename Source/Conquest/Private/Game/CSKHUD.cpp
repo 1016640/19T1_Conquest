@@ -126,6 +126,15 @@ void ACSKHUD::OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCoun
 	}
 }
 
+void ACSKHUD::OnBonusSpellSelection(const USpell* BonusSpell)
+{
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
+	{
+		Widget->OnBonusSpellSelection(BonusSpell);
+	}
+}
+
 void ACSKHUD::OnMatchFinished(bool bIsWinner)
 {
 	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);

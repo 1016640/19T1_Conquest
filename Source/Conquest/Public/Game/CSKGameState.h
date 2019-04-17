@@ -8,6 +8,7 @@
 
 class ABoardManager;
 class ACastle;
+class ACSKPawn;
 class ACSKPlayerController;
 class ACSKPlayerState;
 class ACSKGameMode;
@@ -51,17 +52,29 @@ public:
 	/** Do not call this externally. This is used by the game mode to set the board to use */
 	void SetMatchBoardManager(ABoardManager* InBoardManager);
 
+	/** Do not call this externally. This is used by the local player controller to set the players pawn */
+	void SetLocalPlayersPawn(ACSKPawn* InPlayerPawn);
+
 public:
 
 	/** Get the games board manager */
 	UFUNCTION(BlueprintPure, Category = "Board")
 	ABoardManager* GetBoardManager(bool bErrorCheck = true) const;
 
+	/** Get the local players pawn */
+	UFUNCTION(BlueprintPure, Category = "Board")
+	ACSKPawn* GetLocalPlayerPawn() const { return LocalPlayerPawn; }
+
 private:
 
 	/** The board of this match */
 	UPROPERTY(Transient, Replicated)
 	ABoardManager* BoardManager;
+
+	/** The local players pawn. We save this here to
+	allow tower and spell actions to move the camera */
+	UPROPERTY(Transient)
+	ACSKPawn* LocalPlayerPawn;
 
 public:
 
@@ -177,6 +190,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	bool IsQuickEffectCounterTimed() const { return QuickEffectCounterTimeRemaining != -1.f; }
 
+	/** Get if bonus spell time is timed */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsBonusSpellCounterTimed() const { return BonusSpellCounterTimerRemaining != 1.f; }
+
 	/** Get the player ID of whose action phase it is */
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
@@ -243,6 +260,14 @@ protected:
 	UPROPERTY(Transient, Replicated)
 	float QuickEffectCounterTimeRemaining;
 
+	/** If we should countdown the bonus spell counter timer */
+	UPROPERTY(Transient)
+	uint32 bCountdownBonusSpellTimer : 1;
+
+	/** Time remaining for player to select a target for bonus spell */
+	UPROPERTY(Transient, Replicated)
+	float BonusSpellCounterTimerRemaining;
+
 public:
 
 	/** Notify that a move request has been confirmed and is starting */
@@ -265,6 +290,9 @@ public:
 
 	/** Notify that a quick effect is being selected */
 	void HandleQuickEffectSelectionStart();
+
+	/** Notify that a bonus spell is being targeted */
+	void HandleBonusSpellSelectionStart();
 
 private:
 
@@ -295,6 +323,10 @@ private:
 	/** Handle quick effect selection client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleQuickEffectSelection();
+
+	/** Handle bonus spell selection client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleBonusSpellSelection();
 
 public:
 

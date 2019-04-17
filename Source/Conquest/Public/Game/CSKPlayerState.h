@@ -119,6 +119,9 @@ public:
 	/** Retrieves a spell card from the spell deck and places in the players hand */
 	TSubclassOf<USpellCard> PickupCardFromDeck();
 
+	/** Removes the given spell from players hand */
+	void RemoveCardFromHand(TSubclassOf<USpellCard> Spell);
+
 	/** Resets the spell deck by copying then shuffling given spells */
 	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells);
 

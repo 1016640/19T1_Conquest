@@ -2,6 +2,7 @@
 
 #include "CSKGameState.h"
 #include "CSKGameMode.h"
+#include "CSKPawn.h"
 #include "CSKPlayerController.h"
 #include "CSKPlayerState.h"
 
@@ -47,8 +48,29 @@ void ACSKGameState::Tick(float DeltaTime)
 
 	if (ShouldCountdownPhaseTimer())
 	{
+		// Bonus spell selection
+		if (bCountdownBonusSpellTimer)
+		{
+			if (!IsBonusSpellCounterTimed())
+			{
+				return;
+			}
+
+			BonusSpellCounterTimerRemaining = FMath::Max(0.f, BonusSpellCounterTimerRemaining - DeltaTime);
+			if (BonusSpellCounterTimerRemaining == 0.f)
+			{
+				// Game mode only exists on the server
+				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+				if (GameMode)
+				{
+					// Default to player skipping to use spell
+					GameMode->RequestSkipBonusSpell();
+					bCountdownBonusSpellTimer = false;
+				}
+			}
+		}
 		// Quick effect selection
-		if (bCountdownQuickEffectTimer)
+		else if (bCountdownQuickEffectTimer)
 		{
 			if (!IsQuickEffectCounterTimed())
 			{
@@ -62,7 +84,7 @@ void ACSKGameState::Tick(float DeltaTime)
 				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
 				if (GameMode)
 				{
-					// Default to player not selecting to counter
+					// Default to player skipping to counter
 					GameMode->RequestSkipQuickEffect();
 					bCountdownQuickEffectTimer = false;
 				}
@@ -112,6 +134,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, CoinTossWinnerPlayerID);
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
 	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
+	DOREPLIFETIME(ACSKGameState, BonusSpellCounterTimerRemaining);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -128,6 +151,17 @@ void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
 	if (HasAuthority() && !BoardManager)
 	{
 		BoardManager = InBoardManager;
+	}
+}
+
+void ACSKGameState::SetLocalPlayersPawn(ACSKPawn* InPlayerPawn)
+{
+	if (HasAuthority() && !LocalPlayerPawn)
+	{
+		if (InPlayerPawn && InPlayerPawn->IsLocallyControlled())
+		{
+			LocalPlayerPawn = InPlayerPawn;
+		}
 	}
 }
 
@@ -366,7 +400,18 @@ float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
 
-	if (bCountdownQuickEffectTimer)
+	if (bCountdownBonusSpellTimer)
+	{
+		if (IsBonusSpellCounterTimed())
+		{
+			return BonusSpellCounterTimerRemaining;
+		}
+		else
+		{
+			bOutIsInfinite = true;
+		}
+	}
+	else if (bCountdownQuickEffectTimer)
 	{
 		if (IsQuickEffectCounterTimed())
 		{
@@ -495,6 +540,23 @@ void ACSKGameState::HandleQuickEffectSelectionStart()
 		}
 
 		Multi_HandleQuickEffectSelection();
+	}
+}
+
+void ACSKGameState::HandleBonusSpellSelectionStart()
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		ACSKGameMode* GameMode = CastChecked<ACSKGameMode>(AuthorityGameMode);
+
+		// Zero means indefinite
+		BonusSpellCounterTimerRemaining = GameMode->GetBonusSpellSelectTime();
+		if (BonusSpellCounterTimerRemaining == 0.f)
+		{
+			BonusSpellCounterTimerRemaining = -1.f;
+		}
+
+		Multi_HandleBonusSpellSelection();
 	}
 }
 
@@ -705,16 +767,25 @@ void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* Targ
 {
 	SetFreezeActionPhaseTimer(true);
 	bCountdownQuickEffectTimer = false;
+	bCountdownBonusSpellTimer = false;
 }
 
 void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
 {
 	SetFreezeActionPhaseTimer(false);
+	bCountdownBonusSpellTimer = false;
 }
 
 void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
 {
 	// We want to count down the quick effect selection time
 	bCountdownQuickEffectTimer = true;
+	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::Multi_HandleBonusSpellSelection_Implementation()
+{
+	// We want to count down the bonus spell selection time
+	bCountdownBonusSpellTimer = true;
 	SetFreezeActionPhaseTimer(false);
 }

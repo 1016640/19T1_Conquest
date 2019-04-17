@@ -69,6 +69,7 @@ ACSKGameMode::ACSKGameMode()
 	bLimitOneMoveActionPerTurn = false;
 	MaxSpellUses = 1;
 	QuickEffectCounterTime = 15.f;
+	BonusSpellSelectTime = 15.f;
 	InitialMatchDelay = 2.f;
 	PostMatchDelay = 15.f;
 }
@@ -1145,9 +1146,9 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 			return false;
 		}
 
-
 		// Spell can't (or there is not point) be cast at tile
-		if (!DefaultSpell->CanActivateSpell(TargetTile))
+		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+		if (!DefaultSpell->CanActivateSpell(PlayerState, TargetTile))
 		{
 			return false;
 		}
@@ -1155,7 +1156,6 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		// Default to the static cost
 		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
 
-		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (PlayerState)
 		{
 			// Player isn't able to cast another spell (we don't need to check costs)
@@ -1185,11 +1185,11 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		ACSKPlayerState* OpposingPlayerState = OpposingPlayer->GetCSKPlayerState();
 		if (OpposingPlayerState && OpposingPlayerState->CanCastQuickEffectSpell())
 		{
-			SaveRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, RequiredMana);
+			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, RequiredMana);
 			return true;
 		}
 
-		// Confirm request of spell was successfully spawn
+		// Confirm request of spell if successfully spawned
 		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
 		if (SpellActor)
 		{
@@ -1235,8 +1235,13 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 			return false;
 		}
 
+		// We check using the opposing player, as only the opposing player can cast quick effects during the active players action phase
+		ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		check(OpposingPlayer);
+
 		// Spell can't (or there is not point) be cast at tile
-		if (!DefaultSpell->CanActivateSpell(TargetTile))
+		ACSKPlayerState* PlayerState = OpposingPlayer->GetCSKPlayerState();
+		if (!DefaultSpell->CanActivateSpell(PlayerState, TargetTile))
 		{
 			return false;
 		}
@@ -1244,11 +1249,6 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 		// Default to the static cost
 		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
 
-		// We check using the opposing player, as only the opposing player can cast quick effects during the active players action phase
-		ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
-		check(OpposingPlayer);
-
-		ACSKPlayerState* PlayerState = OpposingPlayer->GetCSKPlayerState();
 		if (PlayerState)
 		{
 			// Re-calculate as spell might use additional mana
@@ -1264,7 +1264,7 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 				"without cost validation as player state is not of CSKPlayerState"));
 		}
 
-		// Confirm request of spell was successfully spawn
+		// Confirm request of spell if successfully spawned
 		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
 		if (SpellActor)
 		{
@@ -1291,6 +1291,67 @@ bool ACSKGameMode::RequestSkipQuickEffect()
 		{
 			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, ActiveSpellRequestCalculatedCost, ActiveSpellRequestSpellTile, EActiveSpellContext::Action);
 		}
+	}
+
+	return false;
+}
+
+bool ACSKGameMode::RequestCastBonusSpell(ATile* TargetTile)
+{
+	if (!TargetTile)
+	{
+		return false;
+	}
+
+	// A spell action should already be active
+	if (!IsActionPhaseInProgress() || !IsWaitingForSpellCast())
+	{
+		return false;
+	}
+
+	if (bWaitingOnBonusSpellSelection)
+	{
+		USpell* DefaultSpell = PendingBonusSpell.GetDefaultObject();
+		check(DefaultSpell);
+
+		// Get the player that will be casting this bonus spell
+		ACSKPlayerController* CastingPlayer = nullptr;
+		if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+		{
+			CastingPlayer = ActionPhaseActiveController;
+		}
+		else
+		{
+			check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+			CastingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		}
+
+		ACSKPlayerState* PlayerState = CastingPlayer->GetCSKPlayerState();
+		if (!DefaultSpell->CanActivateSpell(PlayerState, TargetTile))
+		{
+			return false;
+		}
+
+		// Confirm request of spell if successfully spawned
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, 0, PlayerState);
+		if (SpellActor)
+		{
+			BonusSpellContext = ActiveSpellContext;
+			return ConfirmCastSpell(DefaultSpell, nullptr, SpellActor, 0, TargetTile, EActiveSpellContext::Bonus);
+		}
+	}
+
+	return false;
+}
+
+bool ACSKGameMode::RequestSkipBonusSpell()
+{
+	if (IsActionPhaseInProgress() && bWaitingOnBonusSpellSelection)
+	{
+		FinishCastSpell(true);
+		bWaitingOnBonusSpellSelection = false;
+
+		return true;
 	}
 
 	return false;
@@ -1465,7 +1526,10 @@ void ACSKGameMode::OnActivePlayersPathSegmentComplete(ATile* SegmentTile)
 	// Check if active player has won
 	if (PostCastleMoveCheckWinCondition(SegmentTile))
 	{
-		// TODO: Stop movement of castle
+		ACastleAIController* CastleController = ActionPhaseActiveController->GetCastleController();
+		check(CastleController);
+
+		CastleController->StopFollowingPath();
 	}
 }
 
@@ -1692,6 +1756,7 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 	{
 		bWaitingOnSpellAction = true;
 		bWaitingOnQuickEffectSelection = false;
+		bWaitingOnBonusSpellSelection = false;
 		ActiveSpellContext = Context;
 	}
 
@@ -1706,17 +1771,48 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 			{
 				int32 ManaToConsume = Context == EActiveSpellContext::Action ? FinalCost : ActiveSpellRequestCalculatedCost;
 				PlayerState->SetMana(PlayerState->GetMana() - ManaToConsume);
+				
+				// If an action, we remove the spell being cast from the active player,
+				// as only the active player can cast action spells
+				if (Context == EActiveSpellContext::Action)
+				{
+					PlayerState->RemoveCardFromHand(SpellCard->GetClass());
+				}
+				else
+				{
+					PlayerState->RemoveCardFromHand(ActiveSpellRequestSpellCard);
+				}
 			}
 
 			if (Context == EActiveSpellContext::Counter)
 			{
+
 				// Consume mana from opposing player if countering
 				ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 				ACSKPlayerState* OpposingPlayerState = OpposingController ? OpposingController->GetCSKPlayerState() : nullptr;
 				if (OpposingPlayerState)
 				{
+					OpposingController->SetQuickEffectUsageEnabled(false);
 					OpposingPlayerState->SetMana(OpposingPlayerState->GetMana() - FinalCost);
+
+					// Only the opposing player can use quick effect spell cards
+					OpposingPlayerState->RemoveCardFromHand(SpellCard->GetClass());
 				}
+			}
+		}
+		else
+		{
+			// We need to disable the ability for the casting player to select bonus spells
+			if (BonusSpellContext == EActiveSpellContext::Action)
+			{
+				ActionPhaseActiveController->SetBonusSpellSelectionEnabled(false);
+			}
+			else
+			{
+				check(BonusSpellContext == EActiveSpellContext::Counter);
+
+				ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+				OpposingPlayer->SetBonusSpellSelectionEnabled(false);
 			}
 		}
 	}
@@ -1751,22 +1847,61 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 	return true;
 }
 
-void ACSKGameMode::FinishCastSpell()
+void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 {
 	check(bWaitingOnSpellAction);
-	check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
+	check(IsActionPhaseInProgress());
+
+	// We no longer need the spell actor
+	if (ActivePlayerSpellActor && !ActivePlayerSpellActor->IsPendingKill())
+	{
+		ActivePlayerSpellActor->Destroy();
+	}
+
+	// This function can potentially handle the rest for us
+	if (!bIgnoreBonusCheck)
+	{
+		if (PostCastSpellActivateBonusSpell())
+		{
+			return;
+		}
+	}
+
+	ActivePlayerSpell = nullptr;
+	ActivePlayerSpellCard = false;
+	ActivePlayerSpellActor = nullptr;
 
 	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 	ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 
+	// The context of this spell, bonus spells are considered what originally granted the bonus
+	EActiveSpellContext Context = ActivePlayerSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActivePlayerSpellContext;
+
 	// Restore states
 	{
 		bWaitingOnSpellAction = false;
+
+		// We could be skipping a bonus spell request
+		if (bWaitingOnBonusSpellSelection)
+		{
+			ACSKPlayerController* CasterPlayer = nullptr;
+			if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+			{
+				CasterPlayer = ActionPhaseActiveController;
+			}
+			else
+			{
+				check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+				CasterPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+			}
+
+			CasterPlayer->SetBonusSpellSelectionEnabled(false);
+		}
 	}
 
 	// Increment spells used
 	{
-		if (PlayerState)
+		if (Context == EActiveSpellContext::Action && PlayerState)
 		{
 			PlayerState->IncrementSpellsCast();
 		}
@@ -1784,23 +1919,12 @@ void ACSKGameMode::FinishCastSpell()
 	{
 		for (ACSKPlayerController* Controller : Players)
 		{
-			Controller->Client_OnCastSpellRequestFinished(ActivePlayerSpellContext);
+			Controller->Client_OnCastSpellRequestFinished(Context);
 		}
 	}
 	
-	// We no longer need the spell actor
-	if (ActivePlayerSpellActor && !ActivePlayerSpellActor->IsPendingKill())
-	{
-		ActivePlayerSpellActor->Destroy();
-	}
-
-	// TODO: Check if element tiles match
-	ECSKElementType CardElements = ActivePlayerSpellCard ? ActivePlayerSpellCard->GetElementalTypes() : ECSKElementType::None;
-
-	ActivePlayerSpell = nullptr;
-	ActivePlayerSpellCard = false;
-	ActivePlayerSpellActor = nullptr;
 	ActivePlayerSpellContext = EActiveSpellContext::None;
+	BonusSpellContext = EActiveSpellContext::None;
 
 	// Disable this action if player can't cast any more spells this round
 	if (PlayerState && !PlayerState->CanCastAnotherSpell(true))
@@ -1847,11 +1971,11 @@ void ACSKGameMode::OnStartActiveSpellCast()
 	}
 }
 
-void ACSKGameMode::SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost)
+void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost)
 {
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController);
-	check(!bWaitingOnQuickEffectSelection);
+	check(!bWaitingOnQuickEffectSelection && !bWaitingOnBonusSpellSelection);
 
 	ActiveSpellRequestSpellCard = InSpellCard;
 	ActiveSpellRequestSpellIndex = InSpellIndex;
@@ -1875,6 +1999,137 @@ void ACSKGameMode::SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard>
 	if (CSKGameState)
 	{
 		CSKGameState->HandleQuickEffectSelectionStart();
+	}
+}
+
+bool ACSKGameMode::PostCastSpellActivateBonusSpell()
+{
+	check(bWaitingOnSpellAction);
+	check(IsActionPhaseInProgress());
+
+	// Bonuses only get applied once
+	if (ActivePlayerSpellContext == EActiveSpellContext::Bonus)
+	{
+		return false;
+	}
+
+	check(ActivePlayerSpell && ActivePlayerSpellCard);
+
+	// Different castle based on spell context, we also need the player
+	// state in-case bonus spell requires a specific tile to target
+	ACastle* CastersCastle = nullptr;
+	ACSKPlayerState* CastersState = nullptr;
+
+	if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+	{
+		CastersCastle = ActionPhaseActiveController->GetCastlePawn();
+		CastersState = ActionPhaseActiveController->GetCSKPlayerState();
+	}
+	else
+	{
+		check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+
+		ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		CastersCastle = OpposingController->GetCastlePawn();
+		CastersState = OpposingController->GetCSKPlayerState();
+	}
+
+	if (CastersCastle)
+	{
+		ATile* Tile = CastersCastle->GetCachedTile();
+		if (Tile && Tile->TileType != 0)
+		{
+			// Check if an element matches
+			ECSKElementType MatchingElement = static_cast<ECSKElementType>(Tile->TileType) & ActivePlayerSpellCard->GetElementalTypes();
+			if (BonusElementalSpells.Contains(MatchingElement))
+			{
+				TSubclassOf<USpell> BonusSpell = BonusElementalSpells[MatchingElement];
+				if (!BonusSpell)
+				{
+					#if WITH_EDITOR
+					UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKElementType"));
+					UE_LOG(LogConquest, Warning, TEXT("Bonus Spell for element %s is invalid"), *EnumClass->GetNameByValue((int64)MatchingElement).ToString());
+					#endif
+
+					return false;
+				}
+
+				USpell* DefaultSpell = BonusSpell.GetDefaultObject();
+				check(DefaultSpell);
+
+				// Spell might require a specific target 
+				if (DefaultSpell->RequiresTarget())
+				{
+					// Wait for the player to give us a target tile
+					SaveBonusSpellAndWaitForTargetSelection(BonusSpell);
+					return true;
+				}
+
+				// We can initiate the spell now if no target is required
+				ASpellActor* BonusSpellActor = SpawnSpellActor(DefaultSpell, Tile, 0, CastersState);
+				if (BonusSpellActor)
+				{
+					BonusSpellContext = ActiveSpellContext;
+					return ConfirmCastSpell(BonusSpell.GetDefaultObject(), nullptr, BonusSpellActor, 0, Tile, EActiveSpellContext::Bonus);
+				}
+			}
+			else
+			{
+				#if WITH_EDITOR
+				// The tile may have been set with multiple element types
+				// Spell cards are allowed to have multiple types, but tiles should only have one
+				switch (Tile->TileType)
+				{
+					// Single elements, which are valid
+					case 1:
+					case 2:
+					case 4:
+					case 8:
+					{
+						break;
+					}
+					default:
+					{
+						UE_LOG(LogConquest, Warning, TEXT("Tile %s has invalid element types. A tile should "
+							"only have one element associated with it"), *Tile->GetFName().ToString())
+					}
+				}
+				#endif
+			}
+		}
+	}
+
+	return false;
+}
+
+void ACSKGameMode::SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> InBonusSpell)
+{
+	check(IsActionPhaseInProgress());
+	check(ActionPhaseActiveController);
+	check(!bWaitingOnQuickEffectSelection && !bWaitingOnBonusSpellSelection);
+
+	PendingBonusSpell = InBonusSpell;
+	bWaitingOnBonusSpellSelection = true;
+
+	ACSKPlayerController* CastingPlayer = nullptr;
+	if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+	{
+		CastingPlayer = ActionPhaseActiveController;
+	}
+	else
+	{
+		check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+		CastingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+	}
+
+	// Notify the casting player to select a new spell
+	CastingPlayer->SetBonusSpellSelectionEnabled(true);
+	CastingPlayer->Client_OnSelectBonusSpellTarget(InBonusSpell);
+
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+	if (CSKGameState)
+	{
+		CSKGameState->HandleBonusSpellSelectionStart();
 	}
 }
 
@@ -1906,7 +2161,7 @@ void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 
 		if (bEndPhase)
 		{
-			// TODO: Notify clients and game state
+			// TODO: Notify clients and game state?
 
 			// Start the next round after 2 second delay
 			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
@@ -2063,7 +2318,11 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 		AActor* DeadPiece = HealthComp->GetOwner();
 		if (DeadPiece->IsA<ACastle>())
 		{
-			// TODO: Verify game over
+			ACastle* DestroyedCastle = static_cast<ACastle*>(DeadPiece);
+			
+			// for now
+			ACSKPlayerState* PlayerState = DestroyedCastle->GetBoardPieceOwnerPlayerState();	
+			EndMatch(GetOpposingPlayersController(PlayerState->GetCSKPlayerID()), ECSKMatchWinCondition::CastleDestroyed);
 		}
 		else
 		{

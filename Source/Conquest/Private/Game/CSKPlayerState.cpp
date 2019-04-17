@@ -204,6 +204,14 @@ TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
 	return nullptr;
 }
 
+void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
+{
+	if (HasAuthority())
+	{
+		SpellCardsInHand.Remove(Spell);
+	}
+}
+
 void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells)
 {
 	if (HasAuthority())

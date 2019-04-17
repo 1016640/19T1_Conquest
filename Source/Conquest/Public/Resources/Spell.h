@@ -42,13 +42,14 @@ public:
 public:
 
 	/** If this spell requires a target tile in order to activate. If no
-	target is required, the target to use will default to the players castle */
+	target is required, the target to use will default to the players castle.
+	This only applies to spells that are marked as being bonus spells */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool RequiresTarget() const;
 
 	/** Check if spell can be used on given tile */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
-	bool CanActivateSpell(const ATile* TargetTile) const;
+	bool CanActivateSpell(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile) const;
 
 	/** Calculates the final cost of this spell. Passes in the player casting the spell, the
 	tile they plan to cast it onto and how much additional mana they are willing to spend */

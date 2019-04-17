@@ -49,7 +49,7 @@ public:
 public:
 
 	/** The element type of this tile */
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType")) // TODO: Clear bitmask
 	uint8 TileType;
 
 	/** If this tile is a null tyle (no go zone) */
@@ -109,13 +109,18 @@ protected:
 
 public:
 
+	/** If towers can be constructed on this tile */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	bool CanPlaceTowersOn() const;
+
 	/** If this tile is currently occupied */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	virtual bool IsTileOccupied(bool bConsiderNull = true) const;
 
-	/** If towers can be constructed on this tile */
+	/** If this tile is occupied by given player (as in the 
+	board piece placed on this tile belongs to said player) */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
-	bool CanPlaceTowersOn() const;
+	bool DoesPlayerOccupyTile(const ACSKPlayerState* Player) const;
 
 public:
 

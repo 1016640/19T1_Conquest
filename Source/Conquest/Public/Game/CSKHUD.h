@@ -47,6 +47,9 @@ public:
 	Passes in if our owner is the one instigating this selection (the one who can counter the spell) */
 	void OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile);
 
+	/** Notify that this player is able to select a tile to use the given bonus spell on */
+	void OnBonusSpellSelection(const USpell* BonusSpell);
+
 public:
 
 	/** Notify that the match has finished and the post match widget should */
