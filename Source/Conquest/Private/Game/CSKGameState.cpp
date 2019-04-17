@@ -2,6 +2,7 @@
 
 #include "CSKGameState.h"
 #include "CSKGameMode.h"
+#include "CSKPawn.h"
 #include "CSKPlayerController.h"
 #include "CSKPlayerState.h"
 
@@ -128,6 +129,17 @@ void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
 	if (HasAuthority() && !BoardManager)
 	{
 		BoardManager = InBoardManager;
+	}
+}
+
+void ACSKGameState::SetLocalPlayersPawn(ACSKPawn* InPlayerPawn)
+{
+	if (HasAuthority() && !LocalPlayerPawn)
+	{
+		if (InPlayerPawn && InPlayerPawn->IsLocallyControlled())
+		{
+			LocalPlayerPawn = InPlayerPawn;
+		}
 	}
 }
 

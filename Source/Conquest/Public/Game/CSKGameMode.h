@@ -405,6 +405,9 @@ private:
 	/** Saves the incoming spell request and informs opposing player to choose a counter */
 	void SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
 
+	/** Post spell action check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
+	bool PostCastSpellActivateBonusSpell();
+
 public:
 
 	/** Get the controller for player whose action phase it is */
@@ -454,6 +457,7 @@ private:
 		ActivePlayerSpellCard = nullptr;
 		ActivePlayerSpellActor = nullptr;
 		ActivePlayerSpellContext = EActiveSpellContext::None;
+		BonusSpellContext = EActiveSpellContext::None;
 	}
 
 protected:
@@ -533,6 +537,9 @@ private:
 
 	/** The context of the spell being cast */
 	EActiveSpellContext ActivePlayerSpellContext;
+
+	/** The context of the spell that granted the bonus spells execution */
+	EActiveSpellContext BonusSpellContext;
 
 	/** Timer handle for when waiting for a spell to replicate before executing its effects */
 	FTimerHandle Handle_ExecuteSpellCast;
@@ -685,9 +692,13 @@ public:
 	/** Get the max amount of tiles that can be traversed per action phase */
 	FORCEINLINE int32 GetMaxTileMovementsPerTurn() const { return MaxTileMovements; }
 
-	/** Get the time a quick effect selection */
+	/** Get the time a quick effect selection lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
+
+	/** Get the time a bonus spell selection lasts */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	float GetBonusSpellSelectTime() const { return BonusSpellSelectTime; }
 
 protected:
 
@@ -714,6 +725,10 @@ protected:
 	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	float QuickEffectCounterTime;
+
+	/** The time the player has to select a target when granted a bonus spell that requires one (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	float BonusSpellSelectTime;
 
 	/** How long we wait before starting the match (starting the coin flip).
 	A delay of two seconds or greater is recommended to allow actors to replicate */

@@ -29,6 +29,15 @@ bool ACastleAIController::FollowPath(const FBoardPath& InPath)
 	return false;
 }
 
+void ACastleAIController::StopFollowingPath()
+{
+	UBoardPathFollowingComponent* BoardFollowComponent = GetBoardPathFollowingComponent();
+	if (BoardFollowComponent && BoardFollowComponent->GetStatus() == EPathFollowingStatus::Moving)
+	{
+		BoardFollowComponent->StopFollowingPath();
+	}
+}
+
 void ACastleAIController::OnBoardPathSegmentCompleted(ATile* SegmentTile)
 {
 

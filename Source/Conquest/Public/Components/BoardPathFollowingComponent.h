@@ -35,6 +35,9 @@ public:
 	/** Follows the given path */
 	bool FollowPath(const FBoardPath& InPath);
 
+	/** Stops following current path */
+	void StopFollowingPath();
+
 protected:
 
 	// Begin UPathFollowingComponent Interface

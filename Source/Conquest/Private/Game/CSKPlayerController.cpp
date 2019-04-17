@@ -50,12 +50,13 @@ void ACSKPlayerController::BeginPlay()
 		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
 		if (GameState)
 		{
+			GameState->SetLocalPlayersPawn(GetCSKPawn());
 			GameState->OnRoundStateChanged.AddDynamic(this, &ACSKPlayerController::OnRoundStateChanged);
 		}
 		else
 		{
 			UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController: Unable to bind round state "
-				"change event as game state is not of CSKGameState"));
+				"change event and set local player pawn as game state is not of CSKGameState"));
 		}
 	}
 }
@@ -623,6 +624,10 @@ void ACSKPlayerController::OnRep_bCanUseQuickEffect()
 	}
 }
 
+void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
+{
+}
+
 void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 {
 	// Move the camera over to our castle (where our portal should be)
@@ -710,7 +715,13 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 	{
 		// Have players watch spell in action	
 		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
-		SetIgnoreMoveInput(true);
+
+		// Avoid setting it twice, as this function will get
+		// called twice before Finish if casting a bonus spell
+		if (!IsMoveInputIgnored())
+		{
+			SetIgnoreMoveInput(true);
+		}
 	}
 
 	if (CachedCSKHUD)
@@ -732,6 +743,8 @@ void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EAct
 
 void ACSKPlayerController::Client_OnSelectCounterSpell_Implementation(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile)
 {
+	SetCanSelectTile(true);
+
 	if (CachedCSKHUD)
 	{
 		const USpell* DefaultSpell = SpellToCounter.GetDefaultObject();

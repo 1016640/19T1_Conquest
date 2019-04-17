@@ -281,6 +281,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void SkipQuickEffectSelection();
 
+	/** Enables/Disables this players bonus spell selection */
+	void SetBonusSpellSelectionEnabled(bool bEnable);
+
 private:
 
 	/** Set action mode on the server */
@@ -329,6 +332,10 @@ private:
 	UFUNCTION()
 	void OnRep_bCanUseQuickEffect();
 
+	/** Notify than can select bonus spell target has been replicated */
+	UFUNCTION()
+	void OnRep_bCanSelectBonusSpellTarget();
+
 protected:
 
 	/** If it is our action phase */
@@ -365,11 +372,11 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnTowerBuildRequestFinished();
 
-	/** Notify that an action phase spell cast has been confirmed */
+	/** Notify that a spell cast has been confirmed */
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestConfirmed(EActiveSpellContext SpellContext, ATile* TargetTile);
 
-	/** Notify that an action phase spell cast has finished */
+	/** Notify that a spell cast has finished */
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
 

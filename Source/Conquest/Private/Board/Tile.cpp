@@ -161,6 +161,16 @@ bool ATile::IsTileOccupied(bool bConsiderNull) const
 	return true;
 }
 
+bool ATile::DoesPlayerOccupyTile(const ACSKPlayerState* Player) const
+{
+	if (PieceOccupant.GetInterface() != nullptr)
+	{
+		return Player && PieceOccupant->GetBoardPieceOwnerPlayerState() == Player;
+	}
+
+	return false;
+}
+
 bool ATile::CanPlaceTowersOn() const
 {
 	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);

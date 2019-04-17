@@ -24,6 +24,15 @@ bool UBoardPathFollowingComponent::FollowPath(const FBoardPath& InPath)
 	return false;
 }
 
+void UBoardPathFollowingComponent::StopFollowingPath()
+{
+	if (Status == EPathFollowingStatus::Moving)
+	{
+		Status = EPathFollowingStatus::Idle;
+		Reset();
+	}
+}
+
 void UBoardPathFollowingComponent::Reset()
 {
 	Super::Reset();

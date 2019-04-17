@@ -21,7 +21,7 @@ bool USpell::RequiresTarget_Implementation() const
 	return bSpellRequiresTarget; 
 }
 
-bool USpell::CanActivateSpell_Implementation(const ATile* TargetTile) const
+bool USpell::CanActivateSpell_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile) const
 {
 	return true;
 }

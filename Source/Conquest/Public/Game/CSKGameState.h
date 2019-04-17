@@ -8,6 +8,7 @@
 
 class ABoardManager;
 class ACastle;
+class ACSKPawn;
 class ACSKPlayerController;
 class ACSKPlayerState;
 class ACSKGameMode;
@@ -51,17 +52,29 @@ public:
 	/** Do not call this externally. This is used by the game mode to set the board to use */
 	void SetMatchBoardManager(ABoardManager* InBoardManager);
 
+	/** Do not call this externally. This is used by the local player controller to set the players pawn */
+	void SetLocalPlayersPawn(ACSKPawn* InPlayerPawn);
+
 public:
 
 	/** Get the games board manager */
 	UFUNCTION(BlueprintPure, Category = "Board")
 	ABoardManager* GetBoardManager(bool bErrorCheck = true) const;
 
+	/** Get the local players pawn */
+	UFUNCTION(BlueprintPure, Category = "Board")
+	ACSKPawn* GetLocalPlayerPawn() const { return LocalPlayerPawn; }
+
 private:
 
 	/** The board of this match */
 	UPROPERTY(Transient, Replicated)
 	ABoardManager* BoardManager;
+
+	/** The local players pawn. We save this here to
+	allow tower and spell actions to move the camera */
+	UPROPERTY(Transient)
+	ACSKPawn* LocalPlayerPawn;
 
 public:
 

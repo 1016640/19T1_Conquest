@@ -35,6 +35,9 @@ public:
 	/** Will follow the given path (only if not already following one) */
 	bool FollowPath(const FBoardPath& InPath);
 
+	/** Will end path following of current path */
+	void StopFollowingPath();
+
 private:
 
 	/** Notify that we have finished a segment of the current path */
