@@ -42,7 +42,8 @@ public:
 public:
 
 	/** If this spell requires a target tile in order to activate. If no
-	target is required, the target to use will default to the players castle */
+	target is required, the target to use will default to the players castle.
+	This only applies to spells that are marked as being bonus spells */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool RequiresTarget() const;
 

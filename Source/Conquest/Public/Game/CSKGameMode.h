@@ -346,6 +346,13 @@ public:
 	/** Will attempt to end the quick effect spell selection without casting a counter */
 	bool RequestSkipQuickEffect();
 
+	/** Will attempt to cast the current pending bonus spell */
+	UFUNCTION(BlueprintCallable, Category = CSL)
+	bool RequestCastBonusSpell(ATile* TargetTile);
+
+	/** Will attempt to skip the bonus spell target selecting without casting the spell */
+	bool RequestSkipBonusSpell();
+
 public:
 
 	/** DO NOT CALL THIS. Notify that executing spell has finished */
@@ -394,7 +401,7 @@ private:
 	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile, EActiveSpellContext Context);
 
 	/** Finishes the spell currently be cast */
-	void FinishCastSpell();
+	void FinishCastSpell(bool bIgnoreBonusCheck = false);
 
 	/** Spawns the spell actor for given spell at tile */
 	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const;
@@ -403,10 +410,13 @@ private:
 	void OnStartActiveSpellCast();
 
 	/** Saves the incoming spell request and informs opposing player to choose a counter */
-	void SaveRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
+	void SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
 
 	/** Post spell action check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
 	bool PostCastSpellActivateBonusSpell();
+
+	/** Saves the incoming bonus spell and informs casting player to choose a target */
+	void SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> InBonusSpell);
 
 public:
 
@@ -457,6 +467,7 @@ private:
 		ActivePlayerSpellCard = nullptr;
 		ActivePlayerSpellActor = nullptr;
 		ActivePlayerSpellContext = EActiveSpellContext::None;
+		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
 	}
 
@@ -537,6 +548,13 @@ private:
 
 	/** The context of the spell being cast */
 	EActiveSpellContext ActivePlayerSpellContext;
+
+	/** If we are waiting on the player who casted the current spell to select a target for the bonus spell */
+	uint32 bWaitingOnBonusSpellSelection : 1;
+
+	/** The bonus spell that is waiting to be cast */
+	UPROPERTY()
+	TSubclassOf<USpell> PendingBonusSpell;
 
 	/** The context of the spell that granted the bonus spells execution */
 	EActiveSpellContext BonusSpellContext;

@@ -127,6 +127,7 @@ void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(ACSKPlayerController, bIsActionPhase);
 	DOREPLIFETIME(ACSKPlayerController, RemainingActions);
 	DOREPLIFETIME(ACSKPlayerController, bCanUseQuickEffect);
+	DOREPLIFETIME(ACSKPlayerController, bCanSelectBonusSpellTarget);
 }
 
 void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> InConstructData)
@@ -204,6 +205,14 @@ void ACSKPlayerController::SelectTile()
 		return;
 	}
 
+	// We have to check this before hand, as players can use bonus
+	// spells both during their action phase and while waiting
+	if (bCanSelectBonusSpellTarget)
+	{
+		CastBonusElementalSpellAtHoveredTile();
+		return;
+	}
+
 	// Are we allowed to perform actions
 	if (IsPerformingActionPhase())
 	{
@@ -225,10 +234,16 @@ void ACSKPlayerController::SelectTile()
 				break;
 			}
 		}
+
+		return;
 	}
-	else if (bCanUseQuickEffect)
+	
+	// We can check this after as players can only perform
+	// quick effect attacks when not performing their action phase
+	if (bCanUseQuickEffect)
 	{
 		CastQuickEffectSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
+		return;
 	}
 }
 
@@ -510,11 +525,16 @@ void ACSKPlayerController::SetQuickEffectUsageEnabled(bool bEnable)
 	}
 }
 
-void ACSKPlayerController::SkipQuickEffectSelection()
+void ACSKPlayerController::SetBonusSpellSelectionEnabled(bool bEnable)
 {
-	if (IsLocalPlayerController() && bCanUseQuickEffect)
+	if (HasAuthority() && bCanSelectBonusSpellTarget != bEnable)
 	{
-		Server_SkipQuickEffectSelection();
+		bCanSelectBonusSpellTarget = bEnable;
+
+		if (IsLocalPlayerController())
+		{
+			OnRep_bCanSelectBonusSpellTarget();
+		}
 	}
 }
 
@@ -626,6 +646,14 @@ void ACSKPlayerController::OnRep_bCanUseQuickEffect()
 
 void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 {
+	if (bCanSelectBonusSpellTarget)
+	{
+		SetCanSelectTile(true);
+	}
+	else
+	{
+		SetCanSelectTile(false);
+	}
 }
 
 void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
@@ -724,6 +752,9 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 		}
 	}
 
+	// This can be reset here safely
+	PendingBonusSpell = nullptr;
+
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::CastSpell, SpellContext);
@@ -759,6 +790,20 @@ void ACSKPlayerController::Client_OnWaitForCounterSpell_Implementation()
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnQuickEffectSelection(false, nullptr, nullptr);
+	}
+}
+
+void ACSKPlayerController::Client_OnSelectBonusSpellTarget_Implementation(TSubclassOf<USpell> BonusSpell)
+{
+	SetCanSelectTile(true);
+	SetIgnoreMoveInput(false);
+
+	PendingBonusSpell = BonusSpell;
+
+	if (CachedCSKHUD)
+	{
+		const USpell* DefaultSpell = BonusSpell.GetDefaultObject();
+		CachedCSKHUD->OnBonusSpellSelection(DefaultSpell);
 	}
 }
 
@@ -819,7 +864,7 @@ void ACSKPlayerController::BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructio
 
 void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
 {
-	// Only local players should build
+	// Only local players should cast
 	if (!IsLocalPlayerController())
 	{
 		return;
@@ -836,7 +881,7 @@ void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellC
 
 void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
 {
-	// Only local players should build
+	// Only local players should cast
 	if (!IsLocalPlayerController())
 	{
 		return;
@@ -848,6 +893,51 @@ void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellC
 		{
 			Server_RequestCastQuickEffectAction(SpellCard, SpellIndex, HoveredTile, AdditionalMana);
 		}
+	}
+}
+
+void ACSKPlayerController::SkipQuickEffectSpell()
+{
+	// Only local players should cast
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bCanUseQuickEffect)
+	{
+		Server_SkipQuickEffectSelection();
+	}
+}
+
+void ACSKPlayerController::CastBonusElementalSpellAtHoveredTile()
+{
+	// Only local players should cast
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bCanSelectBonusSpellTarget)
+	{
+		if (HoveredTile)
+		{
+			Server_RequestCastBonusSpellAction(HoveredTile);
+		}
+	}
+}
+
+void ACSKPlayerController::SkipBonusElementalSpell()
+{
+	// Only local players should cast
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bCanSelectBonusSpellTarget)
+	{
+		Server_SkipBonusSpellSelection();
 	}
 }
 
@@ -991,6 +1081,56 @@ void ACSKPlayerController::Server_SkipQuickEffectSelection_Implementation()
 		if (GameMode)
 		{
 			bSuccess = GameMode->RequestSkipQuickEffect();
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_RequestCastBonusSpellAction_Validate(ATile* Target)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_RequestCastBonusSpellAction_Implementation(ATile* Target)
+{
+	bool bSuccess = false;
+
+	if (bCanSelectBonusSpellTarget)
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestCastBonusSpell(Target);
+		}
+	}
+
+	// TODO: inform client if we failed
+	if (!bSuccess)
+	{
+
+	}
+}
+
+bool ACSKPlayerController::Server_SkipBonusSpellSelection_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_SkipBonusSpellSelection_Implementation()
+{
+	bool bSuccess = false;
+
+	if (bCanSelectBonusSpellTarget)
+	{
+		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+		if (GameMode)
+		{
+			bSuccess = GameMode->RequestSkipBonusSpell();
 		}
 	}
 
