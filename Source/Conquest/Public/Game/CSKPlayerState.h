@@ -9,6 +9,7 @@
 class ACastle;
 class ACSKPlayerController;
 class ATower;
+class USpell;
 class USpellCard;
 enum class ESpellType : uint8;
 
@@ -116,6 +117,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
 	void SetHasInfiniteSpellUses(bool bEnable);
 
+	/** Gives this player an additional discount to spells (can be negative to increase costs) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	void AddSpellDiscount(int32 Amount);
+
+	/** Overrides the spell discount this player has (can be negative to increase costs) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	void SetSpellDiscount(int32 Amount);
+
 	/** Retrieves a spell card from the spell deck and places in the players hand */
 	TSubclassOf<USpellCard> PickupCardFromDeck();
 
@@ -131,9 +140,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool HasRequiredGold(int32 RequiredAmount) const;
 
-	/** If this player has required amount of mana */
+	/** If this player has required amount of mana.
+	Can optionally apply discount to required amount */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool HasRequiredMana(int32 RequiredAmount) const;
+	bool HasRequiredMana(int32 RequiredAmount, bool bDiscount = false) const;
 
 	/** Get how many of given type of tower this player owns */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -159,6 +169,10 @@ public:
 	/** Get all the quick effect spells this player is able to cast */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+
+	/** Get the cost of given spell discounted by this players spell discount */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	int32 GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) const;
 
 private:
 
@@ -211,6 +225,9 @@ public:
 	deck. This is when all spell cards are in the discard pile */
 	bool NeedsSpellDeckReshuffle() const;
 
+	/** Get the discount for spells this player has */
+	FORCEINLINE int32 GetSpellDiscount() const { return SpellDiscount; }
+
 protected:
 
 	/** Notify that owned towers has been replicated */
@@ -250,11 +267,6 @@ protected:
 	/** Cached map for counting how many of a certain type of any tower this players owns */
 	TMap<TSubclassOf<ATower>, int32> CachedUniqueTowerCount;
 
-	// TODO: Rep spells here (only rep to owner though)
-	// Not in this section, but how many spells we can use this round (also only reped to owner)
-
-	// TODO: Either replicate arrays (COND_OwnerOnly) or use RPC (via PlayerController) (maybe excluding DiscardPile)
-
 	/** The spells cards in the spell deck. This only exists on the server */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources)/*Replicated,*/ 
 	TArray<TSubclassOf<USpellCard>> SpellCardDeck;
@@ -270,6 +282,12 @@ protected:
 	/** If this player has infinite spell uses */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
 	uint8 bHasInfiniteSpellUses : 1;
+
+	/** The discount this player has when it comes to paying for spells. This is not a
+	percentage but a direct discount (so a spell that cost 5 mana becomes 5 - discount). 
+	This can be set to negative to increase the price of spells */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	int32 SpellDiscount;
 
 public:
 

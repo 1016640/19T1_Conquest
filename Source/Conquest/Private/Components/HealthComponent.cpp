@@ -117,6 +117,11 @@ void UHealthComponent::IncreaseMaxHealth(int32 Amount, bool bIncreaseHealth)
 				ApplyDamage(Delta);
 			}
 		}
+
+		// We also need to consider that our health could now
+		// be greater than our max health (this can arise from
+		// not applying delta to current health)
+		Health = FMath::Min(MaxHealth, Health);
 	}
 }
 

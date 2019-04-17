@@ -45,7 +45,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Health")
 	int32 RestoreHealth(int32 Amount);
 
-	/** Increases max health (Negative values are allowed and will decrease max healt).
+	/** Increases max health (Negative values are allowed and will decrease max health).
 	Can optionally increase health as well but health will be clamped at 1 if decreasing */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Health")
 	void IncreaseMaxHealth(int32 Amount, bool bIncreaseHealth = false);

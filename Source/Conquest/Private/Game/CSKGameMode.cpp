@@ -1166,7 +1166,7 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 
 			// Re-calculate as spell might use additional mana
 			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana))
+			if (!PlayerState->HasRequiredMana(RequiredMana, true))
 			{
 				return false;
 			}
@@ -1253,7 +1253,7 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 		{
 			// Re-calculate as spell might use additional mana
 			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana))
+			if (!PlayerState->HasRequiredMana(RequiredMana, true))
 			{
 				return false;
 			}
@@ -2338,6 +2338,9 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 				PlayerState->RemoveTower(DestroyedTower);
 
 				DestroyedTower->SetActorHiddenInGame(true);
+				
+				// Allow tower to remove and grants
+				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
 				
 				// Destroy after small delay (so any RPCs can get executed)
 				FTimerHandle TempHandle;
