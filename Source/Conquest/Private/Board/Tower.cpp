@@ -4,6 +4,8 @@
 #include "Tile.h"
 #include "BoardManager.h"
 #include "CSKGameMode.h"
+#include "CSKPlayerController.h"
+#include "CSKPlayerState.h"
 
 #include "HealthComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -28,6 +30,9 @@ ATower::ATower()
 	bGivesCollectionPhaseResources = false;
 	bWantsActionDuringEndRoundPhase = false;
 	EndRoundPhaseActionPriority = 0;
+
+	bIsRunningEndRoundAction = false;
+	bIsCustomTileCallbacksBound = false;
 
 	// TODO: We might change this to skeletal meshes later
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
@@ -109,6 +114,12 @@ void ATower::FinishEndRoundAction()
 {
 	if (bIsRunningEndRoundAction && HasAuthority())
 	{
+		// Unbind any callbacks we may have bound
+		if (bIsCustomTileCallbacksBound)
+		{
+			UnbindPlayerTileSelectionCallbacks();
+		}
+
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		check(GameMode);
 		
@@ -143,5 +154,68 @@ void ATower::FinishBuildSequence()
 	if (HasAuthority())
 	{
 		OnBuildSequenceComplete.Broadcast();
+	}
+}
+
+void ATower::BindPlayerTileSelectionCallbacks()
+{
+	if (HasAuthority())
+	{
+		if (bIsRunningEndRoundAction && !bIsCustomTileCallbacksBound)
+		{
+			ACSKPlayerController* Controller = OwnerPlayerState->GetCSKPlayerController();
+			if (Controller)
+			{
+				Controller->CustomCanSelectTile.BindDynamic(this, &ATower::BP_CanSelectTileForAction);
+				Controller->CustomOnSelectTile.BindDynamic(this, &ATower::BP_OnTileSelectedForAction);
+
+				// Notify client to also unbind callbacks
+				Client_BindPlayerTileSelectionCallbacks(false);
+
+				bIsCustomTileCallbacksBound = false;
+			}
+		}
+	}
+}
+
+void ATower::UnbindPlayerTileSelectionCallbacks()
+{
+	if (HasAuthority())
+	{
+		if (bIsRunningEndRoundAction && bIsCustomTileCallbacksBound)
+		{
+			ACSKPlayerController* Controller = OwnerPlayerState->GetCSKPlayerController();
+			if (Controller)
+			{
+				Controller->CustomCanSelectTile.Unbind();
+				Controller->CustomOnSelectTile.Unbind();
+
+				// Notify client to also bind callbacks
+				Client_BindPlayerTileSelectionCallbacks(true);
+
+				bIsCustomTileCallbacksBound = true;
+			}
+		}
+	}
+}
+
+void ATower::Client_BindPlayerTileSelectionCallbacks_Implementation(bool bBind)
+{
+	if (OwnerPlayerState)
+	{
+		ACSKPlayerController* Controller = OwnerPlayerState->GetCSKPlayerController();
+		if (Controller)
+		{
+			if (bBind)
+			{
+				Controller->CustomCanSelectTile.BindDynamic(this, &ATower::BP_CanSelectTileForAction);
+				Controller->SetCanSelectTile(true);
+			}
+			else
+			{
+				Controller->CustomCanSelectTile.Unbind();
+				Controller->SetCanSelectTile(false);
+			}
+		}
 	}
 }

@@ -200,7 +200,7 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 
 void ACSKPlayerController::SelectTile()
 {
-	if (!bCanSelectTile)
+	if (!bCanSelectTile || !HoveredTile)
 	{
 		return;
 	}
@@ -245,6 +245,13 @@ void ACSKPlayerController::SelectTile()
 		CastQuickEffectSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 		return;
 	}
+
+	// Execute custom selection last. We check CanSelect both on client and the server
+	// (We can skip the check here completely if we are the server to prevent the check twice)
+	if (HasAuthority() || (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(HoveredTile)))
+	{
+		Server_ExecuteCustomOnSelectTile(HoveredTile);
+	}
 }
 
 void ACSKPlayerController::ResetCamera()
@@ -265,6 +272,23 @@ void ACSKPlayerController::SetCanSelectTile(bool bEnable)
 		if (!bCanSelectTile)
 		{
 
+		}
+	}
+}
+
+bool ACSKPlayerController::Server_ExecuteCustomOnSelectTile_Validate(ATile* SelectedTile)
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_ExecuteCustomOnSelectTile_Implementation(ATile* SelectedTile)
+{
+	// We can skip the can select if it's not bound (assume it returns true)
+	if (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(SelectedTile))
+	{
+		if (CustomOnSelectTile.IsBound())
+		{
+			CustomOnSelectTile.Execute(SelectedTile);
 		}
 	}
 }

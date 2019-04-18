@@ -1,0 +1,8 @@
+{
+	"BuildId": "4541578",
+	"Modules": 
+	{
+		"Conquest": "UE4Editor-Conquest.dll",
+		"ConquestEditor": "UE4Editor-ConquestEditor.dll"
+	}
+}

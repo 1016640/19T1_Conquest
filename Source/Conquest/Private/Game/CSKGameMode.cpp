@@ -1703,6 +1703,10 @@ ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, A
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	SpawnParams.bDeferConstruction = true;
 
+	// Set owner to player we are spawning for, so client
+	// RPCs will execute on the client who owns them
+	SpawnParams.Owner = PlayerState->GetOwner();
+
 	ATower* Tower = GetWorld()->SpawnActor<ATower>(Template, TileTransform, SpawnParams);
 	if (Tower)
 	{
