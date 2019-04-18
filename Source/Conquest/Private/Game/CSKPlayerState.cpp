@@ -18,6 +18,7 @@ ACSKPlayerState::ACSKPlayerState()
 	CachedNumLegendaryTowers = 0;
 	MaxNumSpellUses = 1;
 	bHasInfiniteSpellUses = false;
+	SpellDiscount = 0;
 
 	TotalGoldCollected = 0;
 	TotalManaCollected = 0;
@@ -46,6 +47,7 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, bHasInfiniteSpellUses, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellDiscount, COND_OwnerOnly);
 
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, TilesTraversedThisRound, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellsCastThisRound, COND_OwnerOnly);
@@ -189,6 +191,19 @@ void ACSKPlayerState::SetHasInfiniteSpellUses(bool bEnable)
 	}
 }
 
+void ACSKPlayerState::AddSpellDiscount(int32 Amount)
+{
+	SetSpellDiscount(SpellDiscount + Amount);
+}
+
+void ACSKPlayerState::SetSpellDiscount(int32 Amount)
+{
+	if (HasAuthority())
+	{
+		SpellDiscount = Amount;
+	}
+}
+
 TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
 {
 	if (HasAuthority() && SpellCardDeck.IsValidIndex(0))
@@ -237,8 +252,10 @@ bool ACSKPlayerState::HasRequiredGold(int32 RequiredAmount) const
 	return (Gold - RequiredAmount) >= 0;
 }
 
-bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount) const
+bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount, bool bDiscount) const
 { 
+	// Lowest amount of mana to spend is zero
+	RequiredAmount = bDiscount ? FMath::Max(0, RequiredAmount - SpellDiscount) : RequiredAmount;
 	return (Mana - RequiredAmount) >= 0;
 }
 
@@ -284,6 +301,17 @@ void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& Ou
 void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
 {
 	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect);
+}
+
+int32 ACSKPlayerState::GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) const
+{
+	if (Spell)
+	{
+		const USpell* DefaultSpell = Spell.GetDefaultObject();
+		return FMath::Max(0, DefaultSpell->GetSpellStaticCost() - SpellDiscount);
+	}
+
+	return -1;
 }
 
 bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const

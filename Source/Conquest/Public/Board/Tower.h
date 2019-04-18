@@ -83,6 +83,11 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "On Built By Player"))
 	void BP_OnBuiltByPlayer(ACSKPlayerController* Controller);
 
+	/** Event for when this tower has been destroyed. This should be used to remove
+	any granted bonuses from the specific player. This function only runs on the server */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "On Destroyed"))
+	void BP_OnDestroyed(ACSKPlayerController* Controller);
+
 	/** Event for when this tower should give resources to given player. This will only 
 	run on the server and only when WantsCollectionPhaseEvent returns true */
 	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Tower, meta = (DisplayName = "Get Collection Phase Resources"))

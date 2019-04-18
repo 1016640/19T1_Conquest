@@ -666,8 +666,8 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 		return false;
 	}
 
-	// Is tower to expensive?
-	if (!PlayerState->HasRequiredGold(ConstructData->GoldCost) || !PlayerState->HasRequiredMana(ConstructData->ManaCost))
+	// Is tower to expensive? We do not apply discount as it only applies to spells
+	if (!PlayerState->HasRequiredGold(ConstructData->GoldCost) || !PlayerState->HasRequiredMana(ConstructData->ManaCost, false))
 	{
 		return false;
 	}
