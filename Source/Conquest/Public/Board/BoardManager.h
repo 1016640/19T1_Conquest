@@ -230,7 +230,11 @@ public:
 
 	/** Finds all the tiles that are within given amount of tiles from the origin */
 	UFUNCTION(BlueprintCallable, Category = "Board")
-	bool FindTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles = true) const;
+	bool GetTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles = true) const;
+
+	/** Get all the tiles that are occupied and within given amount of tiles from the origin */
+	UFUNCTION(BlueprintCallable, Category = "Board")
+	bool GetOccupiedTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreNullTiles = true, bool bIgnoreOrigin = true) const;
 
 public:
 

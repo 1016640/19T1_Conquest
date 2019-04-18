@@ -642,12 +642,8 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 
 	if (PrepareEndRoundActionTowers())
 	{
-		// Attempts to startin running the end round action for tower with most priority. If either
-		// there are no towers or an error occurs, simply start the next round
-		if (!StartRunningTowersEndRoundAction(0))
-		{
-			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
-		}
+		// Give the game state some time to replicate round state changes before commencing end round actions
+		StartNextEndRoundActionAfterDelay(1.f);
 	}
 	else
 	{
@@ -2139,7 +2135,7 @@ void ACSKGameMode::SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> I
 
 void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 {
-	if (bRunningTowerEndRoundAction && Tower)
+	if ((bRunningTowerEndRoundAction || bInitiatingTowerEndRoundAction) && Tower)
 	{
 		// If we should end the end round phase and move back onto the collection phase
 		bool bEndPhase = false;
@@ -2215,11 +2211,11 @@ bool ACSKGameMode::PrepareEndRoundActionTowers()
 		int32 T1Priority = lhs.GetEndRoundActionPriority();
 		int32 T2Priority = rhs.GetEndRoundActionPriority();
 
-		if (T1Priority > T2Priority)
+		if (T1Priority < T2Priority)
 		{
 			return true;
 		}
-		else if (T1Priority < T2Priority)
+		else if (T1Priority > T2Priority)
 		{
 			return false;
 		}

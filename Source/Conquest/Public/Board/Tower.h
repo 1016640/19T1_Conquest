@@ -139,14 +139,15 @@ public:
 	/** Get if this tower is a legendary tower */
 	FORCEINLINE bool IsLegendaryTower() const { return bIsLegendaryTower; }
 
-	/** Get if this tower wants the collection phase event called */
-	UFUNCTION(BlueprintPure, Category = Tower)
-	virtual bool WantsCollectionPhaseEvent() const { return bGivesCollectionPhaseResources; }
+	/** Get if this tower wants the collection phase event called.
+	By default, will return bGivesCollectionPhaseResources */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Tower)
+	bool WantsCollectionPhaseEvent() const;
 
 	/** Get if this tower wants the end round phase event called.
 	By default, will return bWantsActionDuringEndRoundPhase */
-	UFUNCTION(BlueprintPure, Category = Tower)
-	virtual bool WantsEndRoundPhaseEvent() const { return bWantsActionDuringEndRoundPhase; }
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Tower)
+	bool WantsEndRoundPhaseEvent() const;
 
 	/** This towers priority during the end round phase */
 	FORCEINLINE int32 GetEndRoundActionPriority() const { return EndRoundPhaseActionPriority; }
@@ -174,7 +175,7 @@ protected:
 
 	/** Binds the custom tile selection to our owners player controller. This will
 	only work during the end round action and will be automatically unbound. */
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected = "true"))
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
 	void BindPlayerTileSelectionCallbacks();
 
 	/** Unbinds the custom tile selection from our owners player controller. This should be

@@ -361,7 +361,12 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 		}
 		case ECSKRoundState::EndRoundPhase:
 		{
-			SetIgnoreMoveInput(true);
+			// We may have been waiting previously, and 
+			// we don't want to stack ignore commands
+			if (!IsMoveInputIgnored())
+			{
+				SetIgnoreMoveInput(true);
+			}
 
 			break;
 		}

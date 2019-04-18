@@ -333,13 +333,25 @@ bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& 
 	return bSuccess;
 }
 
-bool ABoardManager::FindTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
+bool ABoardManager::GetTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
 {
 	bool bSuccess = false;
 	if (Origin)
 	{
 		const FIntVector& TileHex = Origin->GetGridHexValue();
 		bSuccess = HexGrid.GetAllTilesWithinRange(TileHex, Distance, OutTiles, bIgnoreOccupiedTiles);
+	}
+
+	return bSuccess;
+}
+
+bool ABoardManager::GetOccupiedTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreNullTiles, bool bIgnoreOrigin) const
+{
+	bool bSuccess = false;
+	if (Origin)
+	{
+		const FIntVector& TileHex = Origin->GetGridHexValue();
+		bSuccess = HexGrid.GetAllOccupiedTilesWithinRange(TileHex, Distance, OutTiles, bIgnoreNullTiles, bIgnoreOrigin);
 	}
 
 	return bSuccess;

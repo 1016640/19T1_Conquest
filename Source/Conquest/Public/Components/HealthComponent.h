@@ -67,7 +67,12 @@ public:
 	FORCEINLINE int32 GetMaxHealth() const { return MaxHealth; }
 
 	/** If owner is dead */
-	FORCEINLINE bool IsDead() const { return Health <= 0; }
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsDead() const { return Health <= 0; }
+
+	/** If owner is at max health */
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsFullyHealed() const { return Health >= MaxHealth; }
 
 public:
 

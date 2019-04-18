@@ -157,6 +157,16 @@ void ATower::FinishBuildSequence()
 	}
 }
 
+bool ATower::WantsCollectionPhaseEvent_Implementation() const
+{
+	return bGivesCollectionPhaseResources;
+}
+
+bool ATower::WantsEndRoundPhaseEvent_Implementation() const
+{
+	return bWantsActionDuringEndRoundPhase; 
+}
+
 void ATower::BindPlayerTileSelectionCallbacks()
 {
 	if (HasAuthority())
@@ -170,9 +180,9 @@ void ATower::BindPlayerTileSelectionCallbacks()
 				Controller->CustomOnSelectTile.BindDynamic(this, &ATower::BP_OnTileSelectedForAction);
 
 				// Notify client to also unbind callbacks
-				Client_BindPlayerTileSelectionCallbacks(false);
+				Client_BindPlayerTileSelectionCallbacks(true);
 
-				bIsCustomTileCallbacksBound = false;
+				bIsCustomTileCallbacksBound = true;
 			}
 		}
 	}
@@ -191,9 +201,9 @@ void ATower::UnbindPlayerTileSelectionCallbacks()
 				Controller->CustomOnSelectTile.Unbind();
 
 				// Notify client to also bind callbacks
-				Client_BindPlayerTileSelectionCallbacks(true);
+				Client_BindPlayerTileSelectionCallbacks(false);
 
-				bIsCustomTileCallbacksBound = true;
+				bIsCustomTileCallbacksBound = false;
 			}
 		}
 	}
@@ -208,12 +218,21 @@ void ATower::Client_BindPlayerTileSelectionCallbacks_Implementation(bool bBind)
 		{
 			if (bBind)
 			{
+				EnableInput(Controller);
 				Controller->CustomCanSelectTile.BindDynamic(this, &ATower::BP_CanSelectTileForAction);
+				
+				// Player needs to be able to move
+				Controller->SetIgnoreMoveInput(false);
 				Controller->SetCanSelectTile(true);
+				
 			}
 			else
 			{
+				DisableInput(Controller);
 				Controller->CustomCanSelectTile.Unbind();
+
+				// Player should no longer be able to move
+				Controller->SetIgnoreMoveInput(true);
 				Controller->SetCanSelectTile(false);
 			}
 		}

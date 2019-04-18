@@ -9,6 +9,7 @@
 class ABoardManager;
 class ACSKGameMode;
 class ACSKGameState;
+class ATile;
 class UCSKGameInstance;
 class UUserWidget;
 
@@ -51,6 +52,10 @@ public:
 	/** Get the first board manager found in the level */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
+
+	/** Get if two tiles are within given amount of range of each other */
+	UFUNCTION(BlueprintPure, Category = Board)
+	static bool AreTilesWithingRange(const ATile* T1, const ATile* T2, int32 Range, int32& OutDistance);
 
 public:
 
