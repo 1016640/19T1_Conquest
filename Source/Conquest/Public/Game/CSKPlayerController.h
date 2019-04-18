@@ -18,6 +18,12 @@ class USpell;
 class USpellCard;
 class UTowerConstructionData;
 
+/** Delegate for checking if player can select the tile */
+DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(bool, FCanSelectTileSignature, ATile*, HoveredTile);
+
+/** Delegate for when the a tile has been selected */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnSelectTileSignature, ATile*, SelectedTile);
+
 /** Struct containing tallied amount of resources to give to a player */
 USTRUCT()
 struct CONQUEST_API FCollectionPhaseResourcesTally
@@ -150,6 +156,8 @@ private:
 	/** Resets our camera to focus on our castle */
 	void ResetCamera();
 
+public: // Temp
+
 	/** Sets whethere we can select tiles */
 	void SetCanSelectTile(bool bEnable);
 
@@ -158,6 +166,22 @@ protected:
 	/** Our HUD class as a CSK HUD */
 	UPROPERTY()
 	ACSKHUD* CachedCSKHUD;
+
+private:
+
+	/** Executes the on select tile event on the server */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ExecuteCustomOnSelectTile(ATile* SelectedTile);
+
+public:
+
+	/** Event to check if this player can select given tile. 
+	This is executed on both the client and the server */
+	FCanSelectTileSignature CustomCanSelectTile;
+
+	/** Event for when this player selects the given tile and can select
+	tile returned true (if bound). This is executed only on the server */
+	FOnSelectTileSignature CustomOnSelectTile;
 
 protected:
 

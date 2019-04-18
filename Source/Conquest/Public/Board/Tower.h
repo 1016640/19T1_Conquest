@@ -164,4 +164,37 @@ protected:
 	which towers will execute their actions first. The lower the value, the higher the priority */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece, meta = (ClampMin = 0, EditCondition = "bWantsActionDuringEndRoundPhase"))
 	int32 EndRoundPhaseActionPriority;
+
+protected:
+
+	/** Binds the custom tile selection to our owners player controller. This will
+	only work during the end round action and will be automatically unbound. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected = "true"))
+	void BindPlayerTileSelectionCallbacks();
+
+	/** Unbinds the custom tile selection from our owners player controller. This should be
+	used when custom selection is no longer desired but can be left as it will be auto unbound */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
+	void UnbindPlayerTileSelectionCallbacks();
+
+	/** If the player is allowed to select the given tile for end round action phase.
+	This can run on both the owning players client and the server */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName="Can Select Tile for Action"))
+	bool BP_CanSelectTileForAction(ATile* TargetTile);
+
+	/** Called when player has selected the given tile for end round action. This only
+	executes on the server and when CanSelectTileForAction has returned true */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Tile Selected for Action"))
+	void BP_OnTileSelectedForAction(ATile* TargetTile);
+
+private:
+
+	/** Binds custom tile selection callbacks client side */
+	UFUNCTION(Client, Reliable)
+	void Client_BindPlayerTileSelectionCallbacks(bool bBind);
+
+private:
+
+	/** If custom tile selection callbacks have been bound */
+	uint8 bIsCustomTileCallbacksBound : 1;
 };
