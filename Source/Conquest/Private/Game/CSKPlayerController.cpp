@@ -144,10 +144,25 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 	{
 		SelectedSpellCard = InSpellCard;
 		
-		const USpellCard* DefaultSpellCard = SelectedSpellCard.GetDefaultObject();
+		const USpellCard* DefaultSpellCard = SelectedSpellCard ? SelectedSpellCard.GetDefaultObject() : nullptr;
 		if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(InSpellIndex))
 		{
 			SelectedSpellIndex = InSpellIndex;
+			
+			// If the selected spell doesn't require a target, we can simply cast the spell now instead of waiting or a tile to be selected
+			const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
+			if (!DefaultSpell->RequiresTarget())
+			{
+				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
+				if (bCanUseQuickEffect)
+				{
+					Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+				}
+				else
+				{
+					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+				}
+			}
 		}
 		else
 		{

@@ -16,8 +16,7 @@ bool UCSKGameInstance::ServerTravelToLevel(const UObject* WorldContextObject, FS
 	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
 	if (World)
 	{
-		// Intentional space between travel and name
-		FString URL = "ServerTravel " + LevelName;
+		FString URL = LevelName;
 		
 		// Append each option to the URL
 		for (const FString& Option : Options)

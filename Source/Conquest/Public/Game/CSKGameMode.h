@@ -321,7 +321,7 @@ private:
 public:
 
 	/** Will attempt to end active players action phase if active player has fulfilled action requirements */
-	bool RequestEndActionPhase();
+	bool RequestEndActionPhase(bool bTimeOut = false);
 
 	/** Will attempt to move active players castle towards given tile. Doing this will
 	lock the ability for any other action to be made until castle reaches it's destination */
@@ -693,8 +693,10 @@ protected:
 
 public:
 
-	/** Get if given value is within the limit of tiles that can be traversed each round */
-	FORCEINLINE bool IsCountWithinTileTravelLimits(int32 Count, int32 Bonus) const { return (MinTileMovements <= Count && Count <= (MaxTileMovements + Bonus)); }
+	/** Based on tiles already traversed this round and bonus tile movements,
+	is the querier allowed to move anymore tiles (at least one) */
+	// TODO: Move to game state
+	bool CanTraverseAnymoreTiles(int32 Count, int32 Bonus, int32& OutAllowedTileMovements) const;
 
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)

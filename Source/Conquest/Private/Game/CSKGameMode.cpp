@@ -68,6 +68,8 @@ ACSKGameMode::ACSKGameMode()
 	MaxTileMovements = 2;
 	bLimitOneMoveActionPerTurn = false;
 	MaxSpellUses = 1;
+	MaxSpellCardsInHand = 3;
+
 	QuickEffectCounterTime = 15.f;
 	BonusSpellSelectTime = 15.f;
 	InitialMatchDelay = 2.f;
@@ -145,6 +147,7 @@ void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 			else
 			{
 				SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
+				InitialMatchDelay = GameState->GetServerWorldTimeSeconds() + InitialMatchDelay;
 			}
 		}
 		else
@@ -592,15 +595,23 @@ void ACSKGameMode::OnMatchFinished()
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
-	FString LevelName("L_Lobby");
-	TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
+	//FString LevelName("L_Lobby");
+	//TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
 
-	// Return to the lobby
-	UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
+	//// Return to the lobby
+	//UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
+
+	// temp
+	UCSKGameInstance* GameInstance = GetGameInstance<UCSKGameInstance>();
+	if (GameInstance)
+	{
+		GameInstance->DestroySessionAfterMatchFinished();
+	}
 }
 
 void ACSKGameMode::OnMatchAbort()
 {
+	OnFinishedWaitingPostMatch();
 }
 
 void ACSKGameMode::OnCollectionPhaseStart()
@@ -903,7 +914,12 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 			bDeckReshuffled = true;
 		}
 
-		TSubclassOf<USpellCard> SpellCard = State->PickupCardFromDeck();
+		// Player can only carry X amount of cards in hand
+		TSubclassOf<USpellCard> SpellCard = nullptr;
+		if (State->GetNumSpellsInHand() < MaxSpellCardsInHand)
+		{
+			SpellCard = State->PickupCardFromDeck();
+		}
 
 		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, bDeckReshuffled, SpellCard);
 		Controller->Client_OnCollectionPhaseResourcesTallied(TalliedResults);
@@ -932,7 +948,7 @@ void ACSKGameMode::NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* P
 
 
 
-bool ACSKGameMode::RequestEndActionPhase()
+bool ACSKGameMode::RequestEndActionPhase(bool bTimeOut)
 {
 	// Player is not the active player
 	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
@@ -947,7 +963,7 @@ bool ACSKGameMode::RequestEndActionPhase()
 	}
 
 	// Player might not have fulfilled action phase requirements (e.g. moving castle)
-	if (!ActionPhaseActiveController->CanEndActionPhase())
+	if (!bTimeOut && !ActionPhaseActiveController->CanEndActionPhase())
 	{
 		return false;
 	}
@@ -997,7 +1013,11 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (ensure(PlayerState))
 		{
-			TileSegments -= PlayerState->GetTilesTraversedThisRound();
+			// This player has already traversed the max amount of tiles allowed
+			if (!CanTraverseAnymoreTiles(PlayerState->GetTilesTraversedThisRound(), PlayerState->GetBonusTileMovements(), TileSegments))
+			{
+				return false;
+			}
 		}
 		else
 		{
@@ -1005,17 +1025,14 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 				"max tile movements per turn as player state is not of CSKPlayerState"));
 		}
 
-		if (IsCountWithinTileTravelLimits(TileSegments, PlayerState->GetBonusTileMovements()))
-		{
-			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-			check(BoardManager);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
 
-			// Confirm request if path is successfully found
-			FBoardPath OutBoardPath;
-			if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
-			{
-				return ConfirmCastleMove(OutBoardPath);
-			}
+		// Confirm request if path is successfully found
+		FBoardPath OutBoardPath;
+		if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
+		{
+			return ConfirmCastleMove(OutBoardPath);
 		}
 	}
 
@@ -2143,7 +2160,7 @@ void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 		if (ensure(EndRoundActionTowers.IsValidIndex(EndRoundRunningTower)))
 		{
 			// Double check
-			check(EndRoundActionTowers[EndRoundRunningTower] == Tower);
+			//check(EndRoundActionTowers[EndRoundRunningTower] == Tower);
 			bRunningTowerEndRoundAction = false;
 		}
 		else
@@ -2311,6 +2328,25 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 
 
 
+bool ACSKGameMode::CanTraverseAnymoreTiles(int32 Count, int32 Bonus, int32& OutAllowedTileMovements) const
+{
+	Count = FMath::Max(0, Count);
+
+	// The max amount of movements that can be made
+	int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + Bonus);
+
+	// Bonus can be negative (signalling less moves are allowed)
+	if (Count >= CalculatedMaxMovements)
+	{
+		OutAllowedTileMovements = 0;
+		return false;
+	}
+
+	// We have to subtract the count from th
+	OutAllowedTileMovements = CalculatedMaxMovements - Count;
+	return true;
+}
+
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
 	if (HealthComp->IsDead())
@@ -2329,19 +2365,34 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 			// TODO: Move to function
 			{
 				ATower* DestroyedTower = CastChecked<ATower>(DeadPiece);
+				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
 
 				// Remove references from both board and player
-				ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-				BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
+				{
+					ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+					BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
 
-				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
-				PlayerState->RemoveTower(DestroyedTower);
+					
+					PlayerState->RemoveTower(DestroyedTower);
+				}
 
-				DestroyedTower->SetActorHiddenInGame(true);
-				
-				// Allow tower to remove and grants
-				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
-				
+				// Allow tower to clean up itself
+				{
+					DestroyedTower->SetActorHiddenInGame(true);
+					DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
+				}
+
+				// We need to make sure this tower is removed from end round phase actions
+				if (IsEndRoundPhaseInProgress())
+				{
+					// TODO: THis tower might be the tower running (but for now)
+					int32 Index = EndRoundActionTowers.Remove(DestroyedTower);
+					if (Index >= EndRoundRunningTower)
+					{
+						--EndRoundRunningTower;
+					}
+				}
+
 				// Destroy after small delay (so any RPCs can get executed)
 				FTimerHandle TempHandle;
 				FTimerManager& TimerManager = GetWorldTimerManager();

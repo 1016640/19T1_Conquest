@@ -28,7 +28,7 @@ bool USpell::CanActivateSpell_Implementation(const ACSKPlayerState* CastingPlaye
 
 int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const
 {
-	return SpellStaticCost;
+	return SpellStaticCost + AdditionalMana;
 }
 
 #undef LOCTEXT_NAMESPACE

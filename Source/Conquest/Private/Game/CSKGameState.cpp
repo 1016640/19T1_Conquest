@@ -102,6 +102,7 @@ void ACSKGameState::Tick(float DeltaTime)
 				{
 					// TODO: notify game mode that time has run out
 					// Game mode should then auto path closer to opponents portal (if player hasn't moved)
+					GameMode->RequestEndActionPhase(true);
 				}
 			}
 		}
@@ -115,7 +116,7 @@ void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
 		// We need to have a board manager, we will find one until we wait for the initial one to replicate
 		if (!BoardManager)
 		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: Board Manages has not been replicated to client. Finding the first available board managaer instead."));
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: Board Manager has not been replicated to client. Finding the first available board managaer instead."));
 			BoardManager = UConquestFunctionLibrary::FindMatchBoardManager(this);
 		}
 	}

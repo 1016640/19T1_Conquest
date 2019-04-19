@@ -398,7 +398,8 @@ void ACSKPlayerState::IncrementTilesTraversed()
 		if (GameMode)
 		{
 			// Warning check
-			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound, BonusTileMovements))
+			int32 OutTileMovements = 0;
+			if (!GameMode->CanTraverseAnymoreTiles(TilesTraversedThisRound, BonusTileMovements, OutTileMovements))
 			{
 				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed this round! "
 					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
