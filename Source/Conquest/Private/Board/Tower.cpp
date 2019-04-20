@@ -8,6 +8,7 @@
 #include "CSKPlayerState.h"
 
 #include "HealthComponent.h"
+#include "TowerConstructionData.h"
 #include "Components/StaticMeshComponent.h"
 
 ATower::ATower()
@@ -59,6 +60,19 @@ void ATower::PlacedOnTile(ATile* Tile)
 	StartBuildSequence();
 }
 
+void ATower::GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const
+{
+	if (ConstructData)
+	{
+		OutUIData.Name = FText::FromName(ConstructData->TowerName);
+		
+		// Replace all new lines with spaces
+		FString DescriptionString = ConstructData->TowerDescription.ToString();
+		DescriptionString = DescriptionString.Replace(TEXT("\r\n"), TEXT(" "));
+		OutUIData.Description = FText::FromString(DescriptionString);
+	}
+}
+
 void ATower::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -93,6 +107,7 @@ void ATower::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePr
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME_CONDITION(ATower, ConstructData, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ATower, OwnerPlayerState, COND_InitialOnly);
 }
 

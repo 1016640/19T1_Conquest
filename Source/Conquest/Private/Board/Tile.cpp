@@ -3,6 +3,7 @@
 #include "Tile.h"
 #include "BoardManager.h"
 #include "BoardPieceInterface.h"
+#include "CSKHUD.h"
 #include "CSKPlayerController.h"
 
 ATile::ATile()
@@ -44,6 +45,8 @@ void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 			BP_OnHoverStart(Controller);
 		}
 
+		HoveringPlayer = Controller;
+
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = true;
 		#endif
@@ -54,15 +57,34 @@ void ATile::EndHoveringTile(ACSKPlayerController* Controller)
 {
 	if (Controller && Controller->IsLocalPlayerController())
 	{
+		check(HoveringPlayer == Controller);
+
 		// Null tiles do not recieve this event
 		if (!bIsNullTile)
 		{
 			BP_OnHoverEnd(Controller);
 		}
 
+		HoveringPlayer.Reset();
+
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = false;
 		#endif
+	}
+}
+
+void ATile::RefreshHoveringPlayersBoardPieceUI()
+{
+	if (HoveringPlayer.IsValid())
+	{
+		check(HoveringPlayer->IsLocalPlayerController());
+
+		// This will collect recent BoardPieceUIData to refresh the display with
+		ACSKHUD* CSKHUD = HoveringPlayer->GetCSKHUD();
+		if (CSKHUD)
+		{
+			CSKHUD->OnTileHovered(this);
+		}
 	}
 }
 
@@ -125,6 +147,9 @@ void ATile::Multi_SetBoardPiece_Implementation(AActor* BoardPiece)
 
 		// Execute any events after set up is complete
 		BP_OnBoardPieceSet(BoardPiece);
+
+		// This should always be executed last
+		RefreshHoveringPlayersBoardPieceUI();
 	}
 	else
 	{
@@ -148,6 +173,9 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;
+
+		// This should always be executed last
+		RefreshHoveringPlayersBoardPieceUI();
 	}
 }
 
@@ -179,7 +207,7 @@ bool ATile::CanPlaceTowersOn() const
 
 AActor* ATile::GetBoardPiece() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return CastChecked<AActor>(PieceOccupant.GetObject());
 	}
@@ -189,7 +217,7 @@ AActor* ATile::GetBoardPiece() const
 
 ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return PieceOccupant->GetBoardPieceOwnerPlayerState();
 	}
@@ -199,10 +227,26 @@ ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 
 UHealthComponent* ATile::GetBoardPieceHealthComponent() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return PieceOccupant->GetHealthComponent();
 	}
 
 	return nullptr;
+}
+
+FBoardPieceUIData ATile::GetBoardPieceUIData() const
+{
+	FBoardPieceUIData UIData;
+
+	if (IsTileOccupied())
+	{
+		UIData.BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
+		UIData.Owner = PieceOccupant->GetBoardPieceOwnerPlayerState();
+
+		// Allow individual board pieces to pass in additional data
+		PieceOccupant->GetBoardPieceUIData(UIData);
+	}
+
+	return UIData;
 }

@@ -13,6 +13,39 @@ class ATile;
 class UCSKGameInstance;
 class UUserWidget;
 
+/** Information about a board piece to display to the user */
+USTRUCT(BlueprintType)
+struct CONQUEST_API FBoardPieceUIData
+{
+	GENERATED_BODY()
+
+public:
+
+	FBoardPieceUIData()
+	{
+		Owner = nullptr;
+		BoardPiece = nullptr;
+	}
+
+public:
+
+	/** The name of the board piece */
+	UPROPERTY(BlueprintReadWrite)
+	FText Name;
+
+	/** A description of the board piece */
+	UPROPERTY(BlueprintReadWrite)
+	FText Description;
+
+	/** The player that owns the board piece */
+	UPROPERTY(BlueprintReadOnly)
+	const class ACSKPlayerState* Owner;
+
+	/** The board piece associated with this data */
+	UPROPERTY(BlueprintReadWrite)
+	const AActor* BoardPiece;
+};
+
 /**
  * Blueprint function library containing helper functions for Conquest based functionality
  */

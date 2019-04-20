@@ -5,6 +5,7 @@
 #include "CSKGameState.h"
 
 #include "UserWidget.h"
+#include "Tile.h"
 #include "Widgets/CSKHUDWidget.h"
 
 ACSKHUD::ACSKHUD()
@@ -18,6 +19,25 @@ void ACSKHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);
 	UConquestFunctionLibrary::RemoveWidgetFromParent(PostMatchWidgetInstance);
+}
+
+void ACSKHUD::OnTileHovered(ATile* Tile)
+{
+	UCSKHUDWidget* Widget = GetCSKHUDInstance();
+	if (Widget)
+	{
+		if (Tile && Tile->IsTileOccupied(false))
+		{
+			FBoardPieceUIData UIData = Tile->GetBoardPieceUIData();
+
+			Widget->SetTileWidgetData(UIData);
+			Widget->ToggleTileWidget(true);
+		}
+		else
+		{
+			Widget->ToggleTileWidget(false);
+		}
+	}
 }
 
 void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)

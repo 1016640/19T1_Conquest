@@ -129,7 +129,7 @@ public:
 	/** Set the additional mana the player wants to spend for spells */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void SetSelectedAdditionalMana(int32 InAdditionalMana);
-		 
+
 public:
 
 	/** Get possessed pawn as a CSK pawn */
@@ -335,7 +335,7 @@ public:
 protected:
 
 	/** Event for when the action phase mode has changed */
-	UFUNCTION(BlueprintImplementableEvent, Category = CSK)
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	void OnSelectionModeChanged(ECSKActionPhaseMode NewMode);
 
 private:

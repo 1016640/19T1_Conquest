@@ -147,3 +147,8 @@ void UHealthComponent::Revive(float Percent)
 		}
 	}
 }
+
+void UHealthComponent::OnRep_Health()
+{
+	OnHealthChanged.Broadcast(this, Health, 0);
+}

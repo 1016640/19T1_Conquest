@@ -65,6 +65,10 @@ protected:
 
 public:
 
+	/** Sets this players assigned color */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
+	void SetAssignedColor(FColor InColor);
+
 	/** Gives this player both gold and mana (can be negative) */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
 	void GiveResources(int32 InGold, int32 InMana);

@@ -65,6 +65,8 @@ void ABoardManager::BeginPlay()
 
 	#if WITH_EDITORONLY_DATA
 	SetActorTickEnabled(bDrawDebugBoard);
+	#else
+	SetActorTickEnabled(false);
 	#endif
 }
 

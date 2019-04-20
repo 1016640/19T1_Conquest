@@ -74,6 +74,11 @@ ACSKGameMode::ACSKGameMode()
 	BonusSpellSelectTime = 15.f;
 	InitialMatchDelay = 2.f;
 	PostMatchDelay = 15.f;
+
+	#if WITH_EDITORONLY_DATA
+	P1AssignedColor = FColor::Red;
+	P2AssignedColor = FColor::Green;
+	#endif
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -89,8 +94,8 @@ void ACSKGameMode::Tick(float DeltaTime)
 
 void ACSKGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
-	Players.Add(nullptr);
-	Players.Add(nullptr);
+	// Fix the size of the players array, as it won't be changing throughout the match
+	Players.SetNum(CSK_MAX_NUM_PLAYERS);
 
 	Super::InitGame(MapName, Options, ErrorMessage);
 
@@ -147,7 +152,6 @@ void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 			else
 			{
 				SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
-				InitialMatchDelay = GameState->GetServerWorldTimeSeconds() + InitialMatchDelay;
 			}
 		}
 		else
@@ -363,6 +367,10 @@ void ACSKGameMode::SetPlayerWithID(ACSKPlayerController* Controller, int32 Playe
 			if (PlayerState)
 			{
 				PlayerState->SetCSKPlayerID(PlayerID);
+
+				#if WITH_EDITORONLY_DATA
+				PlayerState->SetAssignedColor(PlayerID == 0 ? P1AssignedColor : P2AssignedColor);
+				#endif
 			}
 		}
 	}
@@ -1109,7 +1117,7 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 		TSubclassOf<ATower> TowerClass = ConstructData->TowerClass;
 
 		// Confirm request if tower was successfully spawned
-		ATower* NewTower = SpawnTowerFor(TowerClass, Tile, ActionPhaseActiveController->GetCSKPlayerState());
+		ATower* NewTower = SpawnTowerFor(TowerClass, Tile, ConstructData, ActionPhaseActiveController->GetCSKPlayerState());
 		if (NewTower)
 		{
 			return ConfirmBuildTower(NewTower, Tile, ConstructData);
@@ -1700,7 +1708,7 @@ void ACSKGameMode::FinishBuildTower()
 }
 
 
-ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
+ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, UTowerConstructionData* ConstructData, ACSKPlayerState* PlayerState) const
 {
 	check(Tile);
 
@@ -1724,6 +1732,7 @@ ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, A
 	if (Tower)
 	{
 		Tower->SetBoardPieceOwnerPlayerState(PlayerState);
+		Tower->ConstructData = ConstructData;
 
 		// Towers are moved client side when performing the build sequence. This means while we wait,
 		// the actor could pop in and be visible before it moves underground. We can set it to hidden
@@ -2386,11 +2395,16 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 				if (IsEndRoundPhaseInProgress())
 				{
 					// TODO: THis tower might be the tower running (but for now)
-					int32 Index = EndRoundActionTowers.Remove(DestroyedTower);
+
+					// We need to revert the index back one if this tower has already executed,
+					// as not doing so will skip one towers end round action
+					int32 Index = EndRoundActionTowers.Find(DestroyedTower);
 					if (Index >= EndRoundRunningTower)
 					{
 						--EndRoundRunningTower;
 					}
+
+					EndRoundActionTowers.RemoveAt(Index);
 				}
 
 				// Destroy after small delay (so any RPCs can get executed)

@@ -82,6 +82,14 @@ void ACSKPlayerState::SetCastle(ACastle* InCastle)
 	}
 }
 
+void ACSKPlayerState::SetAssignedColor(FColor InColor)
+{
+	if (HasAuthority())
+	{
+		AssignedColor = InColor;
+	}
+}
+
 void ACSKPlayerState::GiveResources(int32 InGold, int32 InMana)
 {
 	SetResources(Gold + InGold, Mana + InMana);

@@ -73,6 +73,10 @@ public:
 
 protected:
 
+	/** Get if this tile is currently being hovered by the player */
+	UFUNCTION(BlueprintPure, Category = Tile)
+	bool IsHovered() const { return HoveringPlayer.IsValid(); }
+
 	/** Event for when the player has started to hover over this tile. This event will only ever be called on the client */
 	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName="On Hover Start"))
 	void BP_OnHoverStart(ACSKPlayerController* Controller);
@@ -80,6 +84,16 @@ protected:
 	/** Event for when the player is no longer hovering over this tile. This event will only ever be called on the client */
 	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName = "On Hover End"))
 	void BP_OnHoverEnd(ACSKPlayerController* Controller);
+
+	/** Refreshes the board piece UI data for the hovering player */
+	UFUNCTION(BlueprintCallable, Category = Tile)
+	void RefreshHoveringPlayersBoardPieceUI();
+
+private:
+
+	/** Reference to the controller hovering this tile. We keep this
+	here to notify the player of any changes to the occupant board piece */
+	TWeakObjectPtr<ACSKPlayerController> HoveringPlayer;
 
 public:
 
@@ -135,6 +149,9 @@ public:
 	/** Get the health component of the board piece on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	UHealthComponent* GetBoardPieceHealthComponent() const;
+
+	/** Constructs and returns UI data about the current board piece occupant */\
+	FBoardPieceUIData GetBoardPieceUIData() const;
 
 private:
 

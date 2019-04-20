@@ -9,6 +9,7 @@
 
 class ACSKPlayerController;
 class UStaticMeshComponent;
+class UTowerConstructionData;
 
 /** Delegate for towers when they complete the build sequence */
 DECLARE_MULTICAST_DELEGATE(FTowerBuildSequenceComplete);
@@ -32,6 +33,7 @@ public:
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
+	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const override;
 	// End IBoardPiece Interface
 
 	// Begin AActor Interface
@@ -43,6 +45,12 @@ protected:
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
+
+public:
+
+	/** The construction data about this tower */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = BoardPiece, AdvancedDisplay)
+	const UTowerConstructionData* ConstructData;
 
 public:
 

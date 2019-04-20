@@ -388,7 +388,7 @@ private:
 	void FinishBuildTower();
 
 	/** Spawns a new tower of type for given player at tile */
-	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const;
+	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, UTowerConstructionData* ConstructData, ACSKPlayerState* PlayerState) const;
 
 	/** Notify from timer that we should start tower build sequence */
 	void OnStartActivePlayersBuildSequence();
@@ -627,6 +627,16 @@ public:
 	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
 
 protected:
+
+	#if WITH_EDITORONLY_DATA
+	/** Debug color to give to player 1 in a PIE session */
+	UPROPERTY(EditAnywhere, Category = "Rules|Debug")
+	FColor P1AssignedColor;
+
+	/** Debug color to given to player 2 in a PIE session */
+	UPROPERTY(EditAnywhere, Category = "Rules|Debug")
+	FColor P2AssignedColor;
+	#endif WITH_EDITORONLY_DATA
 
 	/** The amount of gold each player starts with */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources, meta = (ClampMin = 0))

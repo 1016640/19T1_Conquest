@@ -100,6 +100,12 @@ void ACSKPlayerController::Tick(float DeltaTime)
 				{
 					HoveredTile->StartHoveringTile(this);
 				}
+
+				// Notify HUD, HUD will handle null checks
+				if (CachedCSKHUD)
+				{
+					CachedCSKHUD->OnTileHovered(HoveredTile);
+				}
 			}
 		}
 	}
@@ -271,10 +277,10 @@ void ACSKPlayerController::SelectTile()
 
 void ACSKPlayerController::ResetCamera()
 {
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && CastlePawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && CastlePawn)
 	{
-		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
+		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation());
 	}
 }
 
@@ -324,10 +330,10 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 		// Link back to us
 		CastleController->PlayerOwner = this;
 
-		ACSKPlayerState* PlayerState = GetCSKPlayerState();
-		if (PlayerState)
+		ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+		if (CSKPlayerState)
 		{
-			PlayerState->SetCastle(CastlePawn);
+			CSKPlayerState->SetCastle(CastlePawn);
 		}
 	}
 }
@@ -344,11 +350,11 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 				SetIgnoreMoveInput(true);
 			}
 
-			ACSKPawn* Pawn = GetCSKPawn();
-			if (Pawn && CastlePawn)
+			ACSKPawn* CSKPawn = GetCSKPawn();
+			if (CSKPawn && CastlePawn)
 			{
 				// Focus on our castle while we wait for tallied resources
-				Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+				CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
 			}
 
 			bWaitingOnTallyEvent = false;
@@ -486,14 +492,14 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 			if (bEnabled)
 			{
 				// Reset tiles traversed
-				ACSKPlayerState* PlayerState = GetCSKPlayerState();
-				if (PlayerState)
+				ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+				if (CSKPlayerState)
 				{
-					PlayerState->ResetTilesTraversed();
-					PlayerState->ResetSpellsCast();
+					CSKPlayerState->ResetTilesTraversed();
+					CSKPlayerState->ResetSpellsCast();
 
 					// Check not only if we can cast a spell, but if we can afford any of them
-					if (PlayerState->CanCastAnotherSpell(true))
+					if (CSKPlayerState->CanCastAnotherSpell(true))
 					{
 						ModesToEnable |= ECSKActionPhaseMode::CastSpell;
 					}
@@ -651,6 +657,10 @@ bool ACSKPlayerController::CanRequestCastSpellAction() const
 	return false;
 }
 
+void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhaseMode NewMode)
+{
+}
+
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
@@ -658,10 +668,10 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 	// Move our camera to our castle when it's our turn to make actions
 	if (bIsActionPhase)
 	{
-		ACSKPawn* Pawn = GetCSKPawn();
-		if (Pawn && CastlePawn)
+		ACSKPawn* CSKPawn = GetCSKPawn();
+		if (CSKPawn && CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
 
 		SetCanSelectTile(true);
@@ -703,12 +713,12 @@ void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 {
 	// Move the camera over to our castle (where our portal should be)
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
 		if (CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
 		}
 	}
 	else
@@ -737,10 +747,10 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 {
 	SetCanSelectTile(true);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
-		Pawn->TrackActor(nullptr);
+		CSKPawn->TrackActor(nullptr);
 	}
 
 	if (CachedCSKHUD)
@@ -753,11 +763,11 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && TargetTile)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && TargetTile)
 	{
 		// Have players watch get tower built		
-		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 		SetIgnoreMoveInput(true);
 	}
 
@@ -782,11 +792,11 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && TargetTile)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && TargetTile)
 	{
 		// Have players watch spell in action	
-		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 
 		// Avoid setting it twice, as this function will get
 		// called twice before Finish if casting a bonus spell
@@ -1196,18 +1206,18 @@ void ACSKPlayerController::GetBuildableTowers(TArray<TSubclassOf<UTowerConstruct
 
 void ACSKPlayerController::GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
 {
-	ACSKPlayerState* PlayerState = GetCSKPlayerState();
-	if (PlayerState)
+	ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+	if (CSKPlayerState)
 	{
-		PlayerState->GetSpellsPlayerCanCast(OutSpellCards);
+		CSKPlayerState->GetSpellsPlayerCanCast(OutSpellCards);
 	}
 }
 
 void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
 {
-	ACSKPlayerState* PlayerState = GetCSKPlayerState();
-	if (PlayerState)
+	ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+	if (CSKPlayerState)
 	{
-		PlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
+		CSKPlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
 	}
 }

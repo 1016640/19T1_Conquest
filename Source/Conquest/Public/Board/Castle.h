@@ -31,6 +31,7 @@ public:
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual void RemovedOffTile() override;
 	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
+	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const override;
 	// End IBoardPiece Interface
 
 protected:

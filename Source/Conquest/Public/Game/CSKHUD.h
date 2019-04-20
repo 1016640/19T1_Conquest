@@ -31,6 +31,11 @@ public:
 	
 public:
 
+	/** Notify that player has hovered over a new tile */
+	void OnTileHovered(ATile* Tile);
+
+public:
+
 	/** Notify from our owner that the round state has changed */
 	void OnRoundStateChanged(ECSKRoundState NewState);
 
