@@ -510,4 +510,9 @@ public:
 	/** Get the bonus elemental spell this player can cast */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	TSubclassOf<USpell> GetCastableBonusElementalSpell() const { return PendingBonusSpell; }
+
+private:
+
+	// temp
+	TArray<ATile*> TempTiles;
 };

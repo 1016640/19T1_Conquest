@@ -5,6 +5,9 @@
 #include "BoardPieceInterface.h"
 #include "CSKHUD.h"
 #include "CSKPlayerController.h"
+#include "CSKPlayerState.h"
+
+#include "Components/StaticMeshComponent.h"
 
 ATile::ATile()
 {
@@ -16,14 +19,15 @@ ATile::ATile()
 	bOnlyRelevantToOwner = false;
 	bReplicateMovement = false;
 
-	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	SetRootComponent(DummyRoot);
-	DummyRoot->SetMobility(EComponentMobility::Static);
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	SetRootComponent(Mesh);
+	Mesh->SetMobility(EComponentMobility::Static);
 
 	// Fire tile type
-	TileType = 1;
+	TileType = ECSKElementType::Fire;
 	bIsNullTile = false;
 	GridHexIndex = FIntVector(-1);
+	SelectionState = ETileSelectionState::NotSelectable;
 
 	#if WITH_EDITORONLY_DATA
 	bHighlightTile = false;
@@ -34,6 +38,39 @@ void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePro
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 }
+
+#if WITH_EDITOR
+void ATile::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	// We will need to find the board manager manually if not in PIE
+	ABoardManager* BoardManager = nullptr;
+	
+	UWorld* World = GetWorld();
+	if (World && World->IsPlayInEditor())
+	{
+		BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(World, false);
+	}
+	else
+	{
+		BoardManager = UConquestFunctionLibrary::FindMatchBoardManager(this, false);
+	}
+
+	// We don't need to do anything if there is no board manager
+	if (!BoardManager)
+	{
+		return;
+	}
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ATile, TileType) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ATile, bIsNullTile))
+	{
+		BoardManager->SetTilesHighlightMaterial(this);
+	}
+}
+#endif
 
 void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 {
@@ -46,6 +83,8 @@ void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 		}
 
 		HoveringPlayer = Controller;
+
+		RefreshHighlightMaterial();
 
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = true;
@@ -67,9 +106,20 @@ void ATile::EndHoveringTile(ACSKPlayerController* Controller)
 
 		HoveringPlayer.Reset();
 
+		RefreshHighlightMaterial();
+
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = false;
 		#endif
+	}
+}
+
+void ATile::SetSelectionState(ETileSelectionState State)
+{
+	if (SelectionState != State)
+	{
+		SelectionState = State;
+		RefreshHighlightMaterial();
 	}
 }
 
@@ -148,7 +198,8 @@ void ATile::Multi_SetBoardPiece_Implementation(AActor* BoardPiece)
 		// Execute any events after set up is complete
 		BP_OnBoardPieceSet(BoardPiece);
 
-		// This should always be executed last
+		// These should always be executed last
+		RefreshHighlightMaterial();
 		RefreshHoveringPlayersBoardPieceUI();
 	}
 	else
@@ -168,13 +219,14 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 	{
 		AActor* BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
 		
-		// Execute any events before clearing (as at this point we are still technically occupied)
+		// Execute any events before clearing
 		BP_OnBoardPieceCleared();
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;
 
-		// This should always be executed last
+		// These should always be executed last
+		RefreshHighlightMaterial();
 		RefreshHoveringPlayersBoardPieceUI();
 	}
 }
@@ -225,6 +277,17 @@ ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 	return nullptr;
 }
 
+int32 ATile::GetBoardPiecesOwnerPlayerID() const
+{
+	ACSKPlayerState* OwnerState = GetBoardPiecesOwner();
+	if (OwnerState)
+	{
+		return OwnerState->GetCSKPlayerID();
+	}
+
+	return -1;
+}
+
 UHealthComponent* ATile::GetBoardPieceHealthComponent() const
 {
 	if (IsTileOccupied(false))
@@ -249,4 +312,13 @@ FBoardPieceUIData ATile::GetBoardPieceUIData() const
 	}
 
 	return UIData;
+}
+
+void ATile::RefreshHighlightMaterial()
+{
+	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	if (BoardManager)
+	{
+		BoardManager->SetTilesHighlightMaterial(this);
+	}
 }

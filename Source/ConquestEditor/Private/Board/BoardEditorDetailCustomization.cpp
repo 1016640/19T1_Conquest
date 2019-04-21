@@ -451,7 +451,7 @@ ECheckBoxState FBoardEditorStructCustomization_BoardTileProperties::GetTilesIsEl
 		for (int32 Index = 0; Index < Tiles.Num(); ++Index)
 		{
 			ATile* Tile = Tiles[Index];
-			bool bElementSet = (static_cast<uint8>(ElementType) & Tile->TileType) > 0;
+			bool bElementSet = (ElementType & Tile->TileType) != ECSKElementType::None;
 
 			// If result is different, it means there are conflicting arguements.
 			// We can ignore this rule for the very first tile being checked
@@ -484,11 +484,11 @@ void FBoardEditorStructCustomization_BoardTileProperties::SetTilesElement(ECheck
 		{
 			if (NewCheckedState == ECheckBoxState::Checked)
 			{
-				Tile->TileType |= (static_cast<uint8>(ElementType));
+				Tile->TileType = ElementType;
 			}
 			else
 			{
-				Tile->TileType &= ~(static_cast<uint8>(ElementType));
+				Tile->TileType = ECSKElementType::None;
 			}
 		}
 	}

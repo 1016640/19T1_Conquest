@@ -107,6 +107,27 @@ void ACSKPlayerController::Tick(float DeltaTime)
 					CachedCSKHUD->OnTileHovered(HoveredTile);
 				}
 			}
+
+			if (SelectedAction == ECSKActionPhaseMode::MoveCastle)
+			{
+				if (TempTiles.Num() == 0)
+				{
+					GameState->GetTilesPlayerCanMoveTo(this, TempTiles, true);
+					
+				}
+
+				for (ATile* Tile : TempTiles)
+				{
+					Tile->bHighlightTile = true;
+				}
+			}
+			else if (TempTiles.Num() > 0)
+			{
+				for (ATile* Tile : TempTiles)
+				{
+					Tile->bHighlightTile = false;
+				}
+			}
 		}
 	}
 }
@@ -659,6 +680,17 @@ bool ACSKPlayerController::CanRequestCastSpellAction() const
 
 void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhaseMode NewMode)
 {
+	ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (CSKGameState)
+	{
+		switch (NewMode)
+		{
+			case ECSKActionPhaseMode::MoveCastle:
+			{
+
+			}
+		}
+	}
 }
 
 void ACSKPlayerController::OnRep_bIsActionPhase()
@@ -731,10 +763,10 @@ void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(AC
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
-		Pawn->TrackActor(MovingCastle);
+		CSKPawn->TrackActor(MovingCastle);
 	}
 
 	if (CachedCSKHUD)
@@ -757,6 +789,12 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 	{
 		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
 	}
+
+	for (ATile* Tile : TempTiles)
+	{
+		Tile->bHighlightTile = false;
+	}
+	TempTiles.Reset();
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)

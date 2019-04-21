@@ -572,11 +572,25 @@ void ACSKGameMode::OnMatchStart()
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
+	
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+	ABoardManager* BoardManager = CSKGameState ? CSKGameState->GetBoardManager() : nullptr;
 
 	// Have each player transition to their board
 	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
 	{
-		Players[i]->OnTransitionToBoard();
+		ACSKPlayerController* Controller = Players[i];
+		Controller->OnTransitionToBoard();
+		
+		// Initialize the players assigned colors with the board
+		if (BoardManager)
+		{
+			ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+			if (PlayerState)
+			{
+				BoardManager->SetHighlightColorForPlayer(Controller->CSKPlayerID, PlayerState->GetAssignedColor());
+			}
+		}
 	}
 
 	SetActorTickEnabled(false);
@@ -2063,10 +2077,10 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 	if (CastersCastle)
 	{
 		ATile* Tile = CastersCastle->GetCachedTile();
-		if (Tile && Tile->TileType != 0)
+		if (Tile && Tile->TileType != ECSKElementType::None)
 		{
 			// Check if an element matches
-			ECSKElementType MatchingElement = static_cast<ECSKElementType>(Tile->TileType) & ActivePlayerSpellCard->GetElementalTypes();
+			ECSKElementType MatchingElement = (Tile->TileType & ActivePlayerSpellCard->GetElementalTypes());
 			if (BonusElementalSpells.Contains(MatchingElement))
 			{
 				TSubclassOf<USpell> BonusSpell = BonusElementalSpells[MatchingElement];
@@ -2107,10 +2121,10 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 				switch (Tile->TileType)
 				{
 					// Single elements, which are valid
-					case 1:
-					case 2:
-					case 4:
-					case 8:
+					case ECSKElementType::Fire:
+					case ECSKElementType::Water:
+					case ECSKElementType::Earth:
+					case ECSKElementType::Air:
 					{
 						break;
 					}

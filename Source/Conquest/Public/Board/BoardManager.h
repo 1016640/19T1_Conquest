@@ -8,6 +8,8 @@
 #include "BoardManager.generated.h"
 
 class ATower;
+class UMaterialInstanceConstant;
+class UMaterialInterface;
 
 struct CONQUEST_API FBoardInitData
 {
@@ -204,6 +206,14 @@ public:
 	/** Get the tile at given location */
 	FORCEINLINE ATile* GetTileAtLocation(const FVector& Location) const;
 
+	/** Get all the tiles with a matching element type */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	TArray<ATile*> GetTilesWithMatchingElement(ECSKElementType Elements) const;
+
+	/** Get all the tiles that are marked as null */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	TArray<ATile*> GetNullTiles() const;
+
 	/** If a tower is allowed to be placed on given tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	bool CanPlaceTowerOnTile(const ATile* Tile) const;
@@ -251,5 +261,80 @@ public:
 	/** Moves a board piece under the board based on it's boundaries */
 	UFUNCTION(BlueprintCallable, Category = "Board", meta = (AdvancedDisplay=1))
 	void MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale = 1.5f) const;
+
+public:
+	
+	/** Forces a refresh of all tiles highlight materials */
+	UFUNCTION(BlueprintCallable, CallInEditor)
+	void ForceTileHighlightRefresh();
+
+	/** Get the highlight material associated with given element */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	UMaterialInstanceConstant* GetHighlightMaterialForElement(ECSKElementType ElementType) const;
+
+	/** Get the highlight material for null tiles */
+	FORCEINLINE UMaterialInstanceConstant* GetNullHighlightMaterial() const { return NullHighlightMaterial; }
+
+	/** Get the highlight material for hovered tiles */
+	FORCEINLINE UMaterialInstanceConstant* GetHoveredHighlightMaterial() const { return HoveredHighlightMaterial; }
+
+	/** Get the highlight material for selectable tiles */
+	FORCEINLINE UMaterialInstanceConstant* GetSelectableHighlightMaterial() const { return SelectableHighlightMaterial; }
+
+	/** Get the highlight material for unselectable tiles */
+	FORCEINLINE UMaterialInstanceConstant* GetUnselectableHighlightMaterial() const { return UnselectableHighlightMaterial; }
+
+	/** Get the highlight material associated with player of ID */
+	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
+	UMaterialInstanceDynamic* GetPlayerHighlightMaterial(int32 PlayerID) const;
+
+public:
+
+	/** Determines and sets the highlight material that given tile should use */
+	void SetTilesHighlightMaterial(ATile* Tile) const;
+
+	/** Sets the color for highlight material associated with player. This will create a new material if it doesn't exist */
+	void SetHighlightColorForPlayer(int32 PlayerID, FLinearColor Color);
+
+private:
+
+	/** Sets the color for the highlight material associated with player ID. Will create it if it doesn't exist */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_SetHighlightColorForPlayer(int32 Player, FLinearColor Color);
+
+protected:
+
+	/** The highlight materials to use to highlight a tile based off its element type */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Board|Tiles")
+	TMap<ECSKElementType, UMaterialInstanceConstant*> ElementHighlightMaterials;
+
+	/** The highlight material to use to highlight a tile that is marked as null tile */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Board|Tiles")
+	UMaterialInstanceConstant* NullHighlightMaterial;
+
+	/** The highlight material to use for when a tile is hovered by the player */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Board|Tiles")
+	UMaterialInstanceConstant* HoveredHighlightMaterial;
+
+	/** The highlight material to use for when a tile is marked as selectable (e.g. Can build a tower on) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Board|Tiles")
+	UMaterialInstanceConstant* SelectableHighlightMaterial;
+
+	/** The highlight material to use for when a tile is marked as unselectable (e.g. Not a valid spell target) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Board|Tiles")
+	UMaterialInstanceConstant* UnselectableHighlightMaterial;
+
+	/** The highlight material to use to create highlight materials for specific players. This is used
+	as a template to create the player highlight materials, and should contain a vector parameter named Color */
+	UPROPERTY(EditAnywhere, Category = "Board|Tiles")
+	UMaterialInterface* PlayerHighlightMaterialTemplate;
+
+	/** The player highlight material associated with player 1 */
+	UPROPERTY(Transient)
+	UMaterialInstanceDynamic* Player1HighlightMaterial;
+
+	/** The player highlight material associated with player 2 */
+	UPROPERTY(Transient)
+	UMaterialInstanceDynamic* Player2HighlightMaterial;
 };
 

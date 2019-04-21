@@ -2,7 +2,7 @@
 
 #include "CSKPlayerState.h"
 #include "CSKPlayerController.h"
-#include "CSKGameMode.h"
+#include "CSKGameState.h"
 #include "SpellCard.h"
 #include "Tower.h"
 
@@ -400,20 +400,6 @@ void ACSKPlayerState::IncrementTilesTraversed()
 	{
 		++TilesTraversedThisRound;
 		++TotalTilesTraversed;
-
-		#if WITH_EDITOR
-		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-		if (GameMode)
-		{
-			// Warning check
-			int32 OutTileMovements = 0;
-			if (!GameMode->CanTraverseAnymoreTiles(TilesTraversedThisRound, BonusTileMovements, OutTileMovements))
-			{
-				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed this round! "
-					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
-			}
-		}
-		#endif
 	}
 }
 
@@ -431,15 +417,6 @@ void ACSKPlayerState::IncrementSpellsCast()
 	{
 		++SpellsCastThisRound;
 		++TotalSpellsCast;
-
-		#if WITH_EDITOR
-		// Warning check
-		if (MaxNumSpellUses >= 0 && SpellsCastThisRound > MaxNumSpellUses)
-		{
-			UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of spells they can ast this round! "
-				"Max Spell Uses per Turn = %i, Spells Cast this turn = %i"), *GetPlayerName(), MaxNumSpellUses, SpellsCastThisRound);
-		}
-		#endif
 	}
 }
 

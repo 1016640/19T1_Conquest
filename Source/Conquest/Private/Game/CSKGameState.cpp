@@ -8,10 +8,13 @@
 
 #include "BoardManager.h"
 #include "BoardPathFollowingComponent.h"
+#include "Castle.h"
 #include "CastleAIController.h"
 #include "Tower.h"
 #include "TowerConstructionData.h"
 #include "Engine/World.h"
+
+DECLARE_CYCLE_STAT(TEXT("ACSKGameState GetTilesPlayerCanMoveTo Pathfind"), STAT_CSKGameStateGetTilesPlayerCanMoveToPathfind, STATGROUP_Conquest);
 
 ACSKGameState::ACSKGameState()
 {
@@ -570,6 +573,79 @@ bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Cont
 	}
 
 	return false;
+}
+
+bool ACSKGameState::GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles, bool bPathfind) const
+{
+	OutTiles.Reset();
+
+	if (!BoardManager)
+	{
+		return false;
+	}
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		ACastle* CastlePawn = PlayerState->GetCastle();
+
+		// Player might not be able to move anymore this round
+		int32 MaxDistance = GetPlayersNumRemainingMoves(PlayerState);
+		if (MaxDistance > 0)
+		{
+			TArray<ATile*> Candidates;
+			if (BoardManager->GetTilesWithinDistance(CastlePawn->GetCachedTile(), MaxDistance, Candidates))
+			{
+				if (bPathfind)
+				{
+					SCOPE_CYCLE_COUNTER(STAT_CSKGameStateGetTilesPlayerCanMoveToPathfind);
+					
+					// Initialize this here to avoid creation every loop
+					FBoardPath BoardPath;
+
+					for (ATile* Tile : Candidates)
+					{
+						if (BoardManager->FindPath(CastlePawn->GetCachedTile(), Tile, BoardPath, false, MaxDistance))
+						{
+							OutTiles.Add(Tile);
+						}
+					}
+
+					return OutTiles.Num() > 0;
+				}
+				else
+				{
+					// Not all these tiles may be reachable in given moves (player might need to walk
+					// around an obstacle) but they are within MaxDistance tiles of eachother 
+					// This is usefull for small move ranges (eg 1 or 2 tiles max)
+					OutTiles = MoveTemp(Candidates);
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+int32 ACSKGameState::GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const
+{
+	if (PlayerState)
+	{
+		int32 TilesTraversed = PlayerState->GetTilesTraversedThisRound();
+		int32 BonusTiles = PlayerState->GetBonusTileMovements();
+
+		// The max amount of movements a player can make during the move action. Bonus tiles
+		// can be negative (to signal less moves) but should ultimately be clamped to not exceed min
+		int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + BonusTiles);
+
+		if (TilesTraversed < CalculatedMaxMovements)
+		{
+			return CalculatedMaxMovements - TilesTraversed;
+		}
+	}
+
+	return 0;
 }
 
 bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const

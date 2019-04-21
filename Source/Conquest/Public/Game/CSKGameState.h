@@ -334,6 +334,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const;
 
+	/** Get the tiles the given player is able to move to. Can optionally
+	pathfind to each tile to guarantee that the tile can be reached */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles, bool bPathfind = false) const;
+
+	/** Get the remaining amount of tiles the given player is allowed to move */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	int32 GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const;
+
 	/** If given player can build or destroy the given tower */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const;
@@ -364,6 +373,14 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	float ActionPhaseTime;
 
+	/** The minimum amount of tiles a player must move each action phase */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MinTileMovements;
+
+	/** The maximum amount of tiles a player can move each action round */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
+	int32 MaxTileMovements;
+
 	/** The max number of NORMAL towers players are allowed to build */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	int32 MaxNumTowers;
@@ -384,14 +401,6 @@ protected:
 	// TODO: See CSKGameMode.h (ln 412) for a TODO
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
-
-	/** The minimum amount of tiles a player must move each action phase */
-	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
-	int32 MinTileMovements;
-
-	/** The maximum amount of tiles a player can move each action round */
-	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
-	int32 MaxTileMovements;
 
 public:
 

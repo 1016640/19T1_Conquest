@@ -78,6 +78,14 @@ public:
 
 public:
 
+	/** Get the length of this path. This will exclude the initial tile (Origin) */
+	FORCEINLINE int32 Length() const
+	{
+		return FMath::Max(0, Path.Num() - 1);
+	}
+
+public:
+
 	/** The result of the search */
 	EHexGridPathFindResult Result;
 
