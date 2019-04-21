@@ -627,9 +627,17 @@ void ABoardManager::SetTilesHighlightMaterial(ATile* Tile) const
 
 		// Player can potentially select this tile, signal this to
 		// them by displaying a unique material just for hovering
-		if (Tile->IsHovered())
+		if (bIsTileHovered)
 		{
 			TilesHighlightMesh->SetMaterial(0, HoveredHighlightMaterial);
+			return;
+		}
+
+		// This tile could potentially be a players portal, match it to their color
+		int32 PortalID = IsPlayerPortalTile(Tile);
+		if (PortalID != -1)
+		{
+			TilesHighlightMesh->SetMaterial(0, GetPlayerHighlightMaterial(PortalID));
 			return;
 		}
 

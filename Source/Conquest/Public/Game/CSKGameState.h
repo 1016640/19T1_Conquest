@@ -14,6 +14,8 @@ class ACSKPlayerState;
 class ACSKGameMode;
 class ATile;
 class ATower;
+class USpell;
+class USpellCard;
 class UTowerConstructionData;
 
 /** Delegate for when the round state changes */
@@ -338,6 +340,11 @@ public:
 	pathfind to each tile to guarantee that the tile can be reached */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles, bool bPathfind = false) const;
+
+	/** Get the tiles the given player is able to build tiles on. 
+	This assumes player is able to build at least one tower */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool GetTilesPlayerCanBuildOn(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles);
 
 	/** Get the remaining amount of tiles the given player is allowed to move */
 	UFUNCTION(BlueprintPure, Category = CSK)

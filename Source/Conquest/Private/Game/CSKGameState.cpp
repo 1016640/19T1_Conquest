@@ -628,6 +628,32 @@ bool ACSKGameState::GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controll
 	return false;
 }
 
+bool ACSKGameState::GetTilesPlayerCanBuildOn(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles)
+{
+	OutTiles.Reset();
+
+	if (!BoardManager)
+	{
+		return false;
+	}
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		ACastle* CastlePawn = PlayerState->GetCastle();
+		if (BoardManager->GetTilesWithinDistance(CastlePawn->GetCachedTile(), MaxBuildRange, OutTiles))
+		{
+			// We need to remove any portal tiles
+			OutTiles.RemoveAll([this](const ATile* Tile)->bool
+			{
+				return !BoardManager->IsPlayerPortalTile(Tile);
+			});
+		}
+	}
+
+	return OutTiles.Num() > 0;
+}
+
 int32 ACSKGameState::GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const
 {
 	if (PlayerState)

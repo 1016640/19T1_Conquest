@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "Spell.h"
 #include "SpellCard.h"
 #include "Tower.h"
 
@@ -101,31 +102,12 @@ void ACSKPlayerController::Tick(float DeltaTime)
 					HoveredTile->StartHoveringTile(this);
 				}
 
+				OnNewTileHovered(HoveredTile);
+
 				// Notify HUD, HUD will handle null checks
 				if (CachedCSKHUD)
 				{
 					CachedCSKHUD->OnTileHovered(HoveredTile);
-				}
-			}
-
-			if (SelectedAction == ECSKActionPhaseMode::MoveCastle)
-			{
-				if (TempTiles.Num() == 0)
-				{
-					GameState->GetTilesPlayerCanMoveTo(this, TempTiles, true);
-					
-				}
-
-				for (ATile* Tile : TempTiles)
-				{
-					Tile->bHighlightTile = true;
-				}
-			}
-			else if (TempTiles.Num() > 0)
-			{
-				for (ATile* Tile : TempTiles)
-				{
-					Tile->bHighlightTile = false;
 				}
 			}
 		}
@@ -238,6 +220,43 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 	}
 
 	return nullptr;
+}
+
+void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
+{
+	check(IsLocalPlayerController());
+
+	// We want to update the selectable tile based off our current spell we have selected
+	if (IsPerformingActionPhase())
+	{
+		switch (SelectedAction)
+		{
+			case ECSKActionPhaseMode::CastSpell:
+			{
+				for (ATile* Tile : SelectedActionTileCandidates)
+				{
+					Tile->SetSelectionState(ETileSelectionState::NotSelectable);
+				}
+
+				SelectedActionTileCandidates.Empty(1);
+				SelectedActionTileCandidates.Add(NewTile);
+
+				// TODO: Move to game state (The check if we can cast spell at tile) (we would make sure we have a spell selected first)
+				const USpellCard* DefaultSpellCard = SelectedSpellCard ? SelectedSpellCard.GetDefaultObject() : nullptr;
+				if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex))
+				{
+					const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
+					if (DefaultSpell)
+					{
+						ETileSelectionState SelectionState = DefaultSpell->CanActivateSpell(GetCSKPlayerState(), NewTile) 
+							? ETileSelectionState::SelectablePriority : ETileSelectionState::UnselectablePriority;
+
+						NewTile->SetSelectionState(SelectionState);
+					}
+				}
+			}
+		}
+	}
 }
 
 void ACSKPlayerController::SelectTile()
@@ -680,6 +699,14 @@ bool ACSKPlayerController::CanRequestCastSpellAction() const
 
 void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhaseMode NewMode)
 {
+	// Mark previous tiles as disabled
+	for (ATile* Tile : SelectedActionTileCandidates)
+	{
+		Tile->SetSelectionState(ETileSelectionState::NotSelectable);
+	}
+
+	SelectedActionTileCandidates.Empty();
+
 	ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
 	if (CSKGameState)
 	{
@@ -687,9 +714,21 @@ void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhase
 		{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
-
+				ensure(CSKGameState->GetTilesPlayerCanMoveTo(this, SelectedActionTileCandidates, true));
+				break;
+			}
+			case ECSKActionPhaseMode::BuildTowers:
+			{
+				CSKGameState->GetTilesPlayerCanBuildOn(this, SelectedActionTileCandidates);
+				break;
 			}
 		}
+	}
+
+	// Mark new tiles as selectable
+	for (ATile* Tile : SelectedActionTileCandidates)
+	{
+		Tile->SetSelectionState(ETileSelectionState::Selectable);
 	}
 }
 
@@ -790,11 +829,26 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
 	}
 
-	for (ATile* Tile : TempTiles)
+	// If it's our turn, we may still be able to move some more tiles,
+	// so we need to refresh the amount of tiles we can move
+	if (IsPerformingActionPhase())
 	{
-		Tile->bHighlightTile = false;
+		for (ATile* Tile : SelectedActionTileCandidates)
+		{
+			Tile->SetSelectionState(ETileSelectionState::NotSelectable);
+		}
+
+		ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		check(CSKGameState);
+
+		if (CSKGameState->GetTilesPlayerCanMoveTo(this, SelectedActionTileCandidates, true))
+		{
+			for (ATile* Tile : SelectedActionTileCandidates)
+			{
+				Tile->SetSelectionState(ETileSelectionState::Selectable);
+			}
+		}
 	}
-	TempTiles.Reset();
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)

@@ -47,7 +47,8 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool RequiresTarget() const;
 
-	/** Check if spell can be used on given tile */
+	/** Check if spell can be used on given tile. This can get called on clients,
+	but will ultimately be called on the server to validate before allowing cast */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool CanActivateSpell(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile) const;
 

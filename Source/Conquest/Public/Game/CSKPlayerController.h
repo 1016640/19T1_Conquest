@@ -148,6 +148,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	ATile* GetTileUnderMouse() const;
 
+protected:
+
+	/** Event for when the player has hovered over a new tile. This
+	can be null, to signal that the player is no longer over a tile */
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
+	void OnNewTileHovered(ATile* NewTile);
+
 private:
 
 	/** Attempts to perform an action using the current hovered tile */
@@ -513,6 +520,8 @@ public:
 
 private:
 
-	// temp
-	TArray<ATile*> TempTiles;
+	/** The tiles that are selectable for current selected action. Cast spell is different,
+	as it will only contain the hovered tile if we are allowed to cast the selected spell on it */
+	UPROPERTY(Transient)
+	TArray<ATile*> SelectedActionTileCandidates;
 };
