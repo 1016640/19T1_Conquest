@@ -82,6 +82,12 @@ void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 			BP_OnHoverStart(Controller);
 		}
 
+		// Notify the board piece on this tile
+		if (PieceOccupant.GetInterface() != nullptr)
+		{
+			PieceOccupant->OnHoverStart();
+		}
+
 		HoveringPlayer = Controller;
 
 		RefreshHighlightMaterial();
@@ -102,6 +108,12 @@ void ATile::EndHoveringTile(ACSKPlayerController* Controller)
 		if (!bIsNullTile)
 		{
 			BP_OnHoverEnd(Controller);
+		}
+
+		// Notify the board piece on this tile
+		if (PieceOccupant.GetInterface() != nullptr)
+		{
+			PieceOccupant->OnHoverFinish();
 		}
 
 		HoveringPlayer.Reset();
@@ -195,6 +207,13 @@ void ATile::Multi_SetBoardPiece_Implementation(AActor* BoardPiece)
 		PieceOccupant = BoardPiece;
 		PieceOccupant->PlacedOnTile(this);
 
+		// We want to call this after placed on tile, as a board piece
+		// can never be hovered when not on a tile to hover over
+		if (IsHovered())
+		{
+			PieceOccupant->OnHoverStart();
+		}
+
 		// Execute any events after set up is complete
 		BP_OnBoardPieceSet(BoardPiece);
 
@@ -221,6 +240,13 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 		
 		// Execute any events before clearing
 		BP_OnBoardPieceCleared();
+
+		// We want to call this before removed off tile, as a board
+		// piece can never be unhovered when not on a tile to hover off
+		if (IsHovered())
+		{
+			PieceOccupant->OnHoverFinish();
+		}
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;

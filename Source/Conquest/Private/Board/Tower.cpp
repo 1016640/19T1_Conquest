@@ -60,6 +60,16 @@ void ATower::PlacedOnTile(ATile* Tile)
 	StartBuildSequence();
 }
 
+void ATower::OnHoverStart()
+{
+	BP_OnHoveredByPlayer();
+}
+
+void ATower::OnHoverFinish()
+{
+	BP_OnUnhoveredByPlayer();
+}
+
 void ATower::GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const
 {
 	if (ConstructData)

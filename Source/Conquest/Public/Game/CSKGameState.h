@@ -362,6 +362,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
 
+	/** If given player is able to afford given spell. This will check dynamic cost along with static cost.
+	This does not check if spell is able to be cast at tile, so be sure to check that before calling this function */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool CanPlayerCastSpell(const ACSKPlayerController* Controller, ATile* TargetTile,
+		TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana) const;
+
 	/** Get all towers that can be built this match */
 	FORCEINLINE const TArray<TSubclassOf<UTowerConstructionData>>& GetAvailableTowers() const { return AvailableTowers; }
 

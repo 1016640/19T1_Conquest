@@ -10,6 +10,8 @@
 #include "BoardPathFollowingComponent.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "Spell.h"
+#include "SpellCard.h"
 #include "Tower.h"
 #include "TowerConstructionData.h"
 #include "Engine/World.h"
@@ -727,6 +729,46 @@ bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controll
 	}
 
 	return OutTowers.Num() > 0;
+}
+
+bool ACSKGameState::CanPlayerCastSpell(const ACSKPlayerController* Controller, ATile* TargetTile, 
+	TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana) const
+{
+	if (!SpellCard)
+	{
+		return false;
+	}
+
+	const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		TSubclassOf<USpell> Spell = DefaultSpellCard->GetSpellAtIndex(SpellIndex);
+		if (!Spell)
+		{
+			return false;
+		}
+
+		const USpell* DefaultSpell = Spell.GetDefaultObject();
+
+		// This spell might not accept the tile as a target
+		if (!DefaultSpell->CanActivateSpell(PlayerState, TargetTile))
+		{
+			return false;
+		}
+
+		// If we can afford the static cost of this spell.
+		// This discount only gets applied to this cost
+		int32 DiscountedMana = 0;
+		if (PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedMana))
+		{
+			int32 FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedMana, AdditionalMana);
+			return PlayerState->HasRequiredMana(FinalCost);
+		}
+	}
+
+	return false;
 }
 
 void ACSKGameState::UpdateRules()

@@ -32,6 +32,8 @@ public:
 	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
+	virtual void OnHoverStart() override;
+	virtual void OnHoverFinish() override;
 	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
 	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const override;
 	// End IBoardPiece Interface
@@ -83,6 +85,16 @@ private:
 	/** The tile we are currently on, this is cached for quick access to it */
 	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, meta = (AllowPrivateAccess = "true"))
 	ATile* CachedTile;
+
+protected:
+
+	/** Event for when the tile the castle is on has been hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Hovered by Player"))
+	void BP_OnHoveredByPlayer();
+
+	/** Event for when the tile the castle is on is no longer hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Unhovered By Player"))
+	void BP_OnUnhoveredByPlayer();
 
 public:
 

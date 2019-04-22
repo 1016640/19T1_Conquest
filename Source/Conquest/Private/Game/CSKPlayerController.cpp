@@ -235,7 +235,10 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 			{
 				for (ATile* Tile : SelectedActionTileCandidates)
 				{
-					Tile->SetSelectionState(ETileSelectionState::NotSelectable);
+					if (Tile)
+					{
+						Tile->SetSelectionState(ETileSelectionState::NotSelectable);
+					}
 				}
 
 				SelectedActionTileCandidates.Empty(1);
@@ -700,11 +703,7 @@ bool ACSKPlayerController::CanRequestCastSpellAction() const
 void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhaseMode NewMode)
 {
 	// Mark previous tiles as disabled
-	for (ATile* Tile : SelectedActionTileCandidates)
-	{
-		Tile->SetSelectionState(ETileSelectionState::NotSelectable);
-	}
-
+	SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
 	SelectedActionTileCandidates.Empty();
 
 	ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
@@ -725,11 +724,8 @@ void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhase
 		}
 	}
 
-	// Mark new tiles as selectable
-	for (ATile* Tile : SelectedActionTileCandidates)
-	{
-		Tile->SetSelectionState(ETileSelectionState::Selectable);
-	}
+	// All candidates are selectable, but we want to display the hover highlight over it
+	SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
 }
 
 void ACSKPlayerController::OnRep_bIsActionPhase()
@@ -746,6 +742,11 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		}
 
 		SetCanSelectTile(true);
+	}
+	else
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+		SelectedActionTileCandidates.Empty();
 	}
 }
 
@@ -812,6 +813,12 @@ void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(AC
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
 	}
+
+	// Mark tiles as not selectable while we move
+	if (IsPerformingActionPhase())
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+	}
 }
 
 void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
@@ -831,22 +838,15 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 
 	// If it's our turn, we may still be able to move some more tiles,
 	// so we need to refresh the amount of tiles we can move
-	if (IsPerformingActionPhase())
+	// TODO: Need to wait for TilesTraversedThisRound to replicate on the client (for doing this on the client)
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::MoveCastle)
 	{
-		for (ATile* Tile : SelectedActionTileCandidates)
-		{
-			Tile->SetSelectionState(ETileSelectionState::NotSelectable);
-		}
-
 		ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
 		check(CSKGameState);
 
 		if (CSKGameState->GetTilesPlayerCanMoveTo(this, SelectedActionTileCandidates, true))
 		{
-			for (ATile* Tile : SelectedActionTileCandidates)
-			{
-				Tile->SetSelectionState(ETileSelectionState::Selectable);
-			}
+			SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
 		}
 	}
 }
@@ -867,6 +867,12 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
 	}
+
+	// Mark tiles as not selectable while we build
+	if (IsPerformingActionPhase())
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+	}
 }
 
 void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
@@ -877,6 +883,19 @@ void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
+	}
+
+	// If it's our turn, we may still be able to build more towers,
+	// so we need to refresh which tiles are considered selectable
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::BuildTowers)
+	{
+		ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		check(CSKGameState);
+
+		if (CSKGameState->GetTilesPlayerCanBuildOn(this, SelectedActionTileCandidates))
+		{
+			SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
+		}
 	}
 }
 
@@ -1311,5 +1330,18 @@ void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpel
 	if (CSKPlayerState)
 	{
 		CSKPlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
+	}
+}
+
+void ACSKPlayerController::SetTileCandidatesSelectionState(ETileSelectionState SelectionState) const
+{
+	for (ATile* Tile : SelectedActionTileCandidates)
+	{
+		// Tiles shouldn't be null if in this array, but there are some cases
+		// where they seem to be, so this acts a pre-caution to prevent a crash
+		if (ensure(Tile))
+		{
+			Tile->SetSelectionState(SelectionState);
+		}
 	}
 }

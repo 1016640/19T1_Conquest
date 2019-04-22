@@ -11,6 +11,7 @@ class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
 class ACSKPlayerState;
+class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
@@ -35,22 +36,20 @@ public:
 
 public:
 
-	virtual void Tick(float DeltaTime) override;
-
 	// Begin AGameModeBase Interface
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void InitGameState() override;
 	virtual void StartPlay() override;
-	//virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
-	
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
 	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
-
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 	virtual bool HasMatchStarted() const override;	
-
-	//virtual void StartToLeaveMap() override;
 	// End AGameModeBase Interface
+
+	// Begin AActor Interface
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
 
 protected:
 
@@ -76,6 +75,9 @@ private:
 
 	/** Spawns the AI controller for given castle. Will auto possess the castle if successful */
 	ACastleAIController* SpawnCastleControllerFor(ACastle* Castle) const;
+
+	/** Finds a player start with matching tag */
+	APlayerStart* FindPlayerStartWithTag(const FName& InTag) const;
 
 public:
 

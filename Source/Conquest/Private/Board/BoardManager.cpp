@@ -186,14 +186,22 @@ void ABoardManager::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 			TArray<ATile*> AllTiles = HexGrid.GetAllTiles();
 			for (ATile* Tile : AllTiles)
 			{
-				if (Tile && !Tile->bIsNullTile && ElementHighlightMaterials.Contains(Tile->TileType))
+				if (!Tile)
+				{
+					continue;
+				}
+
+				UStaticMeshComponent* HighlightMesh = Tile->GetMesh();
+
+				if (!Tile->bIsNullTile && ElementHighlightMaterials.Contains(Tile->TileType))
 				{
 					UMaterialInstanceConstant* HighlightMat = ElementHighlightMaterials[Tile->TileType];
 					if (!HighlightMat)
 					{
 						continue;
 					}
-					// TODO: Set Material
+					
+					HighlightMesh->SetMaterial(0, ElementHighlightMaterials[Tile->TileType]);
 				}
 			}
 		}
@@ -211,7 +219,17 @@ void ABoardManager::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 			TArray<ATile*> NullTiles = GetNullTiles();
 			for (ATile* Tile : NullTiles)
 			{
-				// TODO: Set material
+				if (!Tile)
+				{
+					continue;
+				}
+
+				UStaticMeshComponent* HighlightMesh = Tile->GetMesh();
+
+				if (Tile->bIsNullTile)
+				{
+					HighlightMesh->SetMaterial(0, NullHighlightMaterial);
+				}
 			}
 		}
 	}

@@ -194,6 +194,17 @@ APawn* ACSKGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, 
 	return Pawn;
 }
 
+AActor* ACSKGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	APlayerStart* PawnSpawn = FindPlayerStartWithTag(ACSKPlayerStart::CSKPawnSpawnTag);
+	if (PawnSpawn)
+	{
+		return PawnSpawn;
+	}
+
+	return Super::ChoosePlayerStart_Implementation(Player);
+}
+
 bool ACSKGameMode::HasMatchStarted() const
 {
 	return !(MatchState == ECSKMatchState::EnteringGame || MatchState == ECSKMatchState::WaitingPreMatch);
@@ -335,6 +346,23 @@ ACastleAIController* ACSKGameMode::SpawnCastleControllerFor(ACastle* Castle) con
 	}
 
 	return NewController;
+}
+
+APlayerStart* ACSKGameMode::FindPlayerStartWithTag(const FName& InTag) const
+{
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		for (TActorIterator<APlayerStart> It(World); It; ++It)
+		{
+			if (It->PlayerStartTag == InTag)
+			{
+				return *It;
+			}
+		}
+	}
+
+	return nullptr;
 }
 
 ACSKPlayerController* ACSKGameMode::GetOpposingPlayersController(int32 PlayerID) const
@@ -570,27 +598,33 @@ void ACSKGameMode::OnMatchStart()
 	StartingPlayerID = CoinFlip() ? 0 : 1;
 
 	AWorldSettings* WorldSettings = GetWorldSettings();
-	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
 	
+	// Initialize player colors here
 	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
-	ABoardManager* BoardManager = CSKGameState ? CSKGameState->GetBoardManager() : nullptr;
+	if (CSKGameState)
+	{
+		ABoardManager* BoardManager = CSKGameState->GetBoardManager();
+		if (BoardManager)
+		{
+			for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+			{
+				ACSKPlayerController* Controller = Players[i];
+
+				ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+				if (PlayerState)
+				{
+					BoardManager->SetHighlightColorForPlayer(i, PlayerState->GetAssignedColor());
+				}
+			}
+		}
+	}
 
 	// Have each player transition to their board
 	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
 	{
 		ACSKPlayerController* Controller = Players[i];
 		Controller->OnTransitionToBoard();
-		
-		// Initialize the players assigned colors with the board
-		if (BoardManager)
-		{
-			ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
-			if (PlayerState)
-			{
-				BoardManager->SetHighlightColorForPlayer(Controller->CSKPlayerID, PlayerState->GetAssignedColor());
-			}
-		}
 	}
 
 	SetActorTickEnabled(false);
@@ -1188,8 +1222,8 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 			return false;
 		}
 
-		// Default to the static cost
-		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
+		// The final cost for casting this spell, we pass this to the spell actor
+		int32 FinalCost = 0;
 
 		if (PlayerState)
 		{
@@ -1199,9 +1233,16 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 				return false;
 			}
 
+			// Spell isn't affordable (with discounts applied)
+			int32 DiscountedCost = 0;
+			if (!PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedCost))
+			{
+				return false;
+			}
+
 			// Re-calculate as spell might use additional mana
-			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana, true))
+			FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedCost, AdditionalMana);
+			if (!PlayerState->HasRequiredMana(FinalCost, true))
 			{
 				return false;
 			}
@@ -1220,15 +1261,15 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		ACSKPlayerState* OpposingPlayerState = OpposingPlayer->GetCSKPlayerState();
 		if (OpposingPlayerState && OpposingPlayerState->CanCastQuickEffectSpell())
 		{
-			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, RequiredMana);
+			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, FinalCost);
 			return true;
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
 		if (SpellActor)
 		{
-			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, RequiredMana, TargetTile, EActiveSpellContext::Action);
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Action);
 		}
 	}
 
@@ -1281,14 +1322,21 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 			return false;
 		}
 
-		// Default to the static cost
-		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
+		// The final cost for casting this spell, we pass this to the spell actor
+		int32 FinalCost = 0;
 
 		if (PlayerState)
 		{
+			// Spell isn't affordable (with discounts applied)
+			int32 DiscountedCost = 0;
+			if (!PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedCost))
+			{
+				return false;
+			}
+
 			// Re-calculate as spell might use additional mana
-			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana, true))
+			FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedCost, AdditionalMana);
+			if (!PlayerState->HasRequiredMana(FinalCost, true))
 			{
 				return false;
 			}
@@ -1300,10 +1348,10 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
 		if (SpellActor)
 		{
-			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, RequiredMana, TargetTile, EActiveSpellContext::Counter);
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Counter);
 		}
 	}
 

@@ -26,11 +26,11 @@ public:
 
 	#if WITH_EDITOR
 	/** Sets this player start as a CSK pawn spawn */
-	UFUNCTION(exec, meta = (DisplayName = "Set as CSK Pawn Spawn"))
+	UFUNCTION(CallInEditor, meta = (DisplayName = "Set as CSK Pawn Spawn"))
 	void SetStartAsCSKPawnSpawn();
 
 	/** Sets this player start as a coin flip camera tag */
-	UFUNCTION(exec, meta = (DisplayName = "Set as Coin Flip Camera"))
+	UFUNCTION(CallInEditor, meta = (DisplayName = "Set as Coin Flip Camera Spawn"))
 	void SetStartAsCoinFlipCamera();
 	#endif
 };

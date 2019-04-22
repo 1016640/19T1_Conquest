@@ -61,6 +61,16 @@ void ACastle::RemovedOffTile()
 	CachedTile = nullptr;
 }
 
+void ACastle::OnHoverStart()
+{
+	BP_OnHoveredByPlayer();
+}
+
+void ACastle::OnHoverFinish()
+{
+	BP_OnUnhoveredByPlayer();
+}
+
 void ACastle::GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const
 {
 	if (OwnerPlayerState)

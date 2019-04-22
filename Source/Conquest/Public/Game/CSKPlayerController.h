@@ -520,6 +520,11 @@ public:
 
 private:
 
+	/** Sets all tiles in selected action candidates to given selection state */
+	void SetTileCandidatesSelectionState(ETileSelectionState SelectionState) const;
+
+private:
+
 	/** The tiles that are selectable for current selected action. Cast spell is different,
 	as it will only contain the hovered tile if we are allowed to cast the selected spell on it */
 	UPROPERTY(Transient)
