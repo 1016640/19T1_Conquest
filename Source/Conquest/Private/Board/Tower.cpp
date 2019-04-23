@@ -31,6 +31,7 @@ ATower::ATower()
 	bGivesCollectionPhaseResources = false;
 	bWantsActionDuringEndRoundPhase = false;
 	EndRoundPhaseActionPriority = 0;
+	BuildSequenceUndergroundScale = 1.5f;
 
 	bIsRunningEndRoundAction = false;
 	bIsCustomTileCallbacksBound = false;
@@ -159,7 +160,7 @@ void ATower::StartBuildSequence()
 	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 	if (BoardManager)
 	{
-		BoardManager->MoveBoardPieceUnderBoard(this);
+		BoardManager->MoveBoardPieceUnderBoard(this, BuildSequenceUndergroundScale);
 	}
 
 	// Start the building sequence

@@ -6,6 +6,7 @@
 #include "GameFramework/HUD.h"
 #include "CSKHUD.generated.h"
 
+class ACSKPlayerState;
 class ATile;
 class UCSKHUDWidget;
 class UUserWidget;
@@ -33,6 +34,11 @@ public:
 
 	/** Notify that player has hovered over a new tile */
 	void OnTileHovered(ATile* Tile);
+
+private:
+
+	/** Helper function for getting the player state corresponding with a portal tile */
+	ACSKPlayerState* GetPlayerStateForPortalTile(ATile* Tile) const;
 
 public:
 

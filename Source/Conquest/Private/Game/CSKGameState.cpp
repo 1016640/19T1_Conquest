@@ -402,6 +402,20 @@ int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 	return 0;
 }
 
+ACSKPlayerState* ACSKGameState::GetPlayerStateWithID(int32 PlayerID) const
+{
+	for (APlayerState* Player : PlayerArray)
+	{
+		ACSKPlayerState* PlayerState = Cast<ACSKPlayerState>(Player);
+		if (PlayerState && PlayerState->GetCSKPlayerID() == PlayerID)
+		{
+			return PlayerState;
+		}
+	}
+
+	return nullptr;
+}
+
 float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
@@ -577,6 +591,26 @@ bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Cont
 	return false;
 }
 
+int32 ACSKGameState::GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const
+{
+	if (PlayerState)
+	{
+		int32 TilesTraversed = PlayerState->GetTilesTraversedThisRound();
+		int32 BonusTiles = PlayerState->GetBonusTileMovements();
+
+		// The max amount of movements a player can make during the move action. Bonus tiles
+		// can be negative (to signal less moves) but should ultimately be clamped to not exceed min
+		int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + BonusTiles);
+
+		if (TilesTraversed < CalculatedMaxMovements)
+		{
+			return CalculatedMaxMovements - TilesTraversed;
+		}
+	}
+
+	return 0;
+}
+
 bool ACSKGameState::GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles, bool bPathfind) const
 {
 	OutTiles.Reset();
@@ -656,26 +690,6 @@ bool ACSKGameState::GetTilesPlayerCanBuildOn(const ACSKPlayerController* Control
 	return OutTiles.Num() > 0;
 }
 
-int32 ACSKGameState::GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const
-{
-	if (PlayerState)
-	{
-		int32 TilesTraversed = PlayerState->GetTilesTraversedThisRound();
-		int32 BonusTiles = PlayerState->GetBonusTileMovements();
-
-		// The max amount of movements a player can make during the move action. Bonus tiles
-		// can be negative (to signal less moves) but should ultimately be clamped to not exceed min
-		int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + BonusTiles);
-
-		if (TilesTraversed < CalculatedMaxMovements)
-		{
-			return CalculatedMaxMovements - TilesTraversed;
-		}
-	}
-
-	return 0;
-}
-
 bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
@@ -729,6 +743,29 @@ bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controll
 	}
 
 	return OutTowers.Num() > 0;
+}
+
+int32 ACSKGameState::GetPlayerNumRemainingSpellCasts(const ACSKPlayerState* PlayerState, bool& bOutInfinite) const
+{
+	bOutInfinite = false;
+
+	if (PlayerState)
+	{
+		int32 SpellsCast = PlayerState->GetSpellsCastThisRound();
+		int32 TotalSpellCasts = PlayerState->GetMaxNumSpellUses();
+
+		if (PlayerState->HasInfiniteSpellUses())
+		{
+			bOutInfinite = true;
+			return 1;
+		}
+		else
+		{
+			return FMath::Max(0, TotalSpellCasts - SpellsCast);
+		}
+	}
+
+	return 0;
 }
 
 bool ACSKGameState::CanPlayerCastSpell(const ACSKPlayerController* Controller, ATile* TargetTile, 

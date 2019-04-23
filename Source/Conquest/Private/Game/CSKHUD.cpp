@@ -2,11 +2,15 @@
 
 #include "CSKHUD.h"
 #include "CSKPlayerController.h"
+#include "CSKPlayerState.h"
 #include "CSKGameState.h"
 
+#include "BoardManager.h"
 #include "UserWidget.h"
 #include "Tile.h"
 #include "Widgets/CSKHUDWidget.h"
+
+#define LOCTEXT_NAMESPACE "CSKHUD"
 
 ACSKHUD::ACSKHUD()
 {
@@ -26,18 +30,62 @@ void ACSKHUD::OnTileHovered(ATile* Tile)
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
-		if (Tile && Tile->IsTileOccupied(false))
-		{
-			FBoardPieceUIData UIData = Tile->GetBoardPieceUIData();
+		bool bDisplay = false;
 
-			Widget->SetTileWidgetData(UIData);
-			Widget->ToggleTileWidget(true);
-		}
-		else
+		if (Tile)
 		{
-			Widget->ToggleTileWidget(false);
+			// Prioritize board piece UI data over tile specific
+			if (Tile->IsTileOccupied(false))
+			{
+				FBoardPieceUIData UIData = Tile->GetBoardPieceUIData();
+				Widget->SetTileWidgetData(UIData);
+
+				bDisplay = true;
+			}
+			else if (!Tile->bIsNullTile)
+			{
+				// This tile has a chance of being a portal tile, we can display this to the user
+				ACSKPlayerState* PotentialPortalOwner = GetPlayerStateForPortalTile(Tile);
+				if (PotentialPortalOwner)
+				{
+					FBoardPieceUIData UIData;
+					UIData.Owner = PotentialPortalOwner;
+
+					FFormatNamedArguments Args;
+					Args.Add("PlayerName", FText::FromString(PotentialPortalOwner->GetPlayerName()));
+					UIData.Name = FText::Format(LOCTEXT("PortalUIName", "{PlayerName}s Portal"), Args);
+
+					Widget->SetTileWidgetData(UIData);
+
+					bDisplay = true;
+				}
+			}
+		}
+
+		Widget->ToggleTileWidget(bDisplay);
+	}
+}
+
+ACSKPlayerState* ACSKHUD::GetPlayerStateForPortalTile(ATile* Tile) const
+{
+	if (!Tile)
+	{
+		return nullptr;
+	}
+
+	ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (CSKGameState)
+	{
+		ABoardManager* BoardManager = CSKGameState->GetBoardManager();
+
+		int32 PortalID = BoardManager ? BoardManager->IsPlayerPortalTile(Tile) : -1;
+		if (PortalID != -1)
+		{
+			return CSKGameState->GetPlayerStateWithID(PortalID);
 		}
 	}
+
+	return nullptr;
 }
 
 void ACSKHUD::OnRoundStateChanged(ECSKRoundState NewState)
@@ -185,3 +233,5 @@ UCSKHUDWidget* ACSKHUD::GetCSKHUDInstance(bool bCreateIfNull)
 
 	return CSKHUDInstance;
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -705,11 +705,6 @@ protected:
 
 public:
 
-	/** Based on tiles already traversed this round and bonus tile movements,
-	is the querier allowed to move anymore tiles (at least one) */
-	// TODO: Move to game state
-	bool CanTraverseAnymoreTiles(int32 Count, int32 Bonus, int32& OutAllowedTileMovements) const;
-
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetActionPhaseTime() const { return ActionPhaseTime; }

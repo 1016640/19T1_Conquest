@@ -191,6 +191,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece, meta = (ClampMin = 0, EditCondition = "bWantsActionDuringEndRoundPhase"))
 	int32 EndRoundPhaseActionPriority;
 
+	/** How far this tower will push itself underground when initiating the build sequence.
+	This is a scaler that will be applied to the meshes bound (specificallty the Z axis) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = BoardPiece)
+	float BuildSequenceUndergroundScale;
+
 protected:
 
 	/** Binds the custom tile selection to our owners player controller. This will

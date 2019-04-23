@@ -234,6 +234,9 @@ public:
 	deck. This is when all spell cards are in the discard pile */
 	bool NeedsSpellDeckReshuffle() const;
 
+	/** Get the max number of spells this player can cast (does not account for inf spell uses) */
+	FORCEINLINE int32 GetMaxNumSpellUses() const { return MaxNumSpellUses; }
+
 	/** Get the discount for spells this player has */
 	FORCEINLINE int32 GetSpellDiscount() const { return SpellDiscount; }
 

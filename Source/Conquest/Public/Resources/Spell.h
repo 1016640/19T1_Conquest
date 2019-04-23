@@ -109,4 +109,9 @@ protected:
 	/** If this spell needs a target in order to activate */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Requires Target"))
 	uint8 bSpellRequiresTarget : 1;
+
+	/** If this spell expects additional mana. This will simply alter the default behavior of CalculateFinalCost
+	with true returning DiscountedCost + AdditionalMana while false simply returns DiscountedCost */
+	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = Spells)
+	uint8 bExpectsAdditionalMana : 1;
 };

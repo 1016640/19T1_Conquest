@@ -199,6 +199,10 @@ public:
 	/** Get the player ID of whose action phase it is */
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
+	/** Get a player state based off a player ID */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	ACSKPlayerState* GetPlayerStateWithID(int32 PlayerID) const;
+
 	/** Get the time remaining for current action taking place (this
 	can either action phase turn time, quick effect counter time) */
 	UFUNCTION(BlueprintPure, Category = Rules)
@@ -336,6 +340,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool HasPlayerMovedRequiredTiles(const ACSKPlayerController* Controller) const;
 
+	/** Get the remaining amount of tiles the given player is allowed to move */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	int32 GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const;
+
 	/** Get the tiles the given player is able to move to. Can optionally
 	pathfind to each tile to guarantee that the tile can be reached */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -345,10 +353,6 @@ public:
 	This assumes player is able to build at least one tower */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool GetTilesPlayerCanBuildOn(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles);
-
-	/** Get the remaining amount of tiles the given player is allowed to move */
-	UFUNCTION(BlueprintPure, Category = CSK)
-	int32 GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const;
 
 	/** If given player can build or destroy the given tower */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -361,6 +365,10 @@ public:
 	/** Get all the towers the given player can build */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool GetTowersPlayerCanBuild(const ACSKPlayerController* Controller, TArray<TSubclassOf<UTowerConstructionData>>& OutTowers) const;
+
+	/** Get the remaining amount of spells the given player is allowed to cast */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	int32 GetPlayerNumRemainingSpellCasts(const ACSKPlayerState* PlayerState, bool& bOutInfinite) const;
 
 	/** If given player is able to afford given spell. This will check dynamic cost along with static cost.
 	This does not check if spell is able to be cast at tile, so be sure to check that before calling this function */

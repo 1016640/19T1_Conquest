@@ -226,38 +226,42 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 {
 	check(IsLocalPlayerController());
 
+	bool bDisplaySpellSelection = false;
+
 	// We want to update the selectable tile based off our current spell we have selected
 	if (IsPerformingActionPhase())
 	{
-		switch (SelectedAction)
+		bDisplaySpellSelection = SelectedAction == ECSKActionPhaseMode::CastSpell;
+	}
+	else if (bCanUseQuickEffect || bCanSelectBonusSpellTarget)
+	{
+		bDisplaySpellSelection = true;
+	}
+
+	if (bDisplaySpellSelection)
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+
+		// Tile will be null if no longer hovering over the board
+		if (NewTile)
 		{
-			case ECSKActionPhaseMode::CastSpell:
+			// We only display the hovered tile to be selectable
+			SelectedActionTileCandidates.Empty(1);
+			SelectedActionTileCandidates.Add(NewTile);
+
+			ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (CSKGameState)
 			{
-				for (ATile* Tile : SelectedActionTileCandidates)
-				{
-					if (Tile)
-					{
-						Tile->SetSelectionState(ETileSelectionState::NotSelectable);
-					}
-				}
+				// We want the selectable highlight to take priority over 
+				ETileSelectionState SelectionState = CSKGameState->CanPlayerCastSpell(this, NewTile, SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana)
+					? ETileSelectionState::SelectablePriority : ETileSelectionState::UnselectablePriority;
 
-				SelectedActionTileCandidates.Empty(1);
-				SelectedActionTileCandidates.Add(NewTile);
-
-				// TODO: Move to game state (The check if we can cast spell at tile) (we would make sure we have a spell selected first)
-				const USpellCard* DefaultSpellCard = SelectedSpellCard ? SelectedSpellCard.GetDefaultObject() : nullptr;
-				if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex))
-				{
-					const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
-					if (DefaultSpell)
-					{
-						ETileSelectionState SelectionState = DefaultSpell->CanActivateSpell(GetCSKPlayerState(), NewTile) 
-							? ETileSelectionState::SelectablePriority : ETileSelectionState::UnselectablePriority;
-
-						NewTile->SetSelectionState(SelectionState);
-					}
-				}
+				NewTile->SetSelectionState(SelectionState);
 			}
+		}
+		else
+		{
+			SelectedActionTileCandidates.Empty();
 		}
 	}
 }
@@ -651,7 +655,7 @@ bool ACSKPlayerController::CanEndActionPhase() const
 			return GameState->HasPlayerMovedRequiredTiles(this);
 		}
 
-		// If movement is being tracked, just assume we can end action phase whenever
+		// If movement isn't being tracked, just assume we can end action phase whenever
 		return true;
 	}
 

@@ -1069,10 +1069,15 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (ensure(PlayerState))
 		{
-			// This player has already traversed the max amount of tiles allowed
-			if (!CanTraverseAnymoreTiles(PlayerState->GetTilesTraversedThisRound(), PlayerState->GetBonusTileMovements(), TileSegments))
+			ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+			if (CSKGameState)
 			{
-				return false;
+				// This player has already traversed the max amount of tiles allowed
+				TileSegments = CSKGameState->GetPlayersNumRemainingMoves(PlayerState);
+				if (TileSegments == 0)
+				{
+					return false;
+				}
 			}
 		}
 		else
@@ -2399,24 +2404,6 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 
 
 
-bool ACSKGameMode::CanTraverseAnymoreTiles(int32 Count, int32 Bonus, int32& OutAllowedTileMovements) const
-{
-	Count = FMath::Max(0, Count);
-
-	// The max amount of movements that can be made
-	int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + Bonus);
-
-	// Bonus can be negative (signalling less moves are allowed)
-	if (Count >= CalculatedMaxMovements)
-	{
-		OutAllowedTileMovements = 0;
-		return false;
-	}
-
-	// We have to subtract the count from th
-	OutAllowedTileMovements = CalculatedMaxMovements - Count;
-	return true;
-}
 
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
