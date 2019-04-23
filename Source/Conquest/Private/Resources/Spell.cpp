@@ -12,7 +12,8 @@ USpell::USpell()
 	SpellType = ESpellType::ActionPhase;
 	SpellStaticCost = 5;
 	bSpellRequiresTarget = false;
-	bExpectsAdditionalMana = false;
+	bSpellExpectsAdditionalMana = false;
+	bSpellNullifiesSpells = false;
 
 	SpellActorClass = ASpellActor::StaticClass();
 }
@@ -29,7 +30,7 @@ bool USpell::CanActivateSpell_Implementation(const ACSKPlayerState* CastingPlaye
 
 int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 DiscountedCost, int32 AdditionalMana) const
 {
-	if (bExpectsAdditionalMana)
+	if (bSpellExpectsAdditionalMana)
 	{
 		return DiscountedCost + AdditionalMana;
 	}

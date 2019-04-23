@@ -34,7 +34,7 @@ protected:
 public:
 
 	/** Sets all activation info */
-	void InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile);
+	void InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, int32 InAdditionalMana, ATile* InTargetedTile);
 
 	/** Notify from game mode to begin execution of this spell */
 	void BeginExecution();
@@ -69,9 +69,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
 	USpell* CastingSpell;
 
-	/** The amount paid to activate this spell */
+	/** The amount paid to activate this spell (discount applied) */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
 	int32 ActivationCost;
+
+	/** The additional mana provided by the caster */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
+	int32 AdditionalMana;
 
 	/** The tile the player targeted this spell with */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
@@ -84,4 +88,9 @@ private:
 
 	/** If this spell has been cancelled */
 	uint8 bCancelled : 1;
+
+public:
+
+	/** Get the additional mana that was used to cast this spell */
+
 };

@@ -82,7 +82,7 @@ int32 UHealthComponent::RestoreHealth(int32 Amount)
 			return 0;
 		}
 
-		int32 NewHealth = FMath::Max(MaxHealth, Health + Amount);
+		int32 NewHealth = FMath::Min(MaxHealth, Health + Amount);
 		int32 Delta = NewHealth - Health;
 
 		Health = NewHealth;

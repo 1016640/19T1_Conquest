@@ -6,6 +6,9 @@
 #include "TimerManager.h"
 #include "Components/SceneComponent.h"
 
+// temp
+#include "CSKPlayerState.h"
+
 ASpellActor::ASpellActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -33,16 +36,18 @@ void ASpellActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME_CONDITION(ASpellActor, CastingPlayer, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ASpellActor, CastingSpell, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ASpellActor, ActivationCost, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ASpellActor, AdditionalMana, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ASpellActor, TargetedTile, COND_InitialOnly);
 }
 
-void ASpellActor::InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile)
+void ASpellActor::InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, int32 InAdditionalMana, ATile* InTargetedTile)
 {
 	if (HasAuthority() && !HasActorBegunPlay())
 	{
 		CastingPlayer = InCastingPlayer;
 		CastingSpell = InCastingSpell;
 		ActivationCost = InActivationCost;
+		AdditionalMana = InAdditionalMana;
 		TargetedTile = InTargetedTile;
 	}
 }

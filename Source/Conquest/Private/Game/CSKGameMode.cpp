@@ -1266,12 +1266,12 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		ACSKPlayerState* OpposingPlayerState = OpposingPlayer->GetCSKPlayerState();
 		if (OpposingPlayerState && OpposingPlayerState->CanCastQuickEffectSpell())
 		{
-			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, FinalCost);
+			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, FinalCost, AdditionalMana);
 			return true;
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, AdditionalMana, PlayerState);
 		if (SpellActor)
 		{
 			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Action);
@@ -1353,7 +1353,7 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, AdditionalMana, PlayerState);
 		if (SpellActor)
 		{
 			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Counter);
@@ -1374,7 +1374,8 @@ bool ACSKGameMode::RequestSkipQuickEffect()
 		check(DefaultSpell);
 
 		// Resume the initial request
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, ActiveSpellRequestSpellTile, ActiveSpellRequestCalculatedCost, ActionPhaseActiveController->GetCSKPlayerState());
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, ActiveSpellRequestSpellTile, 
+			ActiveSpellRequestCalculatedCost, ActiveSpellRequestAdditionalMana, ActionPhaseActiveController->GetCSKPlayerState());
 		if (SpellActor)
 		{
 			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, ActiveSpellRequestCalculatedCost, ActiveSpellRequestSpellTile, EActiveSpellContext::Action);
@@ -1421,10 +1422,10 @@ bool ACSKGameMode::RequestCastBonusSpell(ATile* TargetTile)
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, 0, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, 0, 0, PlayerState);
 		if (SpellActor)
 		{
-			BonusSpellContext = ActiveSpellContext;
+			BonusSpellContext = ActivePlayerSpellContext;
 			return ConfirmCastSpell(DefaultSpell, nullptr, SpellActor, 0, TargetTile, EActiveSpellContext::Bonus);
 		}
 	}
@@ -1928,9 +1929,9 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 		}
 	}
 
-	ActivePlayerSpell = Spell;
-	ActivePlayerSpellCard = SpellCard;
-	ActivePlayerSpellActor = SpellActor;
+	ActiveSpell = Spell;
+	ActiveSpellCard = SpellCard;
+	ActiveSpellActor = SpellActor;
 	ActivePlayerSpellContext = Context;
 
 	// Give spell half a second to replicate
@@ -1946,9 +1947,9 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 	check(IsActionPhaseInProgress());
 
 	// We no longer need the spell actor
-	if (ActivePlayerSpellActor && !ActivePlayerSpellActor->IsPendingKill())
+	if (ActiveSpellActor && !ActiveSpellActor->IsPendingKill())
 	{
-		ActivePlayerSpellActor->Destroy();
+		ActiveSpellActor->Destroy();
 	}
 
 	// This function can potentially handle the rest for us
@@ -1960,9 +1961,9 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 		}
 	}
 
-	ActivePlayerSpell = nullptr;
-	ActivePlayerSpellCard = false;
-	ActivePlayerSpellActor = nullptr;
+	ActiveSpell = nullptr;
+	ActiveSpellCard = false;
+	ActiveSpellActor = nullptr;
 
 	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 	ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
@@ -2026,7 +2027,7 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 	}
 }
 
-ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const
+ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, int32 AdditionalMana, ACSKPlayerState* PlayerState) const
 {
 	check(Tile);
 
@@ -2046,7 +2047,7 @@ ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 Fin
 	ASpellActor* SpellActor = GetWorld()->SpawnActor<ASpellActor>(SpellActorClass, TileTransform, SpawnParams);
 	if (SpellActor)
 	{
-		SpellActor->InitSpellActor(PlayerState, Spell, FinalCost, Tile);
+		SpellActor->InitSpellActor(PlayerState, Spell, FinalCost, AdditionalMana, Tile);
 		SpellActor->FinishSpawning(TileTransform);
 	}
 
@@ -2056,15 +2057,15 @@ ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 Fin
 void ACSKGameMode::OnStartActiveSpellCast()
 {
 	check(IsActionPhaseInProgress());
-	check(ActivePlayerSpellActor);
+	check(ActiveSpellActor);
 
 	// Execute spells effect
 	{
-		ActivePlayerSpellActor->BeginExecution();
+		ActiveSpellActor->BeginExecution();
 	}
 }
 
-void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost)
+void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana)
 {
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController);
@@ -2074,6 +2075,7 @@ void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpell
 	ActiveSpellRequestSpellIndex = InSpellIndex;
 	ActiveSpellRequestSpellTile = InTargetTile;
 	ActiveSpellRequestCalculatedCost = InFinalCost;
+	ActiveSpellRequestAdditionalMana = AdditionalMana;
 	bWaitingOnQuickEffectSelection = true;
 
 	const USpellCard* DefaultSpellCard = ActiveSpellRequestSpellCard.GetDefaultObject();
@@ -2106,7 +2108,7 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 		return false;
 	}
 
-	check(ActivePlayerSpell && ActivePlayerSpellCard);
+	check(ActiveSpell && ActiveSpellCard);
 
 	// Different castle based on spell context, we also need the player
 	// state in-case bonus spell requires a specific tile to target
@@ -2133,7 +2135,7 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 		if (Tile && Tile->TileType != ECSKElementType::None)
 		{
 			// Check if an element matches
-			ECSKElementType MatchingElement = (Tile->TileType & ActivePlayerSpellCard->GetElementalTypes());
+			ECSKElementType MatchingElement = (Tile->TileType & ActiveSpellCard->GetElementalTypes());
 			if (BonusElementalSpells.Contains(MatchingElement))
 			{
 				TSubclassOf<USpell> BonusSpell = BonusElementalSpells[MatchingElement];
@@ -2159,10 +2161,10 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 				}
 
 				// We can initiate the spell now if no target is required
-				ASpellActor* BonusSpellActor = SpawnSpellActor(DefaultSpell, Tile, 0, CastersState);
+				ASpellActor* BonusSpellActor = SpawnSpellActor(DefaultSpell, Tile, 0, 0, CastersState);
 				if (BonusSpellActor)
 				{
-					BonusSpellContext = ActiveSpellContext;
+					BonusSpellContext = ActivePlayerSpellContext;
 					return ConfirmCastSpell(BonusSpell.GetDefaultObject(), nullptr, BonusSpellActor, 0, Tile, EActiveSpellContext::Bonus);
 				}
 			}

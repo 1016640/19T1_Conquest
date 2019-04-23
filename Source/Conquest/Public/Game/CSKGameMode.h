@@ -22,6 +22,85 @@ class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
 
+/** Contains information about a pending spell request */
+USTRUCT()
+struct CONQUEST_API FPendingSpellRequest
+{
+	GENERATED_BODY()
+
+public:
+
+	FPendingSpellRequest()
+		: SpellIndex(0)
+		, TargetTile(nullptr)
+		, Context(EActiveSpellContext::None)
+		, CalculatedCost(0)
+		, AdditionalMana(0)
+		, bIsSet(false)
+	{
+
+	}
+
+public:
+
+	/** Sets this request */
+	void Set(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, 
+		EActiveSpellContext InContext, int32 InCalculatedCost, int32 InAdditionalMana)
+	{
+		SpellCard = InSpellCard;
+		SpellIndex = InSpellIndex;
+		TargetTile = InTargetTile;
+		Context = InContext;
+		CalculatedCost = InCalculatedCost;
+		AdditionalMana = InAdditionalMana;
+
+		bIsSet = true;
+	}
+
+	/** Resets this request */
+	void Reset()
+	{
+		SpellCard = nullptr;
+		SpellIndex = 0;
+		TargetTile = nullptr;
+		Context = EActiveSpellContext::None;
+		CalculatedCost = 0;
+		AdditionalMana = 0;
+
+		bIsSet = false;
+	}
+
+	/** If this request is valid */
+	FORCEINLINE bool IsValid() const { return bIsSet; }
+
+public:
+
+	/** The spell card to use */
+	UPROPERTY()
+	TSubclassOf<USpellCard> SpellCard;
+
+	/** The index of the spell to use */
+	int32 SpellIndex;
+
+	/** The target of this spell */
+	UPROPERTY()
+	ATile* TargetTile;
+
+	/** Context of this spell, can only ever be Action or Quick Effect */
+	EActiveSpellContext Context;
+
+	/** The calculated final cost of this request (discounted + additional mana) */
+	int32 CalculatedCost;
+
+	/** The additional mana that was provided to this spell */
+	int32 AdditionalMana;
+
+private:
+
+	/** If this request is valid */
+	uint8 bIsSet : 1;
+};
+
 /**
  * Manages and handles events present in CSK
  */
@@ -406,13 +485,13 @@ private:
 	void FinishCastSpell(bool bIgnoreBonusCheck = false);
 
 	/** Spawns the spell actor for given spell at tile */
-	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const;
+	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, int32 AdditionalMana, ACSKPlayerState* PlayerState) const;
 
 	/** Notify from timer that we should execute the spell cast */
 	void OnStartActiveSpellCast();
 
 	/** Saves the incoming spell request and informs opposing player to choose a counter */
-	void SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
+	void SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana);
 
 	/** Post spell action check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
 	bool PostCastSpellActivateBonusSpell();
@@ -465,9 +544,9 @@ private:
 		ActiveSpellRequestSpellIndex = 0;
 		ActiveSpellRequestSpellTile = nullptr;
 		ActiveSpellRequestCalculatedCost = 0;
-		ActivePlayerSpell = nullptr;
-		ActivePlayerSpellCard = nullptr;
-		ActivePlayerSpellActor = nullptr;
+		ActiveSpell = nullptr;
+		ActiveSpellCard = nullptr;
+		ActiveSpellActor = nullptr;
 		ActivePlayerSpellContext = EActiveSpellContext::None;
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
@@ -536,17 +615,24 @@ private:
 	track this here in-case the opposing player decides not to counter */
 	int32 ActiveSpellRequestCalculatedCost;
 
+	int32 ActiveSpellRequestAdditionalMana;
+
+	/** The active players pending spellm request. This saves an incoming action spell
+	request while the opposing player selects a potential quick effect spell */
+	UPROPERTY(Transient)
+	FPendingSpellRequest ActivePlayerPendingSpellRequest;
+
 	/** The spell being cast by active player (Points to default object). */
 	UPROPERTY()
-	USpell* ActivePlayerSpell;
+	USpell* ActiveSpell;
 
 	/** The spell card associated with the spell being cast (Points to default object). */
 	UPROPERTY()
-	USpellCard* ActivePlayerSpellCard;
+	USpellCard* ActiveSpellCard;
 
 	/** Instanced actor provided executing the spells logic */
 	UPROPERTY()
-	ASpellActor* ActivePlayerSpellActor;
+	ASpellActor* ActiveSpellActor;
 
 	/** The context of the spell being cast */
 	EActiveSpellContext ActivePlayerSpellContext;

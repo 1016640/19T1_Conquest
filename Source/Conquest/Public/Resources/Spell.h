@@ -79,7 +79,10 @@ public:
 	FORCEINLINE TSubclassOf<ASpellActor> GetSpellActorClass() const { return SpellActorClass; }
 
 	/** Get if this spell expects additional mana */
-	FORCEINLINE bool ExpectsAdditionalMana() const { return bExpectsAdditionalMana; }
+	FORCEINLINE bool ExpectsAdditionalMana() const { return bSpellExpectsAdditionalMana; }
+
+	/** Get if this spell nullifies other spells (only valid for quick effects ) */
+	FORCEINLINE bool NullifiesOtherSpell() const { return bSpellNullifiesSpells; }
 
 protected:
 
@@ -115,6 +118,10 @@ protected:
 
 	/** If this spell expects additional mana. This will simply alter the default behavior of CalculateFinalCost
 	with true returning DiscountedCost + AdditionalMana while false simply returns DiscountedCost */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AdvancedDisplay, Category = Spells)
-	uint8 bExpectsAdditionalMana : 1;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AdvancedDisplay, Category = Spells, meta = (DisplayName="Expects Additional Mana"))
+	uint8 bSpellExpectsAdditionalMana : 1;
+
+	/** If this spell is a quick effect, do we instantly nullify the opponents spell or activate afterwards */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AdvancedDisplay, Category = Spells, meta = (DisplayName = "Nullifies Other Spells"))
+	uint8 bSpellNullifiesSpells : 1;
 };
