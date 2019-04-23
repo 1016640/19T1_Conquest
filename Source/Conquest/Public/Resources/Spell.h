@@ -78,6 +78,9 @@ public:
 	/** Get this spells actor class */
 	FORCEINLINE TSubclassOf<ASpellActor> GetSpellActorClass() const { return SpellActorClass; }
 
+	/** Get if this spell expects additional mana */
+	FORCEINLINE bool ExpectsAdditionalMana() const { return bExpectsAdditionalMana; }
+
 protected:
 
 	/** The name of this spell */
@@ -112,6 +115,6 @@ protected:
 
 	/** If this spell expects additional mana. This will simply alter the default behavior of CalculateFinalCost
 	with true returning DiscountedCost + AdditionalMana while false simply returns DiscountedCost */
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = Spells)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, AdvancedDisplay, Category = Spells)
 	uint8 bExpectsAdditionalMana : 1;
 };

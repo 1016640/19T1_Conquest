@@ -25,7 +25,7 @@ DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(bool, FCanSelectTileSignature, ATile*, 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnSelectTileSignature, ATile*, SelectedTile);
 
 /** Struct containing tallied amount of resources to give to a player */
-USTRUCT()
+USTRUCT(BlueprintType)
 struct CONQUEST_API FCollectionPhaseResourcesTally
 {
 	GENERATED_BODY()
@@ -59,20 +59,20 @@ public:
 public:
 
 	/** Gold tallied */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	int32 Gold; // (uint8?)
 
 	/** Mana tallied */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	int32 Mana; // (uint8?)
 
 	/** If spell deck was reshuffled */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	uint8 bDeckReshuffled : 1;
 
 	/** The spell card the player picked up.
 	Will be invalid if no card was picked up */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	TSubclassOf<USpellCard> SpellCard;
 };
 
@@ -129,6 +129,16 @@ public:
 	/** Set the additional mana the player wants to spend for spells */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void SetSelectedAdditionalMana(int32 InAdditionalMana);
+
+public:
+
+	/** Get if player has given tower construction data selected */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasTowerSelected(TSubclassOf<UTowerConstructionData> InConstructData) const;
+
+	/** Get if player has given spell selected */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasSpellSelected(TSubclassOf<USpell> InSpell) const;
 
 public:
 
@@ -268,7 +278,7 @@ protected:
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard);
+	void OnCollectionResourcesTallied(const FCollectionPhaseResourcesTally& TalliedResources);
 
 	/** Finishes the collection phase event. This must be called after collection resources tallied event */
 	UFUNCTION(BlueprintCallable, Category = CSK)

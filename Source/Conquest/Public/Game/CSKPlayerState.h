@@ -154,6 +154,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool GetDiscountedManaIfAffordable(int32 RequiredAmount, int32& OutAmount) const;
 
+	/** If this player has required amount of mana that is discounted
+	plus the additional provided mana atop of the discounted amount */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool HasRequiredManaPlusAdditionalAmount(int32 RequiredAmount, int32 MinAdditionalAmount = 1) const;
+
+	/** If this player has the required amount of mana (based off HasRequiredManaPlusAdditionalAmount).
+	This will also return the max additional max that this player can give if we have required mana */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool GetMaxAdditionalManaIfAffordable(int32 RequiredAmount, int32 MinAdditionalAmount, int32& OutMaxAmount) const;
+
 	/** Get how many of given type of tower this player owns */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const;

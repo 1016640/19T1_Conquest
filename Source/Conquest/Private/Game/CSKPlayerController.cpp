@@ -13,6 +13,7 @@
 #include "Spell.h"
 #include "SpellCard.h"
 #include "Tower.h"
+#include "TowerConstructionData.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/LocalPlayer.h"
@@ -186,6 +187,33 @@ void ACSKPlayerController::SetSelectedAdditionalMana(int32 InAdditionalMana)
 	{
 		SelectedSpellAdditionalMana = FMath::Max(0, InAdditionalMana);
 	}
+}
+
+bool ACSKPlayerController::HasTowerSelected(TSubclassOf<UTowerConstructionData> InConstructData) const
+{
+	if (SelectedTowerConstructionData && InConstructData)
+	{
+		return SelectedTowerConstructionData == InConstructData;
+	}
+
+	return false;
+}
+
+bool ACSKPlayerController::HasSpellSelected(TSubclassOf<USpell> InSpell) const
+{
+	if (SelectedSpellCard && InSpell)
+	{
+		const USpellCard* DefaultSpellCard = SelectedSpellCard.GetDefaultObject();
+		check(DefaultSpellCard);
+
+		TSubclassOf<USpell> SelectedSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex);
+		if (SelectedSpell)
+		{
+			return SelectedSpell == InSpell;
+		}
+	}
+
+	return false;
 }
 
 ACSKPawn* ACSKPlayerController::GetCSKPawn() const
@@ -482,10 +510,10 @@ void ACSKPlayerController::Client_OnMatchFinished_Implementation(bool bIsWinner)
 void ACSKPlayerController::Client_OnCollectionPhaseResourcesTallied_Implementation(FCollectionPhaseResourcesTally TalliedResources)
 {
 	bWaitingOnTallyEvent = true;
-	OnCollectionResourcesTallied(TalliedResources.Gold, TalliedResources.Mana, TalliedResources.bDeckReshuffled, TalliedResources.SpellCard);
+	OnCollectionResourcesTallied(TalliedResources);
 }
 
-void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard)
+void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(const FCollectionPhaseResourcesTally& TalliedResources)
 {
 	// Just end immediately if not implemented
 	FinishCollectionSequenceEvent();
@@ -751,6 +779,14 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 	{
 		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
 		SelectedActionTileCandidates.Empty();
+	}
+
+	// Always reset the selected data
+	{
+		SelectedTowerConstructionData = nullptr;
+		SelectedSpellCard = nullptr;
+		SelectedSpellIndex = 0;
+		SelectedSpellAdditionalMana = 0;
 	}
 }
 

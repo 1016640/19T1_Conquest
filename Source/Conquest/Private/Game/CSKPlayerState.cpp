@@ -288,6 +288,28 @@ bool ACSKPlayerState::GetDiscountedManaIfAffordable(int32 RequiredAmount, int32&
 	return false;
 }
 
+bool ACSKPlayerState::HasRequiredManaPlusAdditionalAmount(int32 RequiredAmount, int32 MinAdditionalAmount) const
+{
+	// Lowest amount of mana to spend is one
+	RequiredAmount = (RequiredAmount - SpellDiscount) + MinAdditionalAmount;
+	return Mana >= RequiredAmount;
+}
+
+bool ACSKPlayerState::GetMaxAdditionalManaIfAffordable(int32 RequiredAmount, int32 MinAdditionalAmount, int32& OutMaxAmount) const
+{
+	OutMaxAmount = 0;
+
+	// Lowest amount of mana to spend is one
+	int32 MinRequiredAmount = (RequiredAmount - SpellDiscount) + MinAdditionalAmount;
+	if (Mana >= MinRequiredAmount)
+	{
+		OutMaxAmount = Mana - RequiredAmount;
+		return true;
+	}
+
+	return false;
+}
+
 int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const
 {
 	if (Tower)

@@ -44,9 +44,19 @@ bool USpellCard::CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellT
 		{
 			// We only compare static cost, we don't have the
 			// information to calculate a dynamic cost at this time
-			if (CastingPlayer->HasRequiredMana(DefaultSpell->GetSpellStaticCost(), true))
+			if (DefaultSpell->ExpectsAdditionalMana())
 			{
-				return true;
+				if (CastingPlayer->HasRequiredManaPlusAdditionalAmount(DefaultSpell->GetSpellStaticCost()))
+				{
+					return true;
+				}
+			}
+			else
+			{
+				if (CastingPlayer->HasRequiredMana(DefaultSpell->GetSpellStaticCost(), true))
+				{
+					return true;
+				}
 			}
 		}
 	}
