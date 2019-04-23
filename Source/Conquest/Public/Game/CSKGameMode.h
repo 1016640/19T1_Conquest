@@ -33,7 +33,6 @@ public:
 	FPendingSpellRequest()
 		: SpellIndex(0)
 		, TargetTile(nullptr)
-		, Context(EActiveSpellContext::None)
 		, CalculatedCost(0)
 		, AdditionalMana(0)
 		, bIsSet(false)
@@ -44,13 +43,11 @@ public:
 public:
 
 	/** Sets this request */
-	void Set(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, 
-		EActiveSpellContext InContext, int32 InCalculatedCost, int32 InAdditionalMana)
+	void Set(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InCalculatedCost, int32 InAdditionalMana)
 	{
 		SpellCard = InSpellCard;
 		SpellIndex = InSpellIndex;
 		TargetTile = InTargetTile;
-		Context = InContext;
 		CalculatedCost = InCalculatedCost;
 		AdditionalMana = InAdditionalMana;
 
@@ -63,7 +60,6 @@ public:
 		SpellCard = nullptr;
 		SpellIndex = 0;
 		TargetTile = nullptr;
-		Context = EActiveSpellContext::None;
 		CalculatedCost = 0;
 		AdditionalMana = 0;
 
@@ -85,9 +81,6 @@ public:
 	/** The target of this spell */
 	UPROPERTY()
 	ATile* TargetTile;
-
-	/** Context of this spell, can only ever be Action or Quick Effect */
-	EActiveSpellContext Context;
 
 	/** The calculated final cost of this request (discounted + additional mana) */
 	int32 CalculatedCost;
@@ -479,7 +472,8 @@ private:
 	void OnPendingTowerBuildSequenceComplete();
 
 	/** Starts casting the spell. Will determine the instigator based on passed context */
-	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile, EActiveSpellContext Context);
+	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, 
+		ATile* Tile, EActiveSpellContext Context, bool bConsumeOnlyQuickEffect = false);
 
 	/** Finishes the spell currently be cast */
 	void FinishCastSpell(bool bIgnoreBonusCheck = false);
@@ -550,6 +544,9 @@ private:
 		ActivePlayerSpellContext = EActiveSpellContext::None;
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
+
+		ActivePlayerPendingSpellRequest.Reset();
+		QuickEffectPendingSpellRequest.Reset();
 	}
 
 protected:
@@ -617,10 +614,15 @@ private:
 
 	int32 ActiveSpellRequestAdditionalMana;
 
-	/** The active players pending spellm request. This saves an incoming action spell
+	/** The active players pending spell request. This saves an incoming action spell
 	request while the opposing player selects a potential quick effect spell */
 	UPROPERTY(Transient)
 	FPendingSpellRequest ActivePlayerPendingSpellRequest;
+
+	/** The opposing players pending quick effect request. This is saved after a quick
+	effect has been selected and it doesn't immediately nullify active players spell */
+	UPROPERTY(Transient)
+	FPendingSpellRequest QuickEffectPendingSpellRequest;
 
 	/** The spell being cast by active player (Points to default object). */
 	UPROPERTY()

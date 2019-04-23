@@ -881,6 +881,8 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 			return false;
 		}
 
+		// TODO: Need to check if player has already X amount of duped buildings of any kind
+
 		// Has player already built the max amount of duplicates?
 		if (PlayerState->GetNumOwnedTowerDuplicates(TowerClass) >= MaxNumDuplicatedTowers)
 		{

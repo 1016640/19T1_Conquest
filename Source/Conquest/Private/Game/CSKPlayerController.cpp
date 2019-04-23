@@ -587,6 +587,11 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 					ModesToEnable |= ECSKActionPhaseMode::BuildTowers;
 				}
 			}
+			else
+			{
+				bCanUseQuickEffect = false;
+				bCanSelectBonusSpellTarget = false;
+			}
 
 			RemainingActions = ModesToEnable;
 		}

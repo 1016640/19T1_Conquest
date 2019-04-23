@@ -1352,6 +1352,20 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 				"without cost validation as player state is not of CSKPlayerState"));
 		}
 
+		// The player can cast this spell, but this spell might only
+		// be activatable after the actives player original spell cast
+		if (!DefaultSpell->NullifiesOtherSpell())
+		{
+			QuickEffectPendingSpellRequest.Set(SpellCard, SpellIndex, TargetTile, FinalCost, AdditionalMana);
+			RequestSkipQuickEffect();
+
+			return true;
+		}
+		else
+		{
+			QuickEffectPendingSpellRequest.Reset();
+		}
+
 		// Confirm request of spell if successfully spawned
 		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, AdditionalMana, PlayerState);
 		if (SpellActor)
@@ -1367,18 +1381,21 @@ bool ACSKGameMode::RequestSkipQuickEffect()
 {
 	if (IsActionPhaseInProgress() && bWaitingOnQuickEffectSelection)
 	{
-		USpellCard* DefaultSpellCard = ActiveSpellRequestSpellCard.GetDefaultObject();
+		ensure(ActivePlayerPendingSpellRequest.IsValid());
+
+		USpellCard* DefaultSpellCard = ActivePlayerPendingSpellRequest.SpellCard.GetDefaultObject();
 		check(DefaultSpellCard);
 
-		USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(ActiveSpellRequestSpellIndex).GetDefaultObject();
+		USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(ActivePlayerPendingSpellRequest.SpellIndex).GetDefaultObject();
 		check(DefaultSpell);
 
 		// Resume the initial request
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, ActiveSpellRequestSpellTile, 
-			ActiveSpellRequestCalculatedCost, ActiveSpellRequestAdditionalMana, ActionPhaseActiveController->GetCSKPlayerState());
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, ActivePlayerPendingSpellRequest.TargetTile,
+			ActivePlayerPendingSpellRequest.CalculatedCost, ActivePlayerPendingSpellRequest.AdditionalMana, ActionPhaseActiveController->GetCSKPlayerState());
 		if (SpellActor)
 		{
-			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, ActiveSpellRequestCalculatedCost, ActiveSpellRequestSpellTile, EActiveSpellContext::Action);
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, 
+				ActivePlayerPendingSpellRequest.CalculatedCost, ActivePlayerPendingSpellRequest.TargetTile, EActiveSpellContext::Action);
 		}
 	}
 
@@ -1840,7 +1857,8 @@ void ACSKGameMode::OnPendingTowerBuildSequenceComplete()
 	FinishBuildTower();
 }
 
-bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile, EActiveSpellContext Context)
+bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, 
+	ATile* Tile, EActiveSpellContext Context, bool bConsumeOnlyQuickEffect /*= false*/)
 {
 	check(IsActionPhaseInProgress());
 	//check(ActionPhaseActiveController && ActionPhaseActiveController->IsPerformingActionPhase());
@@ -1851,7 +1869,6 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 		bWaitingOnSpellAction = true;
 		bWaitingOnQuickEffectSelection = false;
 		bWaitingOnBonusSpellSelection = false;
-		ActiveSpellContext = Context;
 	}
 
 	// Consume mana from player
@@ -1859,28 +1876,36 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 		// Bonus does not consume any mana from any player
 		if (Context != EActiveSpellContext::Bonus)
 		{
-			// Active player will always consume mana
-			ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
-			if (PlayerState)
+			// Active player will always consume mana (unless executing a quick effect
+			// that runs after the actives player spell cast instead of nullifying it)
+			if (!bConsumeOnlyQuickEffect)
 			{
-				int32 ManaToConsume = Context == EActiveSpellContext::Action ? FinalCost : ActiveSpellRequestCalculatedCost;
-				PlayerState->SetMana(PlayerState->GetMana() - ManaToConsume);
-				
-				// If an action, we remove the spell being cast from the active player,
-				// as only the active player can cast action spells
-				if (Context == EActiveSpellContext::Action)
+				ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
+				if (PlayerState)
 				{
-					PlayerState->RemoveCardFromHand(SpellCard->GetClass());
+					int32 ManaToConsume = Context == EActiveSpellContext::Action ? FinalCost : ActiveSpellRequestCalculatedCost;
+					PlayerState->SetMana(PlayerState->GetMana() - ManaToConsume);
+
+					// If an action, we remove the spell being cast from the active player,
+					// as only the active player can cast action spells
+					if (Context == EActiveSpellContext::Action)
+					{
+						PlayerState->RemoveCardFromHand(SpellCard->GetClass());
+					}
+					else
+					{
+						PlayerState->RemoveCardFromHand(ActiveSpellRequestSpellCard);
+					}
 				}
-				else
-				{
-					PlayerState->RemoveCardFromHand(ActiveSpellRequestSpellCard);
-				}
+			}
+
+			if (Context == EActiveSpellContext::Action)
+			{
+				ActivePlayerPendingSpellRequest.Reset();
 			}
 
 			if (Context == EActiveSpellContext::Counter)
 			{
-
 				// Consume mana from opposing player if countering
 				ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 				ACSKPlayerState* OpposingPlayerState = OpposingController ? OpposingController->GetCSKPlayerState() : nullptr;
@@ -1892,6 +1917,8 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 					// Only the opposing player can use quick effect spell cards
 					OpposingPlayerState->RemoveCardFromHand(SpellCard->GetClass());
 				}
+
+				QuickEffectPendingSpellRequest.Reset();
 			}
 		}
 		else
@@ -1950,6 +1977,32 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 	if (ActiveSpellActor && !ActiveSpellActor->IsPendingKill())
 	{
 		ActiveSpellActor->Destroy();
+		ActiveSpellActor = nullptr;
+	}
+
+	// We have a pending quick effect (A quick effect that doesn't nullify)
+	// We should cast it know and treat it as a post-action spell counter
+	if (QuickEffectPendingSpellRequest.IsValid())
+	{
+		ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+		check(OpposingPlayer);
+
+		USpellCard* DefaultSpellCard = QuickEffectPendingSpellRequest.SpellCard.GetDefaultObject();
+		check(DefaultSpellCard);
+
+		USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(QuickEffectPendingSpellRequest.SpellIndex).GetDefaultObject();
+		check(DefaultSpell);
+
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, QuickEffectPendingSpellRequest.TargetTile,
+			QuickEffectPendingSpellRequest.CalculatedCost, QuickEffectPendingSpellRequest.AdditionalMana, OpposingPlayer->GetCSKPlayerState());
+		if (SpellActor)
+		{
+			// TODO: We might want to add a delay before starting this spell (potentially)
+			ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, QuickEffectPendingSpellRequest.CalculatedCost,
+				QuickEffectPendingSpellRequest.TargetTile, EActiveSpellContext::Counter, true);
+			return;
+		}
+		
 	}
 
 	// This function can potentially handle the rest for us
@@ -2065,7 +2118,7 @@ void ACSKGameMode::OnStartActiveSpellCast()
 	}
 }
 
-void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana)
+void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 InAdditionalMana)
 {
 	check(IsActionPhaseInProgress());
 	check(ActionPhaseActiveController);
@@ -2075,7 +2128,9 @@ void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpell
 	ActiveSpellRequestSpellIndex = InSpellIndex;
 	ActiveSpellRequestSpellTile = InTargetTile;
 	ActiveSpellRequestCalculatedCost = InFinalCost;
-	ActiveSpellRequestAdditionalMana = AdditionalMana;
+	ActiveSpellRequestAdditionalMana = InAdditionalMana;
+	ActivePlayerPendingSpellRequest.Set(InSpellCard, InSpellIndex, InTargetTile, InFinalCost, InAdditionalMana);
+
 	bWaitingOnQuickEffectSelection = true;
 
 	const USpellCard* DefaultSpellCard = ActiveSpellRequestSpellCard.GetDefaultObject();
