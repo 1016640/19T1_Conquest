@@ -2,7 +2,7 @@
 
 #include "CSKPlayerState.h"
 #include "CSKPlayerController.h"
-#include "CSKGameMode.h"
+#include "CSKGameState.h"
 #include "SpellCard.h"
 #include "Tower.h"
 
@@ -45,6 +45,7 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
 	//DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsDiscarded, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, bHasInfiniteSpellUses, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellDiscount, COND_OwnerOnly);
@@ -79,6 +80,14 @@ void ACSKPlayerState::SetCastle(ACastle* InCastle)
 	if (HasAuthority())
 	{
 		Castle = InCastle;
+	}
+}
+
+void ACSKPlayerState::SetAssignedColor(FColor InColor)
+{
+	if (HasAuthority())
+	{
+		AssignedColor = InColor;
 	}
 }
 
@@ -223,7 +232,10 @@ void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
 {
 	if (HasAuthority())
 	{
-		SpellCardsInHand.Remove(Spell);
+		if (SpellCardsInHand.Remove(Spell) > 0)
+		{
+			SpellCardsDiscarded.Add(Spell);
+		}
 	}
 }
 
@@ -232,6 +244,8 @@ void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spel
 	if (HasAuthority())
 	{
 		SpellCardsInHand.Reset();
+		SpellCardsDiscarded.Reset();
+
 		SpellCardDeck = Spells;
 
 		// Shuffle deck (mimics UKismetArrayLibrary shuffle function)
@@ -254,9 +268,24 @@ bool ACSKPlayerState::HasRequiredGold(int32 RequiredAmount) const
 
 bool ACSKPlayerState::HasRequiredMana(int32 RequiredAmount, bool bDiscount) const
 { 
-	// Lowest amount of mana to spend is zero
-	RequiredAmount = bDiscount ? FMath::Max(0, RequiredAmount - SpellDiscount) : RequiredAmount;
-	return (Mana - RequiredAmount) >= 0;
+	// Lowest amount of mana to spend is one
+	RequiredAmount = bDiscount ? FMath::Max(1, RequiredAmount - SpellDiscount) : RequiredAmount;
+	return Mana >= RequiredAmount;
+}
+
+bool ACSKPlayerState::GetDiscountedManaIfAffordable(int32 RequiredAmount, int32& OutAmount) const
+{
+	OutAmount = 0;
+
+	// Lowest amount of mana to spend is one
+	RequiredAmount = FMath::Max(1, RequiredAmount - SpellDiscount);
+	if (Mana >= RequiredAmount)
+	{
+		OutAmount = RequiredAmount;
+		return true;
+	}
+
+	return false;
 }
 
 int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const
@@ -392,19 +421,6 @@ void ACSKPlayerState::IncrementTilesTraversed()
 	{
 		++TilesTraversedThisRound;
 		++TotalTilesTraversed;
-
-		#if WITH_EDITOR
-		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-		if (GameMode)
-		{
-			// Warning check
-			if (!GameMode->IsCountWithinTileTravelLimits(TilesTraversedThisRound, BonusTileMovements))
-			{
-				UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of tiles that can be traversed this round! "
-					"Max Tiles per turn = %i, Tiles moved this turn = %i"), *GetPlayerName(), GameMode->GetMaxTileMovementsPerTurn(), TilesTraversedThisRound);
-			}
-		}
-		#endif
 	}
 }
 
@@ -422,15 +438,6 @@ void ACSKPlayerState::IncrementSpellsCast()
 	{
 		++SpellsCastThisRound;
 		++TotalSpellsCast;
-
-		#if WITH_EDITOR
-		// Warning check
-		if (MaxNumSpellUses >= 0 && SpellsCastThisRound > MaxNumSpellUses)
-		{
-			UE_LOG(LogConquest, Warning, TEXT("Player %s has exceeded amount of spells they can ast this round! "
-				"Max Spell Uses per Turn = %i, Spells Cast this turn = %i"), *GetPlayerName(), MaxNumSpellUses, SpellsCastThisRound);
-		}
-		#endif
 	}
 }
 

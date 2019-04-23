@@ -4,9 +4,9 @@ using UnrealBuildTool;
 
 public class Conquest : ModuleRules
 {
-	public Conquest(ReadOnlyTargetRules Target) : base(Target)
-	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+    public Conquest(ReadOnlyTargetRules Target) : base(Target)
+    {
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
         PublicIncludePaths.AddRange(new string[]
         {
@@ -18,7 +18,7 @@ public class Conquest : ModuleRules
             "Conquest/Private"
         });
 
-        PublicDependencyModuleNames.AddRange(new string[] 
+        PublicDependencyModuleNames.AddRange(new string[]
         {
             "Core",
             "CoreUObject",
@@ -27,16 +27,19 @@ public class Conquest : ModuleRules
             "UMG"
         });
 
-		PrivateDependencyModuleNames.AddRange(new string[] 
+        PrivateDependencyModuleNames.AddRange(new string[]
         {
             "AIModule",
             "OnlineSubsystem",
+            "OnlineSubsystemUtils",
             "Slate",
             "SlateCore"
         });
 
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
+        DynamicallyLoadedModuleNames.AddRange(new string[]
+        {
+            "OnlineSubsystemNull"
+        });
 
 		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}

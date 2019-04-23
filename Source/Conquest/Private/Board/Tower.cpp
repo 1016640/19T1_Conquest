@@ -8,6 +8,7 @@
 #include "CSKPlayerState.h"
 
 #include "HealthComponent.h"
+#include "TowerConstructionData.h"
 #include "Components/StaticMeshComponent.h"
 
 ATower::ATower()
@@ -30,6 +31,7 @@ ATower::ATower()
 	bGivesCollectionPhaseResources = false;
 	bWantsActionDuringEndRoundPhase = false;
 	EndRoundPhaseActionPriority = 0;
+	BuildSequenceUndergroundScale = 1.5f;
 
 	bIsRunningEndRoundAction = false;
 	bIsCustomTileCallbacksBound = false;
@@ -57,6 +59,29 @@ void ATower::PlacedOnTile(ATile* Tile)
 {
 	CachedTile = Tile;
 	StartBuildSequence();
+}
+
+void ATower::OnHoverStart()
+{
+	BP_OnHoveredByPlayer();
+}
+
+void ATower::OnHoverFinish()
+{
+	BP_OnUnhoveredByPlayer();
+}
+
+void ATower::GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const
+{
+	if (ConstructData)
+	{
+		OutUIData.Name = FText::FromName(ConstructData->TowerName);
+		
+		// Replace all new lines with spaces
+		FString DescriptionString = ConstructData->TowerDescription.ToString();
+		DescriptionString = DescriptionString.Replace(TEXT("\r\n"), TEXT(" "));
+		OutUIData.Description = FText::FromString(DescriptionString);
+	}
 }
 
 void ATower::Tick(float DeltaTime)
@@ -93,6 +118,7 @@ void ATower::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePr
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME_CONDITION(ATower, ConstructData, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ATower, OwnerPlayerState, COND_InitialOnly);
 }
 
@@ -134,7 +160,7 @@ void ATower::StartBuildSequence()
 	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 	if (BoardManager)
 	{
-		BoardManager->MoveBoardPieceUnderBoard(this);
+		BoardManager->MoveBoardPieceUnderBoard(this, BuildSequenceUndergroundScale);
 	}
 
 	// Start the building sequence
@@ -157,6 +183,16 @@ void ATower::FinishBuildSequence()
 	}
 }
 
+bool ATower::WantsCollectionPhaseEvent_Implementation() const
+{
+	return bGivesCollectionPhaseResources;
+}
+
+bool ATower::WantsEndRoundPhaseEvent_Implementation() const
+{
+	return bWantsActionDuringEndRoundPhase; 
+}
+
 void ATower::BindPlayerTileSelectionCallbacks()
 {
 	if (HasAuthority())
@@ -170,9 +206,9 @@ void ATower::BindPlayerTileSelectionCallbacks()
 				Controller->CustomOnSelectTile.BindDynamic(this, &ATower::BP_OnTileSelectedForAction);
 
 				// Notify client to also unbind callbacks
-				Client_BindPlayerTileSelectionCallbacks(false);
+				Client_BindPlayerTileSelectionCallbacks(true);
 
-				bIsCustomTileCallbacksBound = false;
+				bIsCustomTileCallbacksBound = true;
 			}
 		}
 	}
@@ -191,9 +227,9 @@ void ATower::UnbindPlayerTileSelectionCallbacks()
 				Controller->CustomOnSelectTile.Unbind();
 
 				// Notify client to also bind callbacks
-				Client_BindPlayerTileSelectionCallbacks(true);
+				Client_BindPlayerTileSelectionCallbacks(false);
 
-				bIsCustomTileCallbacksBound = true;
+				bIsCustomTileCallbacksBound = false;
 			}
 		}
 	}
@@ -208,12 +244,21 @@ void ATower::Client_BindPlayerTileSelectionCallbacks_Implementation(bool bBind)
 		{
 			if (bBind)
 			{
+				EnableInput(Controller);
 				Controller->CustomCanSelectTile.BindDynamic(this, &ATower::BP_CanSelectTileForAction);
+				
+				// Player needs to be able to move
+				Controller->SetIgnoreMoveInput(false);
 				Controller->SetCanSelectTile(true);
+				
 			}
 			else
 			{
+				DisableInput(Controller);
 				Controller->CustomCanSelectTile.Unbind();
+
+				// Player should no longer be able to move
+				Controller->SetIgnoreMoveInput(true);
 				Controller->SetCanSelectTile(false);
 			}
 		}

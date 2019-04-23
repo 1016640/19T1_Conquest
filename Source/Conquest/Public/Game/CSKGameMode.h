@@ -11,6 +11,7 @@ class ACastle;
 class ACastleAIController;
 class ACSKPlayerController;
 class ACSKPlayerState;
+class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
@@ -35,22 +36,20 @@ public:
 
 public:
 
-	virtual void Tick(float DeltaTime) override;
-
 	// Begin AGameModeBase Interface
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void InitGameState() override;
 	virtual void StartPlay() override;
-	//virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
-	
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
 	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
-
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 	virtual bool HasMatchStarted() const override;	
-
-	//virtual void StartToLeaveMap() override;
 	// End AGameModeBase Interface
+
+	// Begin AActor Interface
+	virtual void Tick(float DeltaTime) override;
+	// End AActor Interface
 
 protected:
 
@@ -76,6 +75,9 @@ private:
 
 	/** Spawns the AI controller for given castle. Will auto possess the castle if successful */
 	ACastleAIController* SpawnCastleControllerFor(ACastle* Castle) const;
+
+	/** Finds a player start with matching tag */
+	APlayerStart* FindPlayerStartWithTag(const FName& InTag) const;
 
 public:
 
@@ -321,7 +323,7 @@ private:
 public:
 
 	/** Will attempt to end active players action phase if active player has fulfilled action requirements */
-	bool RequestEndActionPhase();
+	bool RequestEndActionPhase(bool bTimeOut = false);
 
 	/** Will attempt to move active players castle towards given tile. Doing this will
 	lock the ability for any other action to be made until castle reaches it's destination */
@@ -388,7 +390,7 @@ private:
 	void FinishBuildTower();
 
 	/** Spawns a new tower of type for given player at tile */
-	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const;
+	ATower* SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, UTowerConstructionData* ConstructData, ACSKPlayerState* PlayerState) const;
 
 	/** Notify from timer that we should start tower build sequence */
 	void OnStartActivePlayersBuildSequence();
@@ -628,6 +630,16 @@ public:
 
 protected:
 
+	#if WITH_EDITORONLY_DATA
+	/** Debug color to give to player 1 in a PIE session */
+	UPROPERTY(EditAnywhere, Category = "Rules|Debug")
+	FColor P1AssignedColor;
+
+	/** Debug color to given to player 2 in a PIE session */
+	UPROPERTY(EditAnywhere, Category = "Rules|Debug")
+	FColor P2AssignedColor;
+	#endif WITH_EDITORONLY_DATA
+
 	/** The amount of gold each player starts with */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources, meta = (ClampMin = 0))
 	int32 StartingGold;
@@ -692,9 +704,6 @@ protected:
 	TMap<ECSKElementType, TSubclassOf<USpell>> BonusElementalSpells;
 
 public:
-
-	/** Get if given value is within the limit of tiles that can be traversed each round */
-	FORCEINLINE bool IsCountWithinTileTravelLimits(int32 Count, int32 Bonus) const { return (MinTileMovements <= Count && Count <= (MaxTileMovements + Bonus)); }
 
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)

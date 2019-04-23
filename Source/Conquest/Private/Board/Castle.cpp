@@ -2,10 +2,13 @@
 
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "CSKPlayerState.h"
 
 #include "HealthComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/FloatingPawnMovement.h"
+
+#define LOCTEXT_NAMESPACE "Castle"
 
 ACastle::ACastle()
 {
@@ -58,9 +61,31 @@ void ACastle::RemovedOffTile()
 	CachedTile = nullptr;
 }
 
+void ACastle::OnHoverStart()
+{
+	BP_OnHoveredByPlayer();
+}
+
+void ACastle::OnHoverFinish()
+{
+	BP_OnUnhoveredByPlayer();
+}
+
+void ACastle::GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const
+{
+	if (OwnerPlayerState)
+	{
+		FFormatNamedArguments Args;
+		Args.Add("PlayerName", FText::FromString(OwnerPlayerState->GetPlayerName()));
+		OutUIData.Name = FText::Format(LOCTEXT("CastleUIName", "{PlayerName}s Castle"), Args);
+	}
+}
+
 void ACastle::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(ACastle, OwnerPlayerState, COND_InitialOnly);
 }
+
+#undef LOCTEXT_NAMESPACE

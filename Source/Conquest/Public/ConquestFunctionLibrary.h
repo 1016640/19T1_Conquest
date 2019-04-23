@@ -9,8 +9,42 @@
 class ABoardManager;
 class ACSKGameMode;
 class ACSKGameState;
+class ATile;
 class UCSKGameInstance;
 class UUserWidget;
+
+/** Information about a board piece to display to the user */
+USTRUCT(BlueprintType)
+struct CONQUEST_API FBoardPieceUIData
+{
+	GENERATED_BODY()
+
+public:
+
+	FBoardPieceUIData()
+	{
+		Owner = nullptr;
+		BoardPiece = nullptr;
+	}
+
+public:
+
+	/** The name of the board piece */
+	UPROPERTY(BlueprintReadWrite)
+	FText Name;
+
+	/** A description of the board piece */
+	UPROPERTY(BlueprintReadWrite)
+	FText Description;
+
+	/** The player that owns the board piece */
+	UPROPERTY(BlueprintReadOnly)
+	const class ACSKPlayerState* Owner;
+
+	/** The board piece associated with this data */
+	UPROPERTY(BlueprintReadWrite)
+	const AActor* BoardPiece;
+};
 
 /**
  * Blueprint function library containing helper functions for Conquest based functionality
@@ -51,6 +85,10 @@ public:
 	/** Get the first board manager found in the level */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
+
+	/** Get if two tiles are within given amount of range of each other */
+	UFUNCTION(BlueprintPure, Category = Board)
+	static bool AreTilesWithingRange(const ATile* T1, const ATile* T2, int32 Range, int32& OutDistance);
 
 public:
 

@@ -4,7 +4,10 @@
 #include "UObject/ConstructorHelpers.h"
 
 #include "Components/BillboardComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 #if WITH_EDITOR
 #include "DrawDebugHelpers.h"
@@ -65,6 +68,8 @@ void ABoardManager::BeginPlay()
 
 	#if WITH_EDITORONLY_DATA
 	SetActorTickEnabled(bDrawDebugBoard);
+	#else
+	SetActorTickEnabled(false);
 	#endif
 }
 
@@ -153,13 +158,79 @@ void ABoardManager::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
+	// All cases checks utilize world
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(ABoardManager, bDrawDebugBoard))
-	{
-		UWorld* World = GetWorld();
-		if (World && World->IsPlayInEditor())
+	{	
+		if (World->IsPlayInEditor())
 		{
 			SetActorTickEnabled(bDrawDebugBoard);
+		}
+	}
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(ABoardManager, ElementHighlightMaterials))
+	{
+		// Update all non null tiles to match 
+		if (World->IsEditorWorld() && !World->IsPlayInEditor())
+		{
+			if (ElementHighlightMaterials.Num() == 0)
+			{
+				return;
+			}
+
+			TArray<ATile*> AllTiles = HexGrid.GetAllTiles();
+			for (ATile* Tile : AllTiles)
+			{
+				if (!Tile)
+				{
+					continue;
+				}
+
+				UStaticMeshComponent* HighlightMesh = Tile->GetMesh();
+
+				if (!Tile->bIsNullTile && ElementHighlightMaterials.Contains(Tile->TileType))
+				{
+					UMaterialInstanceConstant* HighlightMat = ElementHighlightMaterials[Tile->TileType];
+					if (!HighlightMat)
+					{
+						continue;
+					}
+					
+					HighlightMesh->SetMaterial(0, ElementHighlightMaterials[Tile->TileType]);
+				}
+			}
+		}
+	}
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(ABoardManager, NullHighlightMaterial))
+	{
+		// Update the material of all the null tiles
+		if (World->IsEditorWorld() && !World->IsPlayInEditor())
+		{
+			if (!NullHighlightMaterial)
+			{
+				return;
+			}
+
+			TArray<ATile*> NullTiles = GetNullTiles();
+			for (ATile* Tile : NullTiles)
+			{
+				if (!Tile)
+				{
+					continue;
+				}
+
+				UStaticMeshComponent* HighlightMesh = Tile->GetMesh();
+
+				if (Tile->bIsNullTile)
+				{
+					HighlightMesh->SetMaterial(0, NullHighlightMaterial);
+				}
+			}
 		}
 	}
 }
@@ -333,13 +404,25 @@ bool ABoardManager::FindPath(const ATile* Start, const ATile* Goal, FBoardPath& 
 	return bSuccess;
 }
 
-bool ABoardManager::FindTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
+bool ABoardManager::GetTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles) const
 {
 	bool bSuccess = false;
 	if (Origin)
 	{
 		const FIntVector& TileHex = Origin->GetGridHexValue();
 		bSuccess = HexGrid.GetAllTilesWithinRange(TileHex, Distance, OutTiles, bIgnoreOccupiedTiles);
+	}
+
+	return bSuccess;
+}
+
+bool ABoardManager::GetOccupiedTilesWithinDistance(const ATile* Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreNullTiles, bool bIgnoreOrigin) const
+{
+	bool bSuccess = false;
+	if (Origin)
+	{
+		const FIntVector& TileHex = Origin->GetGridHexValue();
+		bSuccess = HexGrid.GetAllOccupiedTilesWithinRange(TileHex, Distance, OutTiles, bIgnoreNullTiles, bIgnoreOrigin);
 	}
 
 	return bSuccess;
@@ -370,6 +453,44 @@ ATile* ABoardManager::GetTileAtLocation(const FVector& Location) const
 	const FVector Size = FVector(GridHexSize);
 
 	return HexGrid.GetTile(FHexGrid::ConvertWorldToHex(Location, Origin, Size));
+}
+
+TArray<ATile*> ABoardManager::GetTilesWithMatchingElement(ECSKElementType Elements) const
+{
+	TArray<ATile*> Tiles;
+
+	if (HexGrid.bGridGenerated)
+	{
+		TArray<ATile*> AllTiles = HexGrid.GetAllTiles();
+		for (ATile* Tile : AllTiles)
+		{
+			if (ensure(Tile) && (Tile->TileType & Elements) != ECSKElementType::None)
+			{
+				Tiles.Add(Tile);
+			}
+		}
+	}
+
+	return Tiles;
+}
+
+TArray<ATile*> ABoardManager::GetNullTiles() const
+{
+	TArray<ATile*> Tiles;
+
+	if (HexGrid.bGridGenerated)
+	{
+		TArray<ATile*> AllTiles = HexGrid.GetAllTiles();
+		for (ATile* Tile : AllTiles)
+		{
+			if (ensure(Tile) && Tile->bIsNullTile)
+			{
+				Tiles.Add(Tile);
+			}
+		}
+	}
+
+	return Tiles;
 }
 
 bool ABoardManager::CanPlaceTowerOnTile(const ATile* Tile) const
@@ -430,6 +551,170 @@ void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) co
 
 			BoardPiece->SetActorLocation(Origin);
 		}
+	}
+}
+
+void ABoardManager::ForceTileHighlightRefresh()
+{
+	if (HexGrid.bGridGenerated)
+	{
+		TArray<ATile*> AllTiles = HexGrid.GetAllTiles();
+		for (ATile* Tile : AllTiles)
+		{
+			SetTilesHighlightMaterial(Tile);
+		}
+	}
+}
+
+UMaterialInstanceConstant* ABoardManager::GetHighlightMaterialForElement(ECSKElementType ElementType) const
+{
+	UMaterialInstanceConstant* const* HighlightMatPtr = ElementHighlightMaterials.Find(ElementType);
+	if (HighlightMatPtr)
+	{
+		return *HighlightMatPtr;
+	}
+
+	return nullptr;
+}
+
+UMaterialInstanceDynamic* ABoardManager::GetPlayerHighlightMaterial(int32 PlayerID) const
+{
+	if (PlayerID >= 0 && PlayerID <= 1)
+	{
+		return PlayerID == 0 ? Player1HighlightMaterial : Player2HighlightMaterial;
+	}
+
+	return nullptr;
+}
+
+void ABoardManager::SetTilesHighlightMaterial(ATile* Tile) const
+{
+	if (Tile)
+	{
+		// TODO: Add null checks for each material
+
+		UStaticMeshComponent* TilesHighlightMesh = Tile->GetMesh();
+
+		// Null takes priority
+		if (Tile->bIsNullTile)
+		{
+			TilesHighlightMesh->SetMaterial(0, NullHighlightMaterial);
+			return;
+		}
+
+		bool bIsTileHovered = Tile->IsHovered();
+
+		// Tile has been marked as selectable or unselectable (e.g. highlighting
+		// tiles a player can move to during their action phase). For some visualizations,
+		// the selection takes priority over the hover highlight
+		ETileSelectionState SelectionState = Tile->GetSelectionState();
+		if (SelectionState != ETileSelectionState::NotSelectable)
+		{
+			UMaterialInstanceConstant* PriorityMat = nullptr;
+
+			switch (SelectionState)
+			{
+				case ETileSelectionState::Selectable:
+				{
+					PriorityMat = bIsTileHovered ? nullptr : SelectableHighlightMaterial;
+					break;
+				}
+				case ETileSelectionState::Unselectable:
+				{
+					PriorityMat = bIsTileHovered ? nullptr : UnselectableHighlightMaterial;
+					break;
+				}
+				case ETileSelectionState::SelectablePriority:
+				{
+					PriorityMat = SelectableHighlightMaterial;
+					break;
+				}
+				case ETileSelectionState::UnselectablePriority:
+				{
+					PriorityMat = UnselectableHighlightMaterial;
+					break;
+				}
+			}
+
+			if (PriorityMat)
+			{
+				TilesHighlightMesh->SetMaterial(0, PriorityMat);
+				return;
+			}
+		}
+
+		// Player can potentially select this tile, signal this to
+		// them by displaying a unique material just for hovering
+		if (bIsTileHovered)
+		{
+			TilesHighlightMesh->SetMaterial(0, HoveredHighlightMaterial);
+			return;
+		}
+
+		// This tile could potentially be a players portal, match it to their color
+		int32 PortalID = IsPlayerPortalTile(Tile);
+		if (PortalID != -1)
+		{
+			TilesHighlightMesh->SetMaterial(0, GetPlayerHighlightMaterial(PortalID));
+			return;
+		}
+
+		// A player owns a board piece on this tile, we can
+		// highlight it with the players assigned color 
+		int32 OwnerID = Tile->GetBoardPiecesOwnerPlayerID();
+		if (OwnerID != -1)
+		{
+			TilesHighlightMesh->SetMaterial(0, GetPlayerHighlightMaterial(OwnerID));
+			return;
+		}
+
+		// Last case is simply based off tiles element
+		if (ElementHighlightMaterials.Contains(Tile->TileType))
+		{
+			TilesHighlightMesh->SetMaterial(0, ElementHighlightMaterials[Tile->TileType]);
+			return;
+		}
+	}
+}
+
+void ABoardManager::SetHighlightColorForPlayer(int32 PlayerID, FLinearColor Color)
+{
+	if (HasAuthority())
+	{
+		if (!ensure(PlayerID >= 0 && PlayerID <= 1))
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Unable to set player highlight color as player index is invalid"));
+			return;
+		}
+
+		Multi_SetHighlightColorForPlayer(PlayerID, Color);
+	}
+}
+
+void ABoardManager::Multi_SetHighlightColorForPlayer_Implementation(int32 Player, FLinearColor Color)
+{
+	if (!ensure(Player >= 0 && Player <= 1))
+	{
+		return;
+	}
+
+	// Using a reference on purpose, so we save the pointer to the correct player highlight material
+	UMaterialInstanceDynamic*& HighlightMat = Player == 0 ? Player1HighlightMaterial : Player2HighlightMaterial;
+	if (!HighlightMat)
+	{
+		if (PlayerHighlightMaterialTemplate)
+		{
+			HighlightMat = UMaterialInstanceDynamic::Create(PlayerHighlightMaterialTemplate, this);
+		}
+		else
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Unable to create highlight material for player %i as template is invalid"), Player);
+		}
+	}
+
+	if (HighlightMat)
+	{
+		HighlightMat->SetVectorParameterValue(TEXT("Color"), Color);
 	}
 }
 

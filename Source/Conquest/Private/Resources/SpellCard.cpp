@@ -34,7 +34,11 @@ bool USpellCard::CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellT
 	for (const TSubclassOf<USpell>& Spell : Spells)
 	{
 		const USpell* DefaultSpell = Spell.GetDefaultObject();
-		check(DefaultSpell);
+		if (!DefaultSpell)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("USpellCard: Invalid spell found in %s"), *GetName());
+			continue;
+		}
 
 		if (DefaultSpell->GetSpellType() == SpellType)
 		{

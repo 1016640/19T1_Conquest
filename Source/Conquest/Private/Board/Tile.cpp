@@ -3,7 +3,11 @@
 #include "Tile.h"
 #include "BoardManager.h"
 #include "BoardPieceInterface.h"
+#include "CSKHUD.h"
 #include "CSKPlayerController.h"
+#include "CSKPlayerState.h"
+
+#include "Components/StaticMeshComponent.h"
 
 ATile::ATile()
 {
@@ -15,14 +19,15 @@ ATile::ATile()
 	bOnlyRelevantToOwner = false;
 	bReplicateMovement = false;
 
-	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	SetRootComponent(DummyRoot);
-	DummyRoot->SetMobility(EComponentMobility::Static);
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	SetRootComponent(Mesh);
+	Mesh->SetMobility(EComponentMobility::Static);
 
 	// Fire tile type
-	TileType = 1;
+	TileType = ECSKElementType::Fire;
 	bIsNullTile = false;
 	GridHexIndex = FIntVector(-1);
+	SelectionState = ETileSelectionState::NotSelectable;
 
 	#if WITH_EDITORONLY_DATA
 	bHighlightTile = false;
@@ -34,6 +39,39 @@ void ATile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePro
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 }
 
+#if WITH_EDITOR
+void ATile::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	// We will need to find the board manager manually if not in PIE
+	ABoardManager* BoardManager = nullptr;
+	
+	UWorld* World = GetWorld();
+	if (World && World->IsPlayInEditor())
+	{
+		BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(World, false);
+	}
+	else
+	{
+		BoardManager = UConquestFunctionLibrary::FindMatchBoardManager(this, false);
+	}
+
+	// We don't need to do anything if there is no board manager
+	if (!BoardManager)
+	{
+		return;
+	}
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ATile, TileType) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ATile, bIsNullTile))
+	{
+		BoardManager->SetTilesHighlightMaterial(this);
+	}
+}
+#endif
+
 void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 {
 	if (Controller && Controller->IsLocalPlayerController())
@@ -43,6 +81,16 @@ void ATile::StartHoveringTile(ACSKPlayerController* Controller)
 		{ 
 			BP_OnHoverStart(Controller);
 		}
+
+		// Notify the board piece on this tile
+		if (PieceOccupant.GetInterface() != nullptr)
+		{
+			PieceOccupant->OnHoverStart();
+		}
+
+		HoveringPlayer = Controller;
+
+		RefreshHighlightMaterial();
 
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = true;
@@ -54,15 +102,51 @@ void ATile::EndHoveringTile(ACSKPlayerController* Controller)
 {
 	if (Controller && Controller->IsLocalPlayerController())
 	{
+		check(HoveringPlayer == Controller);
+
 		// Null tiles do not recieve this event
 		if (!bIsNullTile)
 		{
 			BP_OnHoverEnd(Controller);
 		}
 
+		// Notify the board piece on this tile
+		if (PieceOccupant.GetInterface() != nullptr)
+		{
+			PieceOccupant->OnHoverFinish();
+		}
+
+		HoveringPlayer.Reset();
+
+		RefreshHighlightMaterial();
+
 		#if WITH_EDITORONLY_DATA
 		bHighlightTile = false;
 		#endif
+	}
+}
+
+void ATile::SetSelectionState(ETileSelectionState State)
+{
+	if (SelectionState != State)
+	{
+		SelectionState = State;
+		RefreshHighlightMaterial();
+	}
+}
+
+void ATile::RefreshHoveringPlayersBoardPieceUI()
+{
+	if (HoveringPlayer.IsValid())
+	{
+		check(HoveringPlayer->IsLocalPlayerController());
+
+		// This will collect recent BoardPieceUIData to refresh the display with
+		ACSKHUD* CSKHUD = HoveringPlayer->GetCSKHUD();
+		if (CSKHUD)
+		{
+			CSKHUD->OnTileHovered(this);
+		}
 	}
 }
 
@@ -123,8 +207,19 @@ void ATile::Multi_SetBoardPiece_Implementation(AActor* BoardPiece)
 		PieceOccupant = BoardPiece;
 		PieceOccupant->PlacedOnTile(this);
 
+		// We want to call this after placed on tile, as a board piece
+		// can never be hovered when not on a tile to hover over
+		if (IsHovered())
+		{
+			PieceOccupant->OnHoverStart();
+		}
+
 		// Execute any events after set up is complete
 		BP_OnBoardPieceSet(BoardPiece);
+
+		// These should always be executed last
+		RefreshHighlightMaterial();
+		RefreshHoveringPlayersBoardPieceUI();
 	}
 	else
 	{
@@ -143,11 +238,22 @@ void ATile::Multi_ClearBoardPiece_Implementation()
 	{
 		AActor* BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
 		
-		// Execute any events before clearing (as at this point we are still technically occupied)
+		// Execute any events before clearing
 		BP_OnBoardPieceCleared();
+
+		// We want to call this before removed off tile, as a board
+		// piece can never be unhovered when not on a tile to hover off
+		if (IsHovered())
+		{
+			PieceOccupant->OnHoverFinish();
+		}
 
 		PieceOccupant->RemovedOffTile();
 		PieceOccupant = nullptr;
+
+		// These should always be executed last
+		RefreshHighlightMaterial();
+		RefreshHoveringPlayersBoardPieceUI();
 	}
 }
 
@@ -179,7 +285,7 @@ bool ATile::CanPlaceTowersOn() const
 
 AActor* ATile::GetBoardPiece() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return CastChecked<AActor>(PieceOccupant.GetObject());
 	}
@@ -189,7 +295,7 @@ AActor* ATile::GetBoardPiece() const
 
 ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return PieceOccupant->GetBoardPieceOwnerPlayerState();
 	}
@@ -197,12 +303,48 @@ ACSKPlayerState* ATile::GetBoardPiecesOwner() const
 	return nullptr;
 }
 
+int32 ATile::GetBoardPiecesOwnerPlayerID() const
+{
+	ACSKPlayerState* OwnerState = GetBoardPiecesOwner();
+	if (OwnerState)
+	{
+		return OwnerState->GetCSKPlayerID();
+	}
+
+	return -1;
+}
+
 UHealthComponent* ATile::GetBoardPieceHealthComponent() const
 {
-	if (IsTileOccupied())
+	if (IsTileOccupied(false))
 	{
 		return PieceOccupant->GetHealthComponent();
 	}
 
 	return nullptr;
+}
+
+FBoardPieceUIData ATile::GetBoardPieceUIData() const
+{
+	FBoardPieceUIData UIData;
+
+	if (IsTileOccupied())
+	{
+		UIData.BoardPiece = CastChecked<AActor>(PieceOccupant.GetObject());
+		UIData.Owner = PieceOccupant->GetBoardPieceOwnerPlayerState();
+
+		// Allow individual board pieces to pass in additional data
+		PieceOccupant->GetBoardPieceUIData(UIData);
+	}
+
+	return UIData;
+}
+
+void ATile::RefreshHighlightMaterial()
+{
+	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+	if (BoardManager)
+	{
+		BoardManager->SetTilesHighlightMaterial(this);
+	}
 }

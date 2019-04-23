@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "Spell.h"
 #include "SpellCard.h"
 #include "Tower.h"
 
@@ -100,6 +101,14 @@ void ACSKPlayerController::Tick(float DeltaTime)
 				{
 					HoveredTile->StartHoveringTile(this);
 				}
+
+				OnNewTileHovered(HoveredTile);
+
+				// Notify HUD, HUD will handle null checks
+				if (CachedCSKHUD)
+				{
+					CachedCSKHUD->OnTileHovered(HoveredTile);
+				}
 			}
 		}
 	}
@@ -144,10 +153,25 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 	{
 		SelectedSpellCard = InSpellCard;
 		
-		const USpellCard* DefaultSpellCard = SelectedSpellCard.GetDefaultObject();
+		const USpellCard* DefaultSpellCard = SelectedSpellCard ? SelectedSpellCard.GetDefaultObject() : nullptr;
 		if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(InSpellIndex))
 		{
 			SelectedSpellIndex = InSpellIndex;
+			
+			// If the selected spell doesn't require a target, we can simply cast the spell now instead of waiting or a tile to be selected
+			const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
+			if (!DefaultSpell->RequiresTarget())
+			{
+				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
+				if (bCanUseQuickEffect)
+				{
+					Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+				}
+				else
+				{
+					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+				}
+			}
 		}
 		else
 		{
@@ -196,6 +220,50 @@ ATile* ACSKPlayerController::GetTileUnderMouse() const
 	}
 
 	return nullptr;
+}
+
+void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
+{
+	check(IsLocalPlayerController());
+
+	bool bDisplaySpellSelection = false;
+
+	// We want to update the selectable tile based off our current spell we have selected
+	if (IsPerformingActionPhase())
+	{
+		bDisplaySpellSelection = SelectedAction == ECSKActionPhaseMode::CastSpell;
+	}
+	else if (bCanUseQuickEffect || bCanSelectBonusSpellTarget)
+	{
+		bDisplaySpellSelection = true;
+	}
+
+	if (bDisplaySpellSelection)
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+
+		// Tile will be null if no longer hovering over the board
+		if (NewTile)
+		{
+			// We only display the hovered tile to be selectable
+			SelectedActionTileCandidates.Empty(1);
+			SelectedActionTileCandidates.Add(NewTile);
+
+			ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (CSKGameState)
+			{
+				// We want the selectable highlight to take priority over 
+				ETileSelectionState SelectionState = CSKGameState->CanPlayerCastSpell(this, NewTile, SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana)
+					? ETileSelectionState::SelectablePriority : ETileSelectionState::UnselectablePriority;
+
+				NewTile->SetSelectionState(SelectionState);
+			}
+		}
+		else
+		{
+			SelectedActionTileCandidates.Empty();
+		}
+	}
 }
 
 void ACSKPlayerController::SelectTile()
@@ -256,10 +324,10 @@ void ACSKPlayerController::SelectTile()
 
 void ACSKPlayerController::ResetCamera()
 {
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && CastlePawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && CastlePawn)
 	{
-		Pawn->TravelToLocation(CastlePawn->GetActorLocation());
+		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation());
 	}
 }
 
@@ -309,10 +377,10 @@ void ACSKPlayerController::SetCastleController(ACastleAIController* InController
 		// Link back to us
 		CastleController->PlayerOwner = this;
 
-		ACSKPlayerState* PlayerState = GetCSKPlayerState();
-		if (PlayerState)
+		ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+		if (CSKPlayerState)
 		{
-			PlayerState->SetCastle(CastlePawn);
+			CSKPlayerState->SetCastle(CastlePawn);
 		}
 	}
 }
@@ -329,11 +397,11 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 				SetIgnoreMoveInput(true);
 			}
 
-			ACSKPawn* Pawn = GetCSKPawn();
-			if (Pawn && CastlePawn)
+			ACSKPawn* CSKPawn = GetCSKPawn();
+			if (CSKPawn && CastlePawn)
 			{
 				// Focus on our castle while we wait for tallied resources
-				Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+				CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
 			}
 
 			bWaitingOnTallyEvent = false;
@@ -361,7 +429,12 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 		}
 		case ECSKRoundState::EndRoundPhase:
 		{
-			SetIgnoreMoveInput(true);
+			// We may have been waiting previously, and 
+			// we don't want to stack ignore commands
+			if (!IsMoveInputIgnored())
+			{
+				SetIgnoreMoveInput(true);
+			}
 
 			break;
 		}
@@ -466,14 +539,14 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 			if (bEnabled)
 			{
 				// Reset tiles traversed
-				ACSKPlayerState* PlayerState = GetCSKPlayerState();
-				if (PlayerState)
+				ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+				if (CSKPlayerState)
 				{
-					PlayerState->ResetTilesTraversed();
-					PlayerState->ResetSpellsCast();
+					CSKPlayerState->ResetTilesTraversed();
+					CSKPlayerState->ResetSpellsCast();
 
 					// Check not only if we can cast a spell, but if we can afford any of them
-					if (PlayerState->CanCastAnotherSpell(true))
+					if (CSKPlayerState->CanCastAnotherSpell(true))
 					{
 						ModesToEnable |= ECSKActionPhaseMode::CastSpell;
 					}
@@ -582,7 +655,7 @@ bool ACSKPlayerController::CanEndActionPhase() const
 			return GameState->HasPlayerMovedRequiredTiles(this);
 		}
 
-		// If movement is being tracked, just assume we can end action phase whenever
+		// If movement isn't being tracked, just assume we can end action phase whenever
 		return true;
 	}
 
@@ -631,6 +704,34 @@ bool ACSKPlayerController::CanRequestCastSpellAction() const
 	return false;
 }
 
+void ACSKPlayerController::OnSelectionModeChanged_Implementation(ECSKActionPhaseMode NewMode)
+{
+	// Mark previous tiles as disabled
+	SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+	SelectedActionTileCandidates.Empty();
+
+	ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (CSKGameState)
+	{
+		switch (NewMode)
+		{
+			case ECSKActionPhaseMode::MoveCastle:
+			{
+				ensure(CSKGameState->GetTilesPlayerCanMoveTo(this, SelectedActionTileCandidates, true));
+				break;
+			}
+			case ECSKActionPhaseMode::BuildTowers:
+			{
+				CSKGameState->GetTilesPlayerCanBuildOn(this, SelectedActionTileCandidates);
+				break;
+			}
+		}
+	}
+
+	// All candidates are selectable, but we want to display the hover highlight over it
+	SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
+}
+
 void ACSKPlayerController::OnRep_bIsActionPhase()
 {
 	SetActionMode(ECSKActionPhaseMode::None, true);
@@ -638,13 +739,18 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 	// Move our camera to our castle when it's our turn to make actions
 	if (bIsActionPhase)
 	{
-		ACSKPawn* Pawn = GetCSKPawn();
-		if (Pawn && CastlePawn)
+		ACSKPawn* CSKPawn = GetCSKPawn();
+		if (CSKPawn && CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
 		}
 
 		SetCanSelectTile(true);
+	}
+	else
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+		SelectedActionTileCandidates.Empty();
 	}
 }
 
@@ -683,12 +789,12 @@ void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 {
 	// Move the camera over to our castle (where our portal should be)
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
 		if (CastlePawn)
 		{
-			Pawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
 		}
 	}
 	else
@@ -701,15 +807,21 @@ void ACSKPlayerController::Client_OnCastleMoveRequestConfirmed_Implementation(AC
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
-		Pawn->TrackActor(MovingCastle);
+		CSKPawn->TrackActor(MovingCastle);
 	}
 
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
+	}
+
+	// Mark tiles as not selectable while we move
+	if (IsPerformingActionPhase())
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
 	}
 }
 
@@ -717,15 +829,29 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 {
 	SetCanSelectTile(true);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
-		Pawn->TrackActor(nullptr);
+		CSKPawn->TrackActor(nullptr);
 	}
 
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::MoveCastle, EActiveSpellContext::None);
+	}
+
+	// If it's our turn, we may still be able to move some more tiles,
+	// so we need to refresh the amount of tiles we can move
+	// TODO: Need to wait for TilesTraversedThisRound to replicate on the client (for doing this on the client)
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::MoveCastle)
+	{
+		ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		check(CSKGameState);
+
+		if (CSKGameState->GetTilesPlayerCanMoveTo(this, SelectedActionTileCandidates, true))
+		{
+			SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
+		}
 	}
 }
 
@@ -733,17 +859,23 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && TargetTile)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && TargetTile)
 	{
 		// Have players watch get tower built		
-		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 		SetIgnoreMoveInput(true);
 	}
 
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
+	}
+
+	// Mark tiles as not selectable while we build
+	if (IsPerformingActionPhase())
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
 	}
 }
 
@@ -756,17 +888,30 @@ void ACSKPlayerController::Client_OnTowerBuildRequestFinished_Implementation()
 	{
 		CachedCSKHUD->OnActionFinished(ECSKActionPhaseMode::BuildTowers, EActiveSpellContext::None);
 	}
+
+	// If it's our turn, we may still be able to build more towers,
+	// so we need to refresh which tiles are considered selectable
+	if (IsPerformingActionPhase() && SelectedAction == ECSKActionPhaseMode::BuildTowers)
+	{
+		ACSKGameState* CSKGameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		check(CSKGameState);
+
+		if (CSKGameState->GetTilesPlayerCanBuildOn(this, SelectedActionTileCandidates))
+		{
+			SetTileCandidatesSelectionState(ETileSelectionState::Selectable);
+		}
+	}
 }
 
 void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EActiveSpellContext SpellContext, ATile* TargetTile)
 {
 	SetCanSelectTile(false);
 
-	ACSKPawn* Pawn = GetCSKPawn();
-	if (Pawn && TargetTile)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && TargetTile)
 	{
 		// Have players watch spell in action	
-		Pawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
 
 		// Avoid setting it twice, as this function will get
 		// called twice before Finish if casting a bonus spell
@@ -1176,18 +1321,31 @@ void ACSKPlayerController::GetBuildableTowers(TArray<TSubclassOf<UTowerConstruct
 
 void ACSKPlayerController::GetCastableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
 {
-	ACSKPlayerState* PlayerState = GetCSKPlayerState();
-	if (PlayerState)
+	ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+	if (CSKPlayerState)
 	{
-		PlayerState->GetSpellsPlayerCanCast(OutSpellCards);
+		CSKPlayerState->GetSpellsPlayerCanCast(OutSpellCards);
 	}
 }
 
 void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
 {
-	ACSKPlayerState* PlayerState = GetCSKPlayerState();
-	if (PlayerState)
+	ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+	if (CSKPlayerState)
 	{
-		PlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
+		CSKPlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
+	}
+}
+
+void ACSKPlayerController::SetTileCandidatesSelectionState(ETileSelectionState SelectionState) const
+{
+	for (ATile* Tile : SelectedActionTileCandidates)
+	{
+		// Tiles shouldn't be null if in this array, but there are some cases
+		// where they seem to be, so this acts a pre-caution to prevent a crash
+		if (ensure(Tile))
+		{
+			Tile->SetSelectionState(SelectionState);
+		}
 	}
 }

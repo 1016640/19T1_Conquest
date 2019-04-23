@@ -6,6 +6,7 @@
 #include "GameFramework/HUD.h"
 #include "CSKHUD.generated.h"
 
+class ACSKPlayerState;
 class ATile;
 class UCSKHUDWidget;
 class UUserWidget;
@@ -29,6 +30,16 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	// End AActor Interface
 	
+public:
+
+	/** Notify that player has hovered over a new tile */
+	void OnTileHovered(ATile* Tile);
+
+private:
+
+	/** Helper function for getting the player state corresponding with a portal tile */
+	ACSKPlayerState* GetPlayerStateForPortalTile(ATile* Tile) const;
+
 public:
 
 	/** Notify from our owner that the round state has changed */

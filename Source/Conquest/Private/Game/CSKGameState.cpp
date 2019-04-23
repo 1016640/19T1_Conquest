@@ -8,10 +8,15 @@
 
 #include "BoardManager.h"
 #include "BoardPathFollowingComponent.h"
+#include "Castle.h"
 #include "CastleAIController.h"
+#include "Spell.h"
+#include "SpellCard.h"
 #include "Tower.h"
 #include "TowerConstructionData.h"
 #include "Engine/World.h"
+
+DECLARE_CYCLE_STAT(TEXT("ACSKGameState GetTilesPlayerCanMoveTo Pathfind"), STAT_CSKGameStateGetTilesPlayerCanMoveToPathfind, STATGROUP_Conquest);
 
 ACSKGameState::ACSKGameState()
 {
@@ -102,6 +107,7 @@ void ACSKGameState::Tick(float DeltaTime)
 				{
 					// TODO: notify game mode that time has run out
 					// Game mode should then auto path closer to opponents portal (if player hasn't moved)
+					GameMode->RequestEndActionPhase(true);
 				}
 			}
 		}
@@ -115,7 +121,7 @@ void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
 		// We need to have a board manager, we will find one until we wait for the initial one to replicate
 		if (!BoardManager)
 		{
-			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: Board Manages has not been replicated to client. Finding the first available board managaer instead."));
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: Board Manager has not been replicated to client. Finding the first available board managaer instead."));
 			BoardManager = UConquestFunctionLibrary::FindMatchBoardManager(this);
 		}
 	}
@@ -396,6 +402,20 @@ int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 	return 0;
 }
 
+ACSKPlayerState* ACSKGameState::GetPlayerStateWithID(int32 PlayerID) const
+{
+	for (APlayerState* Player : PlayerArray)
+	{
+		ACSKPlayerState* PlayerState = Cast<ACSKPlayerState>(Player);
+		if (PlayerState && PlayerState->GetCSKPlayerID() == PlayerID)
+		{
+			return PlayerState;
+		}
+	}
+
+	return nullptr;
+}
+
 float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
@@ -571,6 +591,105 @@ bool ACSKGameState::HasPlayerMovedRequiredTiles(const ACSKPlayerController* Cont
 	return false;
 }
 
+int32 ACSKGameState::GetPlayersNumRemainingMoves(const ACSKPlayerState* PlayerState) const
+{
+	if (PlayerState)
+	{
+		int32 TilesTraversed = PlayerState->GetTilesTraversedThisRound();
+		int32 BonusTiles = PlayerState->GetBonusTileMovements();
+
+		// The max amount of movements a player can make during the move action. Bonus tiles
+		// can be negative (to signal less moves) but should ultimately be clamped to not exceed min
+		int32 CalculatedMaxMovements = FMath::Max(MinTileMovements, MaxTileMovements + BonusTiles);
+
+		if (TilesTraversed < CalculatedMaxMovements)
+		{
+			return CalculatedMaxMovements - TilesTraversed;
+		}
+	}
+
+	return 0;
+}
+
+bool ACSKGameState::GetTilesPlayerCanMoveTo(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles, bool bPathfind) const
+{
+	OutTiles.Reset();
+
+	if (!BoardManager)
+	{
+		return false;
+	}
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		ACastle* CastlePawn = PlayerState->GetCastle();
+
+		// Player might not be able to move anymore this round
+		int32 MaxDistance = GetPlayersNumRemainingMoves(PlayerState);
+		if (MaxDistance > 0)
+		{
+			TArray<ATile*> Candidates;
+			if (BoardManager->GetTilesWithinDistance(CastlePawn->GetCachedTile(), MaxDistance, Candidates))
+			{
+				if (bPathfind)
+				{
+					SCOPE_CYCLE_COUNTER(STAT_CSKGameStateGetTilesPlayerCanMoveToPathfind);
+					
+					// Initialize this here to avoid creation every loop
+					FBoardPath BoardPath;
+
+					for (ATile* Tile : Candidates)
+					{
+						if (BoardManager->FindPath(CastlePawn->GetCachedTile(), Tile, BoardPath, false, MaxDistance))
+						{
+							OutTiles.Add(Tile);
+						}
+					}
+
+					return OutTiles.Num() > 0;
+				}
+				else
+				{
+					// Not all these tiles may be reachable in given moves (player might need to walk
+					// around an obstacle) but they are within MaxDistance tiles of eachother 
+					// This is usefull for small move ranges (eg 1 or 2 tiles max)
+					OutTiles = MoveTemp(Candidates);
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+bool ACSKGameState::GetTilesPlayerCanBuildOn(const ACSKPlayerController* Controller, TArray<ATile*>& OutTiles)
+{
+	OutTiles.Reset();
+
+	if (!BoardManager)
+	{
+		return false;
+	}
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		ACastle* CastlePawn = PlayerState->GetCastle();
+		if (BoardManager->GetTilesWithinDistance(CastlePawn->GetCachedTile(), MaxBuildRange, OutTiles))
+		{
+			// We need to remove any portal tiles
+			OutTiles.RemoveAll([this](const ATile* Tile)->bool
+			{
+				return !BoardManager->IsPlayerPortalTile(Tile);
+			});
+		}
+	}
+
+	return OutTiles.Num() > 0;
+}
+
 bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerController* Controller, TSubclassOf<UTowerConstructionData> TowerTemplate) const
 {
 	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
@@ -624,6 +743,69 @@ bool ACSKGameState::GetTowersPlayerCanBuild(const ACSKPlayerController* Controll
 	}
 
 	return OutTowers.Num() > 0;
+}
+
+int32 ACSKGameState::GetPlayerNumRemainingSpellCasts(const ACSKPlayerState* PlayerState, bool& bOutInfinite) const
+{
+	bOutInfinite = false;
+
+	if (PlayerState)
+	{
+		int32 SpellsCast = PlayerState->GetSpellsCastThisRound();
+		int32 TotalSpellCasts = PlayerState->GetMaxNumSpellUses();
+
+		if (PlayerState->HasInfiniteSpellUses())
+		{
+			bOutInfinite = true;
+			return 1;
+		}
+		else
+		{
+			return FMath::Max(0, TotalSpellCasts - SpellsCast);
+		}
+	}
+
+	return 0;
+}
+
+bool ACSKGameState::CanPlayerCastSpell(const ACSKPlayerController* Controller, ATile* TargetTile, 
+	TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana) const
+{
+	if (!SpellCard)
+	{
+		return false;
+	}
+
+	const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
+
+	const ACSKPlayerState* PlayerState = Controller ? Controller->GetCSKPlayerState() : nullptr;
+	if (PlayerState)
+	{
+		TSubclassOf<USpell> Spell = DefaultSpellCard->GetSpellAtIndex(SpellIndex);
+		if (!Spell)
+		{
+			return false;
+		}
+
+		const USpell* DefaultSpell = Spell.GetDefaultObject();
+
+		// This spell might not accept the tile as a target
+		if (!DefaultSpell->CanActivateSpell(PlayerState, TargetTile))
+		{
+			return false;
+		}
+
+		// If we can afford the static cost of this spell.
+		// This discount only gets applied to this cost
+		int32 DiscountedMana = 0;
+		if (PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedMana))
+		{
+			int32 FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedMana, AdditionalMana);
+			return PlayerState->HasRequiredMana(FinalCost);
+		}
+	}
+
+	return false;
 }
 
 void ACSKGameState::UpdateRules()

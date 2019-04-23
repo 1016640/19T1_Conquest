@@ -67,18 +67,30 @@ public:
 	FORCEINLINE int32 GetMaxHealth() const { return MaxHealth; }
 
 	/** If owner is dead */
-	FORCEINLINE bool IsDead() const { return Health <= 0; }
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsDead() const { return Health <= 0; }
+
+	/** If owner is at max health */
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsFullyHealed() const { return Health >= MaxHealth; }
+
+private:
+
+	/** Notify that health has been replicated */
+	UFUNCTION()
+	void OnRep_Health();
 
 public:
 
 	/** Event for when health has changed (either from damaged or healing) */
-	UPROPERTY(BlueprintAssignable, BlueprintAuthorityOnly, Category = "Health")
+	// TODO: Update to include delta on client calls
+	UPROPERTY(BlueprintAssignable, Category = "Health")
 	FHealthChangeSignature OnHealthChanged;
 
 protected:
 
 	/** Health of our owner */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Health", meta = (ClampMin = 1, EditCondition="!bIsDead"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Health", meta = (ClampMin = 1, EditCondition="!bIsDead"))
 	int32 Health;
 
 	/** Max health of our owner */

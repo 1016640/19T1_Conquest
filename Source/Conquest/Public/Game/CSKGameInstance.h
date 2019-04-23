@@ -23,4 +23,8 @@ public:
 	/** Server travels to given level with options*/
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (WorldContext = "WorldContextObject"))
 	static bool ServerTravelToLevel(const UObject* WorldContextObject, FString LevelName, const TArray<FString>& Options);
+
+	// temp
+	UFUNCTION(BlueprintImplementableEvent)
+	void DestroySessionAfterMatchFinished();
 };

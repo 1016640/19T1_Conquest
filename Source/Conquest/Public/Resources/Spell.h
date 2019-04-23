@@ -47,14 +47,16 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool RequiresTarget() const;
 
-	/** Check if spell can be used on given tile */
+	/** Check if spell can be used on given tile. This can get called on clients,
+	but will ultimately be called on the server to validate before allowing cast */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	bool CanActivateSpell(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile) const;
 
 	/** Calculates the final cost of this spell. Passes in the player casting the spell, the
-	tile they plan to cast it onto and how much additional mana they are willing to spend */
+	tile they plan to cast it onto, the discounted static cost and how much additional mana 
+	they are willing to spend. By default, will return DiscountedCost + AdditionalMana */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
-	int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const;
+	int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 DiscountedCost, int32 AdditionalMana) const;
 
 public:
 
@@ -107,4 +109,9 @@ protected:
 	/** If this spell needs a target in order to activate */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName = "Requires Target"))
 	uint8 bSpellRequiresTarget : 1;
+
+	/** If this spell expects additional mana. This will simply alter the default behavior of CalculateFinalCost
+	with true returning DiscountedCost + AdditionalMana while false simply returns DiscountedCost */
+	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = Spells)
+	uint8 bExpectsAdditionalMana : 1;
 };

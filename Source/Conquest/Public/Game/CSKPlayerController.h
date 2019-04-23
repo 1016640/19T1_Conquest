@@ -129,7 +129,7 @@ public:
 	/** Set the additional mana the player wants to spend for spells */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void SetSelectedAdditionalMana(int32 InAdditionalMana);
-		 
+
 public:
 
 	/** Get possessed pawn as a CSK pawn */
@@ -147,6 +147,13 @@ public:
 	/** Get the tile currently under this controllers mouse. This only works only local player controllers */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	ATile* GetTileUnderMouse() const;
+
+protected:
+
+	/** Event for when the player has hovered over a new tile. This
+	can be null, to signal that the player is no longer over a tile */
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
+	void OnNewTileHovered(ATile* NewTile);
 
 private:
 
@@ -335,7 +342,7 @@ public:
 protected:
 
 	/** Event for when the action phase mode has changed */
-	UFUNCTION(BlueprintImplementableEvent, Category = CSK)
+	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	void OnSelectionModeChanged(ECSKActionPhaseMode NewMode);
 
 private:
@@ -510,4 +517,16 @@ public:
 	/** Get the bonus elemental spell this player can cast */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	TSubclassOf<USpell> GetCastableBonusElementalSpell() const { return PendingBonusSpell; }
+
+private:
+
+	/** Sets all tiles in selected action candidates to given selection state */
+	void SetTileCandidatesSelectionState(ETileSelectionState SelectionState) const;
+
+private:
+
+	/** The tiles that are selectable for current selected action. Cast spell is different,
+	as it will only contain the hovered tile if we are allowed to cast the selected spell on it */
+	UPROPERTY(Transient)
+	TArray<ATile*> SelectedActionTileCandidates;
 };

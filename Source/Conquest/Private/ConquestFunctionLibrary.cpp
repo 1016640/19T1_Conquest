@@ -3,6 +3,7 @@
 #include "ConquestFunctionLibrary.h"
 #include "Conquest.h"
 #include "Board/BoardManager.h"
+#include "Board/Tile.h"
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
@@ -70,6 +71,19 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 	}
 
 	return nullptr;
+}
+
+bool UConquestFunctionLibrary::AreTilesWithingRange(const ATile* T1, const ATile* T2, int32 Range, int32& OutDistance)
+{
+	OutDistance = -1;
+
+	if (T1 && T2)
+	{
+		OutDistance = FHexGrid::HexDisplacement(T1->GetGridHexValue(), T2->GetGridHexValue());
+		return OutDistance <= Range;
+	}
+
+	return false;
 }
 
 void UConquestFunctionLibrary::AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder)

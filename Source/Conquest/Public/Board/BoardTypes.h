@@ -22,6 +22,28 @@ enum class ECSKElementType : uint8
 
 ENUM_CLASS_FLAGS(ECSKElementType);
 
+/** Tracks if a tile has been marked as selectable or unselectable. This is used to determine
+which highlight material to use when a tile is marked as either selectable or unselectable while
+the player is currently hovering over the tile */
+UENUM(BlueprintType)
+enum class ETileSelectionState : uint8
+{
+	/** Tile is not selectable */
+	NotSelectable,
+
+	/** Tile is marked as selectable, but does not have priority over hover */
+	Selectable,
+
+	/** Tile is marked as selectable and has priority over hover */
+	SelectablePriority,
+
+	/** Tile is marked as unselectable, but does not priority over hover */
+	Unselectable,
+
+	/** Tile is marked as unselectable and has priority over hover */
+	UnselectablePriority
+};
+
 /** A path for traversing the board */
 USTRUCT(BlueprintType)
 struct CONQUEST_API FBoardPath

@@ -30,7 +30,10 @@ public:
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
 	virtual void RemovedOffTile() override;
+	virtual void OnHoverStart() override;
+	virtual void OnHoverFinish() override;
 	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
+	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const override;
 	// End IBoardPiece Interface
 
 protected:
@@ -70,6 +73,14 @@ protected:
 	/** Event for when the castle has moved off of given tile */
 	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Removed from Tile"))
 	void BP_OnRemovedFromTile(ATile* Tile);
+
+	/** Event for when the tile the castle is on has been hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Hovered by Player"))
+	void BP_OnHoveredByPlayer();
+
+	/** Event for when the tile the castle is on is no longer hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Unhovered By Player"))
+	void BP_OnUnhoveredByPlayer();
 
 public:
 

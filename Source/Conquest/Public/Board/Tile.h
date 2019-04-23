@@ -10,6 +10,7 @@ class ACSKPlayerController;
 class ACSKPlayerState;
 class IBoardPieceInterface;
 class UHealthComponent;
+class UStaticMeshComponent;
 
 /**
  * Actor for managing an individual tile on the board. Will track
@@ -36,7 +37,21 @@ protected:
 
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	#endif
 	// End UObject Interface
+
+public:
+
+	/** Get mesh component */
+	FORCEINLINE UStaticMeshComponent* GetMesh() const { return Mesh; }
+
+private:
+
+	/** Animated skeletal mesh */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
+	UStaticMeshComponent* Mesh;
 
 public:
 
@@ -49,8 +64,8 @@ public:
 public:
 
 	/** The element type of this tile */
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Tile, meta = (Bitmask, BitmaskEnum = "ECSKElementType")) // TODO: Clear bitmask
-	uint8 TileType;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Tile)
+	ECSKElementType TileType;
 
 	/** If this tile is a null tyle (no go zone) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
@@ -71,15 +86,41 @@ public:
 	/** Informs this tile thay given player is no longer hovering over it */
 	void EndHoveringTile(ACSKPlayerController* Controller);
 
+	/** Sets this tile selectable state for visual purposes */
+	void SetSelectionState(ETileSelectionState State);
+
+public:
+
+	/** Get if this tile is currently being hovered by the player */
+	UFUNCTION(BlueprintPure, Category = Tile)
+	bool IsHovered() const { return HoveringPlayer.IsValid(); }
+
+	/** Get this tiles selection state. Do not use this for game logic but for aesthetic logic */
+	UFUNCTION(BlueprintPure, Category = Tile)
+	ETileSelectionState GetSelectionState() const { return SelectionState; }
+
 protected:
 
 	/** Event for when the player has started to hover over this tile. This event will only ever be called on the client */
-	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName="On Hover Start"))
+	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName = "On Hover Start"))
 	void BP_OnHoverStart(ACSKPlayerController* Controller);
 
 	/** Event for when the player is no longer hovering over this tile. This event will only ever be called on the client */
-	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName = "On Hover End"))
+	UFUNCTION(BlueprintImplementableEvent, Category = Tile, meta = (DisplayName = "On Hover Start"))
 	void BP_OnHoverEnd(ACSKPlayerController* Controller);
+
+	/** Refreshes the board piece UI data for the hovering player */
+	UFUNCTION(BlueprintCallable, Category = Tile)
+	void RefreshHoveringPlayersBoardPieceUI();
+
+private:
+
+	/** Reference to the controller hovering this tile. We keep this
+	here to notify the player of any changes to the occupant board piece */
+	TWeakObjectPtr<ACSKPlayerController> HoveringPlayer;
+
+	/** The current state of if this tile can be selected or not (used for visualization) */
+	ETileSelectionState SelectionState;
 
 public:
 
@@ -92,7 +133,7 @@ public:
 protected:
 
 	/** Event for when a new board piece has been placed on this tile */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName="On Board Piece Set"))
+	UFUNCTION(BlueprintImplementableEvent, Category = "Board|Tiles", meta = (DisplayName = "On Board Piece Set"))
 	void BP_OnBoardPieceSet(AActor* NewBoardPiece);
 
 	/** Event for when the occupant board piece has been cleared */
@@ -132,13 +173,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	ACSKPlayerState* GetBoardPiecesOwner() const;
 
+	/** Get the player ID of the player whose board piece is on this tile */
+	int32 GetBoardPiecesOwnerPlayerID() const;
+
 	/** Get the health component of the board piece on this tile */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")
 	UHealthComponent* GetBoardPieceHealthComponent() const;
+
+	/** Constructs and returns UI data about the current board piece occupant */\
+	FBoardPieceUIData GetBoardPieceUIData() const;
 
 private:
 
 	/** The board piece currently on this tile */
 	UPROPERTY(Transient)
 	TScriptInterface<IBoardPieceInterface> PieceOccupant;
+
+public:
+
+	/** Refreshes this tiles highlight material */
+	UFUNCTION(BlueprintCallable, Category = "Board|Tiles")
+	void RefreshHighlightMaterial();
 };

@@ -68,10 +68,17 @@ ACSKGameMode::ACSKGameMode()
 	MaxTileMovements = 2;
 	bLimitOneMoveActionPerTurn = false;
 	MaxSpellUses = 1;
+	MaxSpellCardsInHand = 3;
+
 	QuickEffectCounterTime = 15.f;
 	BonusSpellSelectTime = 15.f;
 	InitialMatchDelay = 2.f;
 	PostMatchDelay = 15.f;
+
+	#if WITH_EDITORONLY_DATA
+	P1AssignedColor = FColor::Red;
+	P2AssignedColor = FColor::Green;
+	#endif
 }
 
 void ACSKGameMode::Tick(float DeltaTime)
@@ -87,8 +94,8 @@ void ACSKGameMode::Tick(float DeltaTime)
 
 void ACSKGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
-	Players.Add(nullptr);
-	Players.Add(nullptr);
+	// Fix the size of the players array, as it won't be changing throughout the match
+	Players.SetNum(CSK_MAX_NUM_PLAYERS);
 
 	Super::InitGame(MapName, Options, ErrorMessage);
 
@@ -185,6 +192,17 @@ APawn* ACSKGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, 
 	}
 
 	return Pawn;
+}
+
+AActor* ACSKGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	APlayerStart* PawnSpawn = FindPlayerStartWithTag(ACSKPlayerStart::CSKPawnSpawnTag);
+	if (PawnSpawn)
+	{
+		return PawnSpawn;
+	}
+
+	return Super::ChoosePlayerStart_Implementation(Player);
 }
 
 bool ACSKGameMode::HasMatchStarted() const
@@ -330,6 +348,23 @@ ACastleAIController* ACSKGameMode::SpawnCastleControllerFor(ACastle* Castle) con
 	return NewController;
 }
 
+APlayerStart* ACSKGameMode::FindPlayerStartWithTag(const FName& InTag) const
+{
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		for (TActorIterator<APlayerStart> It(World); It; ++It)
+		{
+			if (It->PlayerStartTag == InTag)
+			{
+				return *It;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 ACSKPlayerController* ACSKGameMode::GetOpposingPlayersController(int32 PlayerID) const
 {
 	if (PlayerID == 0 || PlayerID == 1)
@@ -360,6 +395,10 @@ void ACSKGameMode::SetPlayerWithID(ACSKPlayerController* Controller, int32 Playe
 			if (PlayerState)
 			{
 				PlayerState->SetCSKPlayerID(PlayerID);
+
+				#if WITH_EDITORONLY_DATA
+				PlayerState->SetAssignedColor(PlayerID == 0 ? P1AssignedColor : P2AssignedColor);
+				#endif
 			}
 		}
 	}
@@ -559,13 +598,33 @@ void ACSKGameMode::OnMatchStart()
 	StartingPlayerID = CoinFlip() ? 0 : 1;
 
 	AWorldSettings* WorldSettings = GetWorldSettings();
-	WorldSettings->NotifyBeginPlay();
 	WorldSettings->NotifyMatchStarted();
+	
+	// Initialize player colors here
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+	if (CSKGameState)
+	{
+		ABoardManager* BoardManager = CSKGameState->GetBoardManager();
+		if (BoardManager)
+		{
+			for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+			{
+				ACSKPlayerController* Controller = Players[i];
+
+				ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+				if (PlayerState)
+				{
+					BoardManager->SetHighlightColorForPlayer(i, PlayerState->GetAssignedColor());
+				}
+			}
+		}
+	}
 
 	// Have each player transition to their board
 	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
 	{
-		Players[i]->OnTransitionToBoard();
+		ACSKPlayerController* Controller = Players[i];
+		Controller->OnTransitionToBoard();
 	}
 
 	SetActorTickEnabled(false);
@@ -592,15 +651,23 @@ void ACSKGameMode::OnMatchFinished()
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
-	FString LevelName("L_Lobby");
-	TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
+	//FString LevelName("L_Lobby");
+	//TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
 
-	// Return to the lobby
-	UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
+	//// Return to the lobby
+	//UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
+
+	// temp
+	UCSKGameInstance* GameInstance = GetGameInstance<UCSKGameInstance>();
+	if (GameInstance)
+	{
+		GameInstance->DestroySessionAfterMatchFinished();
+	}
 }
 
 void ACSKGameMode::OnMatchAbort()
 {
+	OnFinishedWaitingPostMatch();
 }
 
 void ACSKGameMode::OnCollectionPhaseStart()
@@ -642,12 +709,8 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 
 	if (PrepareEndRoundActionTowers())
 	{
-		// Attempts to startin running the end round action for tower with most priority. If either
-		// there are no towers or an error occurs, simply start the next round
-		if (!StartRunningTowersEndRoundAction(0))
-		{
-			EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
-		}
+		// Give the game state some time to replicate round state changes before commencing end round actions
+		StartNextEndRoundActionAfterDelay(1.f);
 	}
 	else
 	{
@@ -907,7 +970,12 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 			bDeckReshuffled = true;
 		}
 
-		TSubclassOf<USpellCard> SpellCard = State->PickupCardFromDeck();
+		// Player can only carry X amount of cards in hand
+		TSubclassOf<USpellCard> SpellCard = nullptr;
+		if (State->GetNumSpellsInHand() < MaxSpellCardsInHand)
+		{
+			SpellCard = State->PickupCardFromDeck();
+		}
 
 		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, bDeckReshuffled, SpellCard);
 		Controller->Client_OnCollectionPhaseResourcesTallied(TalliedResults);
@@ -936,7 +1004,7 @@ void ACSKGameMode::NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* P
 
 
 
-bool ACSKGameMode::RequestEndActionPhase()
+bool ACSKGameMode::RequestEndActionPhase(bool bTimeOut)
 {
 	// Player is not the active player
 	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
@@ -951,7 +1019,7 @@ bool ACSKGameMode::RequestEndActionPhase()
 	}
 
 	// Player might not have fulfilled action phase requirements (e.g. moving castle)
-	if (!ActionPhaseActiveController->CanEndActionPhase())
+	if (!bTimeOut && !ActionPhaseActiveController->CanEndActionPhase())
 	{
 		return false;
 	}
@@ -1001,7 +1069,16 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 		ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 		if (ensure(PlayerState))
 		{
-			TileSegments -= PlayerState->GetTilesTraversedThisRound();
+			ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+			if (CSKGameState)
+			{
+				// This player has already traversed the max amount of tiles allowed
+				TileSegments = CSKGameState->GetPlayersNumRemainingMoves(PlayerState);
+				if (TileSegments == 0)
+				{
+					return false;
+				}
+			}
 		}
 		else
 		{
@@ -1009,17 +1086,14 @@ bool ACSKGameMode::RequestCastleMove(ATile* Goal)
 				"max tile movements per turn as player state is not of CSKPlayerState"));
 		}
 
-		if (IsCountWithinTileTravelLimits(TileSegments, PlayerState->GetBonusTileMovements()))
-		{
-			ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-			check(BoardManager);
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		check(BoardManager);
 
-			// Confirm request if path is successfully found
-			FBoardPath OutBoardPath;
-			if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
-			{
-				return ConfirmCastleMove(OutBoardPath);
-			}
+		// Confirm request if path is successfully found
+		FBoardPath OutBoardPath;
+		if (BoardManager->FindPath(Origin, Goal, OutBoardPath, false, TileSegments))
+		{
+			return ConfirmCastleMove(OutBoardPath);
 		}
 	}
 
@@ -1096,7 +1170,7 @@ bool ACSKGameMode::RequestBuildTower(TSubclassOf<UTowerConstructionData> TowerTe
 		TSubclassOf<ATower> TowerClass = ConstructData->TowerClass;
 
 		// Confirm request if tower was successfully spawned
-		ATower* NewTower = SpawnTowerFor(TowerClass, Tile, ActionPhaseActiveController->GetCSKPlayerState());
+		ATower* NewTower = SpawnTowerFor(TowerClass, Tile, ConstructData, ActionPhaseActiveController->GetCSKPlayerState());
 		if (NewTower)
 		{
 			return ConfirmBuildTower(NewTower, Tile, ConstructData);
@@ -1153,8 +1227,8 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 			return false;
 		}
 
-		// Default to the static cost
-		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
+		// The final cost for casting this spell, we pass this to the spell actor
+		int32 FinalCost = 0;
 
 		if (PlayerState)
 		{
@@ -1164,9 +1238,16 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 				return false;
 			}
 
+			// Spell isn't affordable (with discounts applied)
+			int32 DiscountedCost = 0;
+			if (!PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedCost))
+			{
+				return false;
+			}
+
 			// Re-calculate as spell might use additional mana
-			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana, true))
+			FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedCost, AdditionalMana);
+			if (!PlayerState->HasRequiredMana(FinalCost, true))
 			{
 				return false;
 			}
@@ -1185,15 +1266,15 @@ bool ACSKGameMode::RequestCastSpell(TSubclassOf<USpellCard> SpellCard, int32 Spe
 		ACSKPlayerState* OpposingPlayerState = OpposingPlayer->GetCSKPlayerState();
 		if (OpposingPlayerState && OpposingPlayerState->CanCastQuickEffectSpell())
 		{
-			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, RequiredMana);
+			SaveSpellRequestAndWaitForCounterSelection(SpellCard, SpellIndex, TargetTile, FinalCost);
 			return true;
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
 		if (SpellActor)
 		{
-			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, RequiredMana, TargetTile, EActiveSpellContext::Action);
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Action);
 		}
 	}
 
@@ -1246,14 +1327,21 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 			return false;
 		}
 
-		// Default to the static cost
-		int32 RequiredMana = DefaultSpell->GetSpellStaticCost();
+		// The final cost for casting this spell, we pass this to the spell actor
+		int32 FinalCost = 0;
 
 		if (PlayerState)
 		{
+			// Spell isn't affordable (with discounts applied)
+			int32 DiscountedCost = 0;
+			if (!PlayerState->GetDiscountedManaIfAffordable(DefaultSpell->GetSpellStaticCost(), DiscountedCost))
+			{
+				return false;
+			}
+
 			// Re-calculate as spell might use additional mana
-			RequiredMana = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, AdditionalMana);
-			if (!PlayerState->HasRequiredMana(RequiredMana, true))
+			FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedCost, AdditionalMana);
+			if (!PlayerState->HasRequiredMana(FinalCost, true))
 			{
 				return false;
 			}
@@ -1265,10 +1353,10 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 		}
 
 		// Confirm request of spell if successfully spawned
-		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, RequiredMana, PlayerState);
+		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, PlayerState);
 		if (SpellActor)
 		{
-			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, RequiredMana, TargetTile, EActiveSpellContext::Counter);
+			return ConfirmCastSpell(DefaultSpell, DefaultSpellCard, SpellActor, FinalCost, TargetTile, EActiveSpellContext::Counter);
 		}
 	}
 
@@ -1687,7 +1775,7 @@ void ACSKGameMode::FinishBuildTower()
 }
 
 
-ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, ACSKPlayerState* PlayerState) const
+ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, UTowerConstructionData* ConstructData, ACSKPlayerState* PlayerState) const
 {
 	check(Tile);
 
@@ -1711,6 +1799,7 @@ ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, A
 	if (Tower)
 	{
 		Tower->SetBoardPieceOwnerPlayerState(PlayerState);
+		Tower->ConstructData = ConstructData;
 
 		// Towers are moved client side when performing the build sequence. This means while we wait,
 		// the actor could pop in and be visible before it moves underground. We can set it to hidden
@@ -2041,10 +2130,10 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 	if (CastersCastle)
 	{
 		ATile* Tile = CastersCastle->GetCachedTile();
-		if (Tile && Tile->TileType != 0)
+		if (Tile && Tile->TileType != ECSKElementType::None)
 		{
 			// Check if an element matches
-			ECSKElementType MatchingElement = static_cast<ECSKElementType>(Tile->TileType) & ActivePlayerSpellCard->GetElementalTypes();
+			ECSKElementType MatchingElement = (Tile->TileType & ActivePlayerSpellCard->GetElementalTypes());
 			if (BonusElementalSpells.Contains(MatchingElement))
 			{
 				TSubclassOf<USpell> BonusSpell = BonusElementalSpells[MatchingElement];
@@ -2085,10 +2174,10 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 				switch (Tile->TileType)
 				{
 					// Single elements, which are valid
-					case 1:
-					case 2:
-					case 4:
-					case 8:
+					case ECSKElementType::Fire:
+					case ECSKElementType::Water:
+					case ECSKElementType::Earth:
+					case ECSKElementType::Air:
 					{
 						break;
 					}
@@ -2139,7 +2228,7 @@ void ACSKGameMode::SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> I
 
 void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 {
-	if (bRunningTowerEndRoundAction && Tower)
+	if ((bRunningTowerEndRoundAction || bInitiatingTowerEndRoundAction) && Tower)
 	{
 		// If we should end the end round phase and move back onto the collection phase
 		bool bEndPhase = false;
@@ -2147,7 +2236,7 @@ void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 		if (ensure(EndRoundActionTowers.IsValidIndex(EndRoundRunningTower)))
 		{
 			// Double check
-			check(EndRoundActionTowers[EndRoundRunningTower] == Tower);
+			//check(EndRoundActionTowers[EndRoundRunningTower] == Tower);
 			bRunningTowerEndRoundAction = false;
 		}
 		else
@@ -2215,11 +2304,11 @@ bool ACSKGameMode::PrepareEndRoundActionTowers()
 		int32 T1Priority = lhs.GetEndRoundActionPriority();
 		int32 T2Priority = rhs.GetEndRoundActionPriority();
 
-		if (T1Priority > T2Priority)
+		if (T1Priority < T2Priority)
 		{
 			return true;
 		}
-		else if (T1Priority < T2Priority)
+		else if (T1Priority > T2Priority)
 		{
 			return false;
 		}
@@ -2315,6 +2404,7 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 
 
 
+
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
 	if (HealthComp->IsDead())
@@ -2333,19 +2423,39 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 			// TODO: Move to function
 			{
 				ATower* DestroyedTower = CastChecked<ATower>(DeadPiece);
+				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
 
 				// Remove references from both board and player
-				ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-				BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
+				{
+					ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+					BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
 
-				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
-				PlayerState->RemoveTower(DestroyedTower);
+					
+					PlayerState->RemoveTower(DestroyedTower);
+				}
 
-				DestroyedTower->SetActorHiddenInGame(true);
-				
-				// Allow tower to remove and grants
-				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
-				
+				// Allow tower to clean up itself
+				{
+					DestroyedTower->SetActorHiddenInGame(true);
+					DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
+				}
+
+				// We need to make sure this tower is removed from end round phase actions
+				if (IsEndRoundPhaseInProgress())
+				{
+					// TODO: THis tower might be the tower running (but for now)
+
+					// We need to revert the index back one if this tower has already executed,
+					// as not doing so will skip one towers end round action
+					int32 Index = EndRoundActionTowers.Find(DestroyedTower);
+					if (Index >= EndRoundRunningTower)
+					{
+						--EndRoundRunningTower;
+					}
+
+					EndRoundActionTowers.RemoveAt(Index);
+				}
+
 				// Destroy after small delay (so any RPCs can get executed)
 				FTimerHandle TempHandle;
 				FTimerManager& TimerManager = GetWorldTimerManager();

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Conquest.h"
 #include "UObject/Interface.h"
 #include "BoardPieceInterface.generated.h"
 
@@ -41,4 +41,15 @@ public:
 
 	/** Event for when this board piece has been removed from the tile it once occupied (called on clients) */
 	virtual void RemovedOffTile() {  }
+
+	/** Event for when the tile this board piece is on has been hovered by the player */
+	virtual void OnHoverStart() { }
+
+	/** Event for when the tile this board piece is on is no longer hovered by the player */
+	virtual void OnHoverFinish() { }
+
+public:
+
+	/** Get information about this board piece to display to the player.*/
+	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutData) const { }
 };

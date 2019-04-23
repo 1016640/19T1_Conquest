@@ -9,6 +9,7 @@
 class USpell;
 enum class ECSKRoundState : uint8;
 enum class ECSKActionPhaseMode : uint8;
+struct FBoardPieceUIData;
 
 /**
  * Specialized HUD for the CSKHUD to interact with
@@ -18,6 +19,16 @@ class UCSKHUDWidget : public UUserWidget
 {
 	GENERATED_BODY()
 	
+public:
+
+	/** Notify if we should display or hide the tiles information */
+	UFUNCTION(BlueprintImplementableEvent)
+	void ToggleTileWidget(bool bDisplay);
+
+	/** Notify that player has hovered over a new tile with a board piece on it */
+	UFUNCTION(BlueprintImplementableEvent)
+	void SetTileWidgetData(const FBoardPieceUIData& UIData);
+
 public:
 
 	/** Notify that the round state has changed */

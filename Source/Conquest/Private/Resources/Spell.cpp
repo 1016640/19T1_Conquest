@@ -12,6 +12,7 @@ USpell::USpell()
 	SpellType = ESpellType::ActionPhase;
 	SpellStaticCost = 5;
 	bSpellRequiresTarget = false;
+	bExpectsAdditionalMana = false;
 
 	SpellActorClass = ASpellActor::StaticClass();
 }
@@ -23,12 +24,19 @@ bool USpell::RequiresTarget_Implementation() const
 
 bool USpell::CanActivateSpell_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile) const
 {
-	return true;
+	return TargetTile != nullptr;
 }
 
-int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 AdditionalMana) const
+int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 DiscountedCost, int32 AdditionalMana) const
 {
-	return SpellStaticCost;
+	if (bExpectsAdditionalMana)
+	{
+		return DiscountedCost + AdditionalMana;
+	}
+	else
+	{
+		return DiscountedCost;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

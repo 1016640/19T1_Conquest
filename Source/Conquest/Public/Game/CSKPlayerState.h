@@ -65,6 +65,10 @@ protected:
 
 public:
 
+	/** Sets this players assigned color */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
+	void SetAssignedColor(FColor InColor);
+
 	/** Gives this player both gold and mana (can be negative) */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
 	void GiveResources(int32 InGold, int32 InMana);
@@ -128,7 +132,7 @@ public:
 	/** Retrieves a spell card from the spell deck and places in the players hand */
 	TSubclassOf<USpellCard> PickupCardFromDeck();
 
-	/** Removes the given spell from players hand */
+	/** Removes the given spell from players hand, adding it to the discard pile */
 	void RemoveCardFromHand(TSubclassOf<USpellCard> Spell);
 
 	/** Resets the spell deck by copying then shuffling given spells */
@@ -144,6 +148,11 @@ public:
 	Can optionally apply discount to required amount */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool HasRequiredMana(int32 RequiredAmount, bool bDiscount = false) const;
+
+	/** If this player has required amount of mana. This will
+	also return the discounted amount if we have required mana */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool GetDiscountedManaIfAffordable(int32 RequiredAmount, int32& OutAmount) const;
 
 	/** Get how many of given type of tower this player owns */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -225,6 +234,9 @@ public:
 	deck. This is when all spell cards are in the discard pile */
 	bool NeedsSpellDeckReshuffle() const;
 
+	/** Get the max number of spells this player can cast (does not account for inf spell uses) */
+	FORCEINLINE int32 GetMaxNumSpellUses() const { return MaxNumSpellUses; }
+
 	/** Get the discount for spells this player has */
 	FORCEINLINE int32 GetSpellDiscount() const { return SpellDiscount; }
 
@@ -274,6 +286,10 @@ protected:
 	/** The spells in the players hand. This only exists on the server and the owners client */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Resources)
 	TArray<TSubclassOf<USpellCard>> SpellCardsInHand;
+
+	/** The spells in the players discard pile. We track these as some spells utilize these */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = Resources)
+	TArray<TSubclassOf<USpellCard>> SpellCardsDiscarded;
 
 	/** The number of spells this player is allowed to use. Is overriden by HasInfiniteSpellUses */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)

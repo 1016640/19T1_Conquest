@@ -9,6 +9,7 @@
 
 class ACSKPlayerController;
 class UStaticMeshComponent;
+class UTowerConstructionData;
 
 /** Delegate for towers when they complete the build sequence */
 DECLARE_MULTICAST_DELEGATE(FTowerBuildSequenceComplete);
@@ -31,7 +32,10 @@ public:
 	virtual void SetBoardPieceOwnerPlayerState(ACSKPlayerState* InPlayerState) override;
 	virtual ACSKPlayerState* GetBoardPieceOwnerPlayerState() const override { return OwnerPlayerState; }
 	virtual void PlacedOnTile(ATile* Tile) override;
+	virtual void OnHoverStart() override;
+	virtual void OnHoverFinish() override;
 	virtual UHealthComponent* GetHealthComponent() const override { return HealthTracker; }
+	virtual void GetBoardPieceUIData(FBoardPieceUIData& OutUIData) const override;
 	// End IBoardPiece Interface
 
 	// Begin AActor Interface
@@ -43,6 +47,12 @@ protected:
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
+
+public:
+
+	/** The construction data about this tower */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Replicated, Category = BoardPiece, AdvancedDisplay)
+	const UTowerConstructionData* ConstructData;
 
 public:
 
@@ -75,6 +85,16 @@ private:
 	/** The tile we are currently on, this is cached for quick access to it */
 	UPROPERTY(BlueprintReadOnly, Transient, DuplicateTransient, meta = (AllowPrivateAccess = "true"))
 	ATile* CachedTile;
+
+protected:
+
+	/** Event for when the tile the castle is on has been hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Hovered by Player"))
+	void BP_OnHoveredByPlayer();
+
+	/** Event for when the tile the castle is on is no longer hovered by the local player */
+	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Unhovered By Player"))
+	void BP_OnUnhoveredByPlayer();
 
 public:
 
@@ -139,14 +159,15 @@ public:
 	/** Get if this tower is a legendary tower */
 	FORCEINLINE bool IsLegendaryTower() const { return bIsLegendaryTower; }
 
-	/** Get if this tower wants the collection phase event called */
-	UFUNCTION(BlueprintPure, Category = Tower)
-	virtual bool WantsCollectionPhaseEvent() const { return bGivesCollectionPhaseResources; }
+	/** Get if this tower wants the collection phase event called.
+	By default, will return bGivesCollectionPhaseResources */
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Tower)
+	bool WantsCollectionPhaseEvent() const;
 
 	/** Get if this tower wants the end round phase event called.
 	By default, will return bWantsActionDuringEndRoundPhase */
-	UFUNCTION(BlueprintPure, Category = Tower)
-	virtual bool WantsEndRoundPhaseEvent() const { return bWantsActionDuringEndRoundPhase; }
+	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Tower)
+	bool WantsEndRoundPhaseEvent() const;
 
 	/** This towers priority during the end round phase */
 	FORCEINLINE int32 GetEndRoundActionPriority() const { return EndRoundPhaseActionPriority; }
@@ -170,11 +191,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BoardPiece, meta = (ClampMin = 0, EditCondition = "bWantsActionDuringEndRoundPhase"))
 	int32 EndRoundPhaseActionPriority;
 
+	/** How far this tower will push itself underground when initiating the build sequence.
+	This is a scaler that will be applied to the meshes bound (specificallty the Z axis) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = BoardPiece)
+	float BuildSequenceUndergroundScale;
+
 protected:
 
 	/** Binds the custom tile selection to our owners player controller. This will
 	only work during the end round action and will be automatically unbound. */
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected = "true"))
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
 	void BindPlayerTileSelectionCallbacks();
 
 	/** Unbinds the custom tile selection from our owners player controller. This should be

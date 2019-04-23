@@ -78,6 +78,14 @@ public:
 
 public:
 
+	/** Get the length of this path. This will exclude the initial tile (Origin) */
+	FORCEINLINE int32 Length() const
+	{
+		return FMath::Max(0, Path.Num() - 1);
+	}
+
+public:
+
 	/** The result of the search */
 	EHexGridPathFindResult Result;
 
@@ -318,6 +326,9 @@ public:
 
 	/** Get all tiles within desired range of given hex. Get if at least one tile was in range */
 	bool GetAllTilesWithinRange(const FHex& Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreOccupiedTiles = true) const;
+
+	/** Get all occupied tiles within desired range of given hex. Get if at least one tile was in range */
+	bool GetAllOccupiedTilesWithinRange(const FHex& Origin, int32 Distance, TArray<ATile*>& OutTiles, bool bIgnoreNullTiles = true, bool bIgnoreOrigin = true) const;
 
 public:
 
