@@ -86,6 +86,18 @@ bool UConquestFunctionLibrary::AreTilesWithingRange(const ATile* T1, const ATile
 	return false;
 }
 
+int32 UConquestFunctionLibrary::AccumulateHealthReportDeltas(const TArray<FHealthChangeReport>& Reports)
+{
+	int32 Total = 0;
+
+	for (const FHealthChangeReport& Repo : Reports)
+	{
+		Total += Repo.Delta;
+	}
+
+	return Total;
+}
+
 void UConquestFunctionLibrary::AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder)
 {
 	if (Widget && !Widget->IsInViewport())

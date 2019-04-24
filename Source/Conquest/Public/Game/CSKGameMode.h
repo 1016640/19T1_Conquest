@@ -4,6 +4,7 @@
 
 #include "Conquest.h"
 #include "GameFramework/GameModeBase.h"
+#include "BoardPieceInterface.h"
 #include "BoardTypes.h"
 #include "CSKGameMode.generated.h"
 
@@ -15,6 +16,7 @@ class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
+class IBoardPieceInterface;
 class UHealthComponent;
 class USpell;
 class USpellCard;
@@ -421,7 +423,7 @@ public:
 	bool RequestSkipQuickEffect();
 
 	/** Will attempt to cast the current pending bonus spell */
-	UFUNCTION(BlueprintCallable, Category = CSL)
+	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestCastBonusSpell(ATile* TargetTile);
 
 	/** Will attempt to skip the bonus spell target selecting without casting the spell */
@@ -533,15 +535,10 @@ private:
 		ActivePlayerPendingTowerTile = nullptr;
 		
 		bWaitingOnQuickEffectSelection = false;
-		ActiveSpellContext = EActiveSpellContext::None;
-		ActiveSpellRequestSpellCard = nullptr;
-		ActiveSpellRequestSpellIndex = 0;
-		ActiveSpellRequestSpellTile = nullptr;
-		ActiveSpellRequestCalculatedCost = 0;
 		ActiveSpell = nullptr;
 		ActiveSpellCard = nullptr;
 		ActiveSpellActor = nullptr;
-		ActivePlayerSpellContext = EActiveSpellContext::None;
+		ActiveSpellContext = EActiveSpellContext::None;
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
 
@@ -588,31 +585,8 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
-	/** The type of spell that is currently active */
-	EActiveSpellContext ActiveSpellContext;
-
 	/** If we are waiting on the opposing player (against active player) to select a quick effect counter */
 	uint32 bWaitingOnQuickEffectSelection : 1;
-
-	/** The spell card the active player attempted to cast. We track
-	this here in-case the opposing player decides not to counter */
-	UPROPERTY()
-	TSubclassOf<USpellCard> ActiveSpellRequestSpellCard;
-
-	/** The index of the spell the active player attempted to cast. We 
-	track this here in-case the opposing player decides not to counter */
-	int32 ActiveSpellRequestSpellIndex;
-
-	/** The tile the active player attempted to cast their spell on. We 
-	track this here in-case the opposing player decides not to counter */
-	UPROPERTY()
-	ATile* ActiveSpellRequestSpellTile;
-
-	/** The cost that was calculated or active players spell request. We 
-	track this here in-case the opposing player decides not to counter */
-	int32 ActiveSpellRequestCalculatedCost;
-
-	int32 ActiveSpellRequestAdditionalMana;
 
 	/** The active players pending spell request. This saves an incoming action spell
 	request while the opposing player selects a potential quick effect spell */
@@ -637,7 +611,7 @@ private:
 	ASpellActor* ActiveSpellActor;
 
 	/** The context of the spell being cast */
-	EActiveSpellContext ActivePlayerSpellContext;
+	EActiveSpellContext ActiveSpellContext;
 
 	/** If we are waiting on the player who casted the current spell to select a target for the bonus spell */
 	uint32 bWaitingOnBonusSpellSelection : 1;
@@ -707,6 +681,9 @@ public:
 	/** Get the max number of duplicate NORMAL towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumDuplicatedTowers() const { return MaxNumDuplicatedTowers; }
 
+	/** Get the max number of duplicate NORMAL tower types the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumDuplicatedTowerTypes() const { return MaxNumDuplicatedTowerTypes; }
+
 	/** Get the max number of LEGENDARY towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumLegendaryTowers() const { return MaxNumLegendaryTowers; }
 
@@ -756,9 +733,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumTowers;
 
-	/** The max amount of duplicates of the same NORMAL tower a player can construct (zero means indefinite) */
+	/** The max amount of duplicates of a single NORMAL tower a player can construct (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumDuplicatedTowers;
+
+	/** The max amount of duplicated types of all NORMAL towers player can have (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxNumDuplicatedTowerTypes;
 
 	/** The max amount of LEGENDARY towers a player can have constructed at once (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
@@ -854,12 +835,52 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = Rules, meta = (ClampMin = 1))
 	float PostMatchDelay;
 
+public:
+
+	/** Get all the towers that were damaged during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetDamageHealthReports(bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetHealingHealthReports() const;
+
+	/** Get all the towers that were damaged during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const;
+
 protected:
 
 	/** Callback for when a tower/castle has taken damage. This
 	function checks if given tower/castle has been destroyed */
 	UFUNCTION()
 	void OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta);
+
+	/** Clears both health report arrays */
+	void ClearHealthReports();
+
+	/** Caches all the active action health reports then clearing it for a new action */
+	void CacheAndClearHealthReports();
+
+private:
+
+	/** Generates a new array containing health reports filtered by passed in arguments */
+	TArray<FHealthChangeReport> QueryPreviousHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const;
+
+protected:
+
+	/** Reports of health changed during the current action, sorted in the order
+	they were recieved. Actions are a spell cast or a towers end round phase action */
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CSK|Game")
+	TArray<FHealthChangeReport> ActiveActionHealthReports;
+
+	/** The health change reports from the previous action */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CSK|Game")
+	TArray<FHealthChangeReport> PreviousActionHealthReports;
 
 protected:
 

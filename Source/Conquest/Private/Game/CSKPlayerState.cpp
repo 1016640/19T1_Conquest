@@ -324,6 +324,24 @@ int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) con
 	return 0;
 }
 
+int32 ACSKPlayerState::GetNumOwnedTowerDuplicateTypes() const
+{
+	TArray<int32> TowerCounts;
+	CachedUniqueTowerCount.GenerateValueArray(TowerCounts);
+
+	int32 NumTypes = 0;
+	for (int32 Count : TowerCounts)
+	{
+		// Owning two of the same type means we have a duplicate
+		if (Count >= 2)
+		{
+			++NumTypes;
+		}
+	}
+
+	return NumTypes;
+}
+
 bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
 {
 	if (bHasInfiniteSpellUses || SpellsCastThisRound < MaxNumSpellUses)

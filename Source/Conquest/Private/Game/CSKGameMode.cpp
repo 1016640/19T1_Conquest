@@ -60,6 +60,7 @@ ACSKGameMode::ACSKGameMode()
 	MaxNumTowers = 7;
 	MaxNumLegendaryTowers = 1;
 	MaxNumDuplicatedTowers = 2;
+	MaxNumDuplicatedTowerTypes = 2;
 	MaxBuildRange = 4;
 
 	ActionPhaseTime = 90.f;
@@ -672,10 +673,13 @@ void ACSKGameMode::OnMatchAbort()
 
 void ACSKGameMode::OnCollectionPhaseStart()
 {
-	UE_LOG(LogConquest, Log, TEXT("Starting Collection Phase"));
+	// Clear from previous end round phase
+	ClearHealthReports();
 
 	CollectionSequenceFinishedFlags = 0;
 	DelayThenStartCollectionPhaseSequence();
+
+	UE_LOG(LogConquest, Log, TEXT("Starting Collection Phase"));
 }
 
 void ACSKGameMode::OnFirstActionPhaseStart()
@@ -702,6 +706,9 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 
 	// Resets action phase active controller
 	UpdateActivePlayerForActionPhase(-1);
+
+	// Clear from action phases
+	ClearHealthReports();
 
 	EndRoundRunningTower = 0;
 	bRunningTowerEndRoundAction = false;
@@ -1422,13 +1429,13 @@ bool ACSKGameMode::RequestCastBonusSpell(ATile* TargetTile)
 
 		// Get the player that will be casting this bonus spell
 		ACSKPlayerController* CastingPlayer = nullptr;
-		if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+		if (ActiveSpellContext == EActiveSpellContext::Action)
 		{
 			CastingPlayer = ActionPhaseActiveController;
 		}
 		else
 		{
-			check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+			check(ActiveSpellContext == EActiveSpellContext::Counter);
 			CastingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 		}
 
@@ -1442,7 +1449,7 @@ bool ACSKGameMode::RequestCastBonusSpell(ATile* TargetTile)
 		ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, 0, 0, PlayerState);
 		if (SpellActor)
 		{
-			BonusSpellContext = ActivePlayerSpellContext;
+			BonusSpellContext = ActiveSpellContext;
 			return ConfirmCastSpell(DefaultSpell, nullptr, SpellActor, 0, TargetTile, EActiveSpellContext::Bonus);
 		}
 	}
@@ -1883,7 +1890,13 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 				ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 				if (PlayerState)
 				{
-					int32 ManaToConsume = Context == EActiveSpellContext::Action ? FinalCost : ActiveSpellRequestCalculatedCost;
+					int32 ManaToConsume = FinalCost;
+					if (Context == EActiveSpellContext::Counter)
+					{
+						ensure(ActivePlayerPendingSpellRequest.IsValid());
+						ManaToConsume = ActivePlayerPendingSpellRequest.CalculatedCost;
+					}
+
 					PlayerState->SetMana(PlayerState->GetMana() - ManaToConsume);
 
 					// If an action, we remove the spell being cast from the active player,
@@ -1894,7 +1907,7 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 					}
 					else
 					{
-						PlayerState->RemoveCardFromHand(ActiveSpellRequestSpellCard);
+						PlayerState->RemoveCardFromHand(ActivePlayerPendingSpellRequest.SpellCard);
 					}
 				}
 			}
@@ -1959,7 +1972,11 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 	ActiveSpell = Spell;
 	ActiveSpellCard = SpellCard;
 	ActiveSpellActor = SpellActor;
-	ActivePlayerSpellContext = Context;
+	ActiveSpellContext = Context;
+
+	// Some spells will utilize the actions of other spells (mainly quick effects)
+	// We can track what was healed and damaged to account for this
+	CacheAndClearHealthReports();
 
 	// Give spell half a second to replicate
 	FTimerManager& TimerManager = GetWorldTimerManager();
@@ -2022,7 +2039,7 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 	ACSKPlayerState* PlayerState = ActionPhaseActiveController->GetCSKPlayerState();
 
 	// The context of this spell, bonus spells are considered what originally granted the bonus
-	EActiveSpellContext Context = ActivePlayerSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActivePlayerSpellContext;
+	EActiveSpellContext Context = ActiveSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActiveSpellContext;
 
 	// Restore states
 	{
@@ -2032,13 +2049,13 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 		if (bWaitingOnBonusSpellSelection)
 		{
 			ACSKPlayerController* CasterPlayer = nullptr;
-			if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+			if (ActiveSpellContext == EActiveSpellContext::Action)
 			{
 				CasterPlayer = ActionPhaseActiveController;
 			}
 			else
 			{
-				check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+				check(ActiveSpellContext == EActiveSpellContext::Counter);
 				CasterPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 			}
 
@@ -2070,7 +2087,7 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreBonusCheck)
 		}
 	}
 	
-	ActivePlayerSpellContext = EActiveSpellContext::None;
+	ActiveSpellContext = EActiveSpellContext::None;
 	BonusSpellContext = EActiveSpellContext::None;
 
 	// Disable this action if player can't cast any more spells this round
@@ -2124,16 +2141,11 @@ void ACSKGameMode::SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpell
 	check(ActionPhaseActiveController);
 	check(!bWaitingOnQuickEffectSelection && !bWaitingOnBonusSpellSelection);
 
-	ActiveSpellRequestSpellCard = InSpellCard;
-	ActiveSpellRequestSpellIndex = InSpellIndex;
-	ActiveSpellRequestSpellTile = InTargetTile;
-	ActiveSpellRequestCalculatedCost = InFinalCost;
-	ActiveSpellRequestAdditionalMana = InAdditionalMana;
+	// Save this for when recieving either request or skip
 	ActivePlayerPendingSpellRequest.Set(InSpellCard, InSpellIndex, InTargetTile, InFinalCost, InAdditionalMana);
-
 	bWaitingOnQuickEffectSelection = true;
 
-	const USpellCard* DefaultSpellCard = ActiveSpellRequestSpellCard.GetDefaultObject();
+	const USpellCard* DefaultSpellCard = InSpellCard.GetDefaultObject();
 	check(DefaultSpellCard);
 
 	ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
@@ -2158,7 +2170,7 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 	check(IsActionPhaseInProgress());
 
 	// Bonuses only get applied once
-	if (ActivePlayerSpellContext == EActiveSpellContext::Bonus)
+	if (ActiveSpellContext == EActiveSpellContext::Bonus)
 	{
 		return false;
 	}
@@ -2170,14 +2182,14 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 	ACastle* CastersCastle = nullptr;
 	ACSKPlayerState* CastersState = nullptr;
 
-	if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+	if (ActiveSpellContext == EActiveSpellContext::Action)
 	{
 		CastersCastle = ActionPhaseActiveController->GetCastlePawn();
 		CastersState = ActionPhaseActiveController->GetCSKPlayerState();
 	}
 	else
 	{
-		check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+		check(ActiveSpellContext == EActiveSpellContext::Counter);
 
 		ACSKPlayerController* OpposingController = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 		CastersCastle = OpposingController->GetCastlePawn();
@@ -2219,7 +2231,7 @@ bool ACSKGameMode::PostCastSpellActivateBonusSpell()
 				ASpellActor* BonusSpellActor = SpawnSpellActor(DefaultSpell, Tile, 0, 0, CastersState);
 				if (BonusSpellActor)
 				{
-					BonusSpellContext = ActivePlayerSpellContext;
+					BonusSpellContext = ActiveSpellContext;
 					return ConfirmCastSpell(BonusSpell.GetDefaultObject(), nullptr, BonusSpellActor, 0, Tile, EActiveSpellContext::Bonus);
 				}
 			}
@@ -2262,13 +2274,13 @@ void ACSKGameMode::SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> I
 	bWaitingOnBonusSpellSelection = true;
 
 	ACSKPlayerController* CastingPlayer = nullptr;
-	if (ActivePlayerSpellContext == EActiveSpellContext::Action)
+	if (ActiveSpellContext == EActiveSpellContext::Action)
 	{
 		CastingPlayer = ActionPhaseActiveController;
 	}
 	else
 	{
-		check(ActivePlayerSpellContext == EActiveSpellContext::Counter);
+		check(ActiveSpellContext == EActiveSpellContext::Counter);
 		CastingPlayer = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
 	}
 
@@ -2407,6 +2419,9 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 			UE_LOG(LogConquest, Log, TEXT("Executing end round action for Tower %s. Action index = %i"), 
 				*TowerToRun->GetFName().ToString(), Index + 1);
 
+			// We can track any damage or healing applied (some towers may use it)
+			CacheAndClearHealthReports();
+
 			TowerToRun->ExecuteEndRoundPhaseAction();
 			bRunningTowerEndRoundAction = true;
 
@@ -2461,33 +2476,65 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 
 
 
+TArray<FHealthChangeReport> ACSKGameMode::GetDamageHealthReports(bool bFilterOutDead) const
+{
+	return QueryPreviousHealthReports(true, nullptr, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameMode::GetHealingHealthReports() const
+{
+	return QueryPreviousHealthReports(false, nullptr, false);
+}
+
+TArray<FHealthChangeReport> ACSKGameMode::GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead) const
+{
+	return QueryPreviousHealthReports(true, PlayerState, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameMode::GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const
+{
+	return QueryPreviousHealthReports(false, PlayerState, false);
+}
 
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
-	if (HealthComp->IsDead())
+	// Get script interface as damage board piece could either be a castle or tower
+	AActor* CompOwner = HealthComp->GetOwner();
+	TScriptInterface<IBoardPieceInterface> BoardPieice(CompOwner);
+
+	if (!BoardPieice)
 	{
-		AActor* DeadPiece = HealthComp->GetOwner();
-		if (DeadPiece->IsA<ACastle>())
+		return;
+	}
+
+	ACSKPlayerState* PlayerState = BoardPieice->GetBoardPieceOwnerPlayerState();
+	check(PlayerState);
+
+	// This is used to generate the health report
+	bool bIsCastle = CompOwner->IsA<ACastle>();
+	bool bKilled = HealthComp->IsDead();
+
+	if (bKilled)
+	{
+		if (CompOwner->IsA<ACastle>())
 		{
-			ACastle* DestroyedCastle = static_cast<ACastle*>(DeadPiece);
-			
-			// for now
-			ACSKPlayerState* PlayerState = DestroyedCastle->GetBoardPieceOwnerPlayerState();	
+			ACastle* DestroyedCastle = static_cast<ACastle*>(CompOwner);
+
+			// for now TODO: Have action finish (this either being spell or end round phase action)
+			// then stop executing it after those	
 			EndMatch(GetOpposingPlayersController(PlayerState->GetCSKPlayerID()), ECSKMatchWinCondition::CastleDestroyed);
 		}
 		else
 		{
 			// TODO: Move to function
 			{
-				ATower* DestroyedTower = CastChecked<ATower>(DeadPiece);
-				ACSKPlayerState* PlayerState = DestroyedTower->GetBoardPieceOwnerPlayerState();
+				ATower* DestroyedTower = CastChecked<ATower>(CompOwner);
 
 				// Remove references from both board and player
 				{
 					ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
 					BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
 
-					
 					PlayerState->RemoveTower(DestroyedTower);
 				}
 
@@ -2519,31 +2566,76 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 				TimerManager.SetTimer(TempHandle, DestroyedTower, &AActor::K2_DestroyActor, 2.f);
 			}
 		}
+
+		UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has been destroyed"),
+			*CompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1);
 	}
 	else
 	{
-		// Get script interface as damage board piece could either be a castle or tower
-		AActor* HealthCompOwner = HealthComp->GetOwner();
-		TScriptInterface<IBoardPieceInterface> BoardPieice(HealthCompOwner);
-
-		if (BoardPieice)
+		// Positive delta = Healing, Negative delta = Damage
+		if (Delta > 0)
 		{
-			ACSKPlayerState* PlayerState = BoardPieice->GetBoardPieceOwnerPlayerState();
-			check(PlayerState);
-			
-			// Positive delta = Healing, Negative delta = Damage
-			if (Delta > 0)
-			{
-				UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recovered %i health"), 
-					*HealthCompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
-			}
-			else
-			{
-				UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recieved %i damage"),
-					*HealthCompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
-			}
+			UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recovered %i health"),
+				*CompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
+		}
+		else
+		{
+			UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has recieved %i damage"),
+				*CompOwner->GetName(), PlayerState->GetCSKPlayerID() + 1, Delta);
 		}
 	}
+
+	// Generate a change report and save it
+	{
+		FHealthChangeReport Report(CompOwner, PlayerState, bIsCastle, bKilled, Delta);
+		ActiveActionHealthReports.Add(MoveTemp(Report));
+	}
+}
+
+void ACSKGameMode::ClearHealthReports()
+{
+	ActiveActionHealthReports.Empty();
+	PreviousActionHealthReports.Empty();
+}
+
+void ACSKGameMode::CacheAndClearHealthReports()
+{
+	PreviousActionHealthReports = MoveTemp(ActiveActionHealthReports);
+}
+
+TArray<FHealthChangeReport> ACSKGameMode::QueryPreviousHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const
+{
+	TArray<FHealthChangeReport> Reports;
+	for (const FHealthChangeReport& Repo : PreviousActionHealthReports)
+	{
+		// Filter owner
+		if (InOwner)
+		{
+			if (Repo.Owner != InOwner)
+			{
+				continue;
+			}
+		}
+
+		// Filter out differen type
+		if (bDamaged != Repo.bWasDamaged)
+		{
+			continue;
+		}
+
+		// Only filter killed if checking damaged
+		if (bDamaged)
+		{			
+			if (bExcludeDead && Repo.bKilled)
+			{
+				continue;
+			}
+		}
+
+		Reports.Add(Repo);
+	}
+
+	return Reports;
 }
 
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)

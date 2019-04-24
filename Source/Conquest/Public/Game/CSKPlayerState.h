@@ -168,6 +168,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const;
 
+	/** Get how many duplicates of different tower types this player on */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	int32 GetNumOwnedTowerDuplicateTypes() const;
+
 	/** Get if this player is able to cast another spell based on how many spells we can use.
 	Can optionally check if we can afford to cast any of the spells currently in our hand */
 	UFUNCTION(BlueprintPure, Category = Resources)

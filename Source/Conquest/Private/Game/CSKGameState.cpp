@@ -817,6 +817,7 @@ void ACSKGameState::UpdateRules()
 		ActionPhaseTime = GameMode->GetActionPhaseTime();
 		MaxNumTowers = GameMode->GetMaxNumTowers();
 		MaxNumDuplicatedTowers = GameMode->GetMaxNumDuplicatedTowers();
+		MaxNumDuplicatedTowerTypes = GameMode->GetMaxNumDuplicatedTowerTypes();
 		MaxNumLegendaryTowers = GameMode->GetMaxNumLegendaryTowers();
 		MaxBuildRange = GameMode->GetMaxBuildRange();
 		MinTileMovements = GameMode->GetMinTileMovementsPerTurn();
@@ -862,7 +863,7 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	if (DefaultTower->IsLegendaryTower())
 	{
 		// Has player built max amount of legendary towers allowed?
-		if (PlayerState->GetNumLegendaryTowersOwned() >= MaxNumLegendaryTowers)
+		if (MaxNumLegendaryTowers > 0 && PlayerState->GetNumLegendaryTowersOwned() >= MaxNumLegendaryTowers)
 		{
 			return false;
 		}
@@ -876,17 +877,27 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	else
 	{
 		// Has player built the max amount of normal towers allowed?
-		if (PlayerState->GetNumNormalTowersOwned() >= MaxNumTowers)
+		if (MaxNumTowers > 0 && PlayerState->GetNumNormalTowersOwned() >= MaxNumTowers)
 		{
 			return false;
 		}
 
-		// TODO: Need to check if player has already X amount of duped buildings of any kind
+		int32 TowerInstanceCount = PlayerState->GetNumOwnedTowerDuplicates(TowerClass);
 
-		// Has player already built the max amount of duplicates?
-		if (PlayerState->GetNumOwnedTowerDuplicates(TowerClass) >= MaxNumDuplicatedTowers)
+		// Has player already built the max amount of duplicates for this tower?
+		if (MaxNumDuplicatedTowers > 0 && TowerInstanceCount >= MaxNumDuplicatedTowers)
 		{
 			return false;
+		}
+
+		// Has player already created too many duplicates for different towers?
+		if (MaxNumDuplicatedTowerTypes > 0 && PlayerState->GetNumOwnedTowerDuplicateTypes() >= MaxNumDuplicatedTowerTypes)
+		{
+			// Player might be attempting to build duplicate of this building
+			if ((TowerInstanceCount + 1) > 1)
+			{
+				return false;
+			}
 		}
 	}
 

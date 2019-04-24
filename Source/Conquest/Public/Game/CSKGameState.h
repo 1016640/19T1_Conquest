@@ -410,6 +410,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	int32 MaxNumDuplicatedTowers;
 
+	/** The max amount of duplicated types of all NORMAL towers player can have built at once */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	int32 MaxNumDuplicatedTowerTypes;
+
 	/** The max number of LEGENDARY towers a player can have built at once */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	int32 MaxNumLegendaryTowers;
