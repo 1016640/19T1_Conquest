@@ -70,7 +70,7 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 
 int32 UHealthComponent::RestoreHealth(int32 Amount)
 {
-	if (GetOwnerRole() == ROLE_Authority && !IsDead())
+	if (GetOwnerRole() == ROLE_Authority && !(IsDead() || IsFullyHealed()))
 	{
 		if (Amount <= 0)
 		{

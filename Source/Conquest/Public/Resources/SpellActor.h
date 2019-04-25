@@ -89,8 +89,36 @@ private:
 	/** If this spell has been cancelled */
 	uint8 bCancelled : 1;
 
-public:
+protected:
 
-	/** Get the additional mana that was used to cast this spell */
+	/** Enables input from our casters player controller. On Tile Selected
+	will only be called on the server, all other inputs on the client */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	void BindPlayerInput();
 
+	/** Disables input from our casters player controller. Will automatically
+	be called when ending execution while input has been bound */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	void UnbindPlayerInput();
+
+	/** If the player is allowed to select the given tile for spell.
+	This can run on both the owning players client and the server */
+	UFUNCTION(BlueprintImplementableEvent, Category = Spells, meta = (DisplayName = "Can Select Tile for Spell"))
+	bool BP_CanSelectTileForSpell(ATile* TargetTile);
+
+	/** Called when player has selected the given tile for spell. This only
+	executes on the server and when CanSelectTileForSpell has returned true */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Spells, meta = (DisplayName = "On Tile Selected for Spell"))
+	void BP_OnTileSelectedForSpell(ATile* TargetTile);
+
+private:
+
+	/** Binds custom tile selection callbacks client side */
+	UFUNCTION(Client, Reliable)
+	void Client_BindPlayerInput(bool bBind);
+
+private:
+
+	/** If custom tile selection callbacks have been bound */
+	uint8 bIsInputBound : 1;
 };

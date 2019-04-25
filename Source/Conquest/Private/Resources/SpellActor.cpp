@@ -2,12 +2,11 @@
 
 #include "SpellActor.h"
 #include "CSKGameMode.h"
+#include "CSKPlayerController.h"
+#include "CSKPlayerState.h"
 
 #include "TimerManager.h"
 #include "Components/SceneComponent.h"
-
-// temp
-#include "CSKPlayerState.h"
 
 ASpellActor::ASpellActor()
 {
@@ -61,18 +60,6 @@ void ASpellActor::BeginExecution()
 	}
 }
 
-bool ASpellActor::CheckSpellIsCancelled()
-{
-	bool bWasCancelled = bCancelled;
-
-	if (bCancelled && bRunning)
-	{
-		FinishSpell();
-	}
-
-	return bWasCancelled;
-}
-
 void ASpellActor::CancelExecution()
 {
 	if (bRunning)
@@ -97,6 +84,12 @@ void ASpellActor::FinishSpell()
 {
 	if (bRunning)
 	{
+		// Unbind any callbacks we may have bound
+		if (bIsInputBound)
+		{
+			UnbindPlayerInput();
+		}
+
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
@@ -105,5 +98,88 @@ void ASpellActor::FinishSpell()
 
 		bRunning = false;
 		bCancelled = false;
+	}
+}
+
+bool ASpellActor::CheckSpellIsCancelled()
+{
+	bool bWasCancelled = bCancelled;
+
+	if (bCancelled && bRunning)
+	{
+		FinishSpell();
+	}
+
+	return bWasCancelled;
+}
+
+void ASpellActor::BindPlayerInput()
+{
+	if (HasAuthority())
+	{
+		if (bRunning && !bCancelled && !bIsInputBound)
+		{
+			ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
+			if (Controller)
+			{
+				Controller->CustomCanSelectTile.BindDynamic(this, &ASpellActor::BP_CanSelectTileForSpell);
+				Controller->CustomOnSelectTile.BindDynamic(this, &ASpellActor::BP_OnTileSelectedForSpell);
+
+				// Notify client to also bind callbacks
+				Client_BindPlayerInput(true);
+
+				bIsInputBound = true;
+			}
+		}
+	}
+}
+
+void ASpellActor::UnbindPlayerInput()
+{
+	if (HasAuthority())
+	{
+		if (bRunning && !bCancelled && !bIsInputBound)
+		{
+			ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
+			if (Controller)
+			{
+				Controller->CustomCanSelectTile.Unbind();
+				Controller->CustomOnSelectTile.Unbind();
+
+				// Notify client to also unbind callbacks
+				Client_BindPlayerInput(false);
+
+				bIsInputBound = false;
+			}
+		}
+	}
+}
+
+void ASpellActor::Client_BindPlayerInput_Implementation(bool bBind)
+{
+	if (CastingPlayer)
+	{
+		ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
+		if (CastingPlayer)
+		{
+			if (bBind)
+			{
+				EnableInput(Controller);
+				Controller->CustomCanSelectTile.BindDynamic(this, &ASpellActor::BP_CanSelectTileForSpell);
+
+				// Player needs to be able to move
+				Controller->SetIgnoreMoveInput(false);
+				Controller->SetCanSelectTile(true);
+			}
+			else
+			{
+				DisableInput(Controller);
+				Controller->CustomCanSelectTile.Unbind();
+
+				// Player should no longer be able to move
+				Controller->SetIgnoreMoveInput(true);
+				Controller->SetCanSelectTile(false);
+			}
+		}
 	}
 }

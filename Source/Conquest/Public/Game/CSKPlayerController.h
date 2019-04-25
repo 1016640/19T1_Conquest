@@ -165,6 +165,11 @@ protected:
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	void OnNewTileHovered(ATile* NewTile);
 
+public:
+
+	/** Sets whether we can select tiles */
+	void SetCanSelectTile(bool bEnable);
+
 private:
 
 	/** Attempts to perform an action using the current hovered tile */
@@ -172,11 +177,6 @@ private:
 
 	/** Resets our camera to focus on our castle */
 	void ResetCamera();
-
-public: // Temp
-
-	/** Sets whethere we can select tiles */
-	void SetCanSelectTile(bool bEnable);
 
 protected:
 

@@ -258,6 +258,38 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 {
 	check(IsLocalPlayerController());
 
+	// Either a spell actor or a tower has bound to input, we
+	// can show if the action can be executed similar to spells
+	// We check this first as we prioritize spell actor bindings
+	// over spell cast ones (since spell actor is more relevant)
+	if (CustomCanSelectTile.IsBound())
+	{
+		SetTileCandidatesSelectionState(ETileSelectionState::NotSelectable);
+
+		// Tile will be null if no longer hovering over the board
+		if (NewTile)
+		{
+			// We only display the hovered tile to be selectable
+			SelectedActionTileCandidates.Empty(1);
+			SelectedActionTileCandidates.Add(NewTile);
+
+			if (CustomCanSelectTile.Execute(NewTile))
+			{
+				NewTile->SetSelectionState(ETileSelectionState::SelectablePriority);
+			}
+			else
+			{
+				NewTile->SetSelectionState(ETileSelectionState::UnselectablePriority);
+			}
+		}
+		else
+		{
+			SelectedActionTileCandidates.Empty();
+		}
+
+		return;
+	}
+
 	bool bDisplaySpellSelection = false;
 
 	// We want to update the selectable tile based off our current spell we have selected
@@ -298,10 +330,30 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 	}
 }
 
+void ACSKPlayerController::SetCanSelectTile(bool bEnable)
+{
+	if (bCanSelectTile != bEnable)
+	{
+		bCanSelectTile = bEnable;
+
+		if (!bCanSelectTile)
+		{
+
+		}
+	}
+}
+
 void ACSKPlayerController::SelectTile()
 {
 	if (!bCanSelectTile || !HoveredTile)
 	{
+		return;
+	}
+
+	// temp fix: problem is that spell actors binding input are being overriden by IsPerformingActionPhase()
+	if ((CustomCanSelectTile.IsBound() && CustomCanSelectTile.Execute(HoveredTile)))
+	{
+		Server_ExecuteCustomOnSelectTile(HoveredTile);
 		return;
 	}
 
@@ -348,10 +400,11 @@ void ACSKPlayerController::SelectTile()
 
 	// Execute custom selection last. We check CanSelect both on client and the server
 	// (We can skip the check here completely if we are the server to prevent the check twice)
-	if (HasAuthority() || (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(HoveredTile)))
+	/*if (HasAuthority() || (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(HoveredTile)))
 	{
 		Server_ExecuteCustomOnSelectTile(HoveredTile);
-	}
+		return;
+	}*/
 }
 
 void ACSKPlayerController::ResetCamera()
@@ -360,19 +413,6 @@ void ACSKPlayerController::ResetCamera()
 	if (CSKPawn && CastlePawn)
 	{
 		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation());
-	}
-}
-
-void ACSKPlayerController::SetCanSelectTile(bool bEnable)
-{
-	if (bCanSelectTile != bEnable)
-	{
-		bCanSelectTile = bEnable;
-
-		if (!bCanSelectTile)
-		{
-
-		}
 	}
 }
 

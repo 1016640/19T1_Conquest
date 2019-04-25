@@ -201,12 +201,12 @@ protected:
 	/** Binds the custom tile selection to our owners player controller. This will
 	only work during the end round action and will be automatically unbound. */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
-	void BindPlayerTileSelectionCallbacks();
+	void BindPlayerInput();
 
 	/** Unbinds the custom tile selection from our owners player controller. This should be
 	used when custom selection is no longer desired but can be left as it will be auto unbound */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
-	void UnbindPlayerTileSelectionCallbacks();
+	void UnbindPlayerInput();
 
 	/** If the player is allowed to select the given tile for end round action phase.
 	This can run on both the owning players client and the server */
@@ -215,17 +215,17 @@ protected:
 
 	/** Called when player has selected the given tile for end round action. This only
 	executes on the server and when CanSelectTileForAction has returned true */
-	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName = "On Tile Selected for Action"))
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = BoardPiece, meta = (DisplayName = "On Tile Selected for Action"))
 	void BP_OnTileSelectedForAction(ATile* TargetTile);
 
 private:
 
-	/** Binds custom tile selection callbacks client side */
+	/** Binds player input client side */
 	UFUNCTION(Client, Reliable)
-	void Client_BindPlayerTileSelectionCallbacks(bool bBind);
+	void Client_BindPlayerInput(bool bBind);
 
 private:
 
-	/** If custom tile selection callbacks have been bound */
-	uint8 bIsCustomTileCallbacksBound : 1;
+	/** If player input has been bound*/
+	uint8 bIsInputBound : 1;
 };
