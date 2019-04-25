@@ -315,8 +315,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (DisplayName="Set Action Mode"))
 	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
-	/** Enables/Disables this players quick effect ussage */
-	void SetQuickEffectUsageEnabled(bool bEnable);
+	/** Enables/Disables this players nullify quick effect selection */
+	void SetNullifyQuickEffectSelectionEnabled(bool bEnable);
+
+	/** Enables/Disables this players post quick effect selection */
+	void SetPostQuickEffectSelectionEnabled(bool bEnable);
+
+	/** Resets both quick effect selection options */
+	void ResetQuickEffectSelections();
 
 	/** Enables/Disables this players bonus spell selection */
 	void SetBonusSpellSelectionEnabled(bool bEnable);
@@ -365,9 +371,13 @@ private:
 	UFUNCTION()
 	void OnRep_RemainingActions();
 
-	/** Notify that can use quick effect has been replicated */
+	/** Notify that can select quick effect has been replicated */
 	UFUNCTION()
-	void OnRep_bCanUseQuickEffect();
+	void OnRep_bCanSelectNullifyQuickEffect();
+
+	/** Notify that can select quick effect target has been replicated */
+	UFUNCTION()
+	void OnRep_bCanSelectPostQuickEffect();
 
 	/** Notify than can select bonus spell target has been replicated */
 	UFUNCTION()
@@ -387,9 +397,13 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
-	/** If this player is allowed to select a counter spell */
-	UPROPERTY(ReplicatedUsing = OnRep_bCanUseQuickEffect)
-	uint32 bCanUseQuickEffect : 1;
+	/** If this player is allowed to select a nullify counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectNullifyQuickEffect)
+	uint32 bCanSelectNullifyQuickEffect : 1;
+
+	/** If this player is allowed to select a post action spell counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectPostQuickEffect)
+	uint32 bCanSelectPostQuickEffect : 1;
 
 	/** If this player can select a bonus spell target */
 	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectBonusSpellTarget)
@@ -421,17 +435,22 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
 
-	/** Notify that this player is able to counter an incoming spell cast */
+	/** Notify that this player is able to counter an incoming spell cast
+	(and if the spell is selection is a nullify or post action counter )*/
 	UFUNCTION(Client, Reliable)
-	void Client_OnSelectCounterSpell(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
+	void Client_OnSelectCounterSpell(bool bNullify, TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
 
 	/** Notify that this players spell request is pending as the opposing player is selecting a counter */
 	UFUNCTION(Client, Reliable)
-	void Client_OnWaitForCounterSpell();
+	void Client_OnWaitForCounterSpell(bool bNullify);
 
-	/** Notify that this player is able to select a tile to use bonus spell on */
+	/** Notify that this player is able to select a tile to use a bonus spell on */
 	UFUNCTION(Client, Reliable)
 	void Client_OnSelectBonusSpellTarget(TSubclassOf<USpell> BonusSpell);
+
+	/** Notify that the opposing player is able to select a tile to use a bonus spell on */
+	UFUNCTION(Client, Reliable)
+	void Client_OnWaitForBonusSpell();
 
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
@@ -522,7 +541,7 @@ public:
 
 	/** Get the list of quick effect spells this player can cast (in hand) */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells = true) const;
 
 	/** Get the bonus elemental spell this player can cast */
 	UFUNCTION(BlueprintPure, Category = CSK)

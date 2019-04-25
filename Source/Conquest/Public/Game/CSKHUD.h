@@ -56,10 +56,10 @@ public:
 
 	/** Notify that the opposing player (to whose action phase it is) has started to select a counter spell.
 	Passes in if our owner is the one instigating this selection (the one who can counter the spell) */
-	void OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile);
+	void OnQuickEffectSelection(bool bInstigator, bool bNullify, const USpell* SpellToCounter, ATile* TargetTile);
 
 	/** Notify that this player is able to select a tile to use the given bonus spell on */
-	void OnBonusSpellSelection(const USpell* BonusSpell);
+	void OnBonusSpellSelection(bool bInstigator, const USpell* BonusSpell);
 
 public:
 

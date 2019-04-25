@@ -25,9 +25,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Spells)
 	bool HasSpellOfType(ESpellType SpellType) const;
 
-	/** Check if given player can afford at least one spell of this card */
+	/** Check if given player can afford at least one spell of this card. Can query
+	either nullify or post quick effect spells if specified type is Quick Effect */
 	UFUNCTION(BlueprintCallable, Category = Spells)
-	bool CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellType SpellType) const;
+	bool CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellType SpellType, bool bNullifySpells = true) const;
 
 public:
 

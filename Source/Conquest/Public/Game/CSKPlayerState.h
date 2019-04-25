@@ -179,7 +179,7 @@ public:
 
 	/** Get if this player is able to cast a quick effect spell. This checks for the cost of the spell */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool CanCastQuickEffectSpell() const;
+	bool CanCastQuickEffectSpell(bool bNullifySpells) const;
 
 	/** Get if this player has infinite spell uses */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -191,7 +191,7 @@ public:
 
 	/** Get all the quick effect spells this player is able to cast */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells) const;
 
 	/** Get the cost of given spell discounted by this players spell discount */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -200,10 +200,10 @@ public:
 private:
 
 	/** Get if this player is able to afford any spell of type */
-	bool CanAffordSpellOfType(ESpellType SpellType) const;
+	bool CanAffordSpellOfType(ESpellType SpellType, bool bNullifySpells = true) const;
 
 	/** Get the spells of type this player can afford */
-	void GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const;
+	void GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType, bool bNullifySpells = true) const;
 
 public:
 
@@ -328,7 +328,7 @@ public:
 	void ResetTilesTraversed();
 
 	/** Increments the spells we have cast this round */
-	void IncrementSpellsCast();
+	void IncrementSpellsCast(bool bIsQuickEffect);
 
 	/** Resets the spells cast count for next round */
 	void ResetSpellsCast();

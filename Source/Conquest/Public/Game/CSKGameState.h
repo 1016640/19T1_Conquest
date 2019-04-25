@@ -295,7 +295,7 @@ public:
 	void HandleSpellRequestFinished();
 
 	/** Notify that a quick effect is being selected */
-	void HandleQuickEffectSelectionStart();
+	void HandleQuickEffectSelectionStart(bool bNullify);
 
 	/** Notify that a bonus spell is being targeted */
 	void HandleBonusSpellSelectionStart();
@@ -328,7 +328,7 @@ private:
 
 	/** Handle quick effect selection client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleQuickEffectSelection();
+	void Multi_HandleQuickEffectSelection(bool bNullify);
 
 	/** Handle bonus spell selection client side */
 	UFUNCTION(NetMulticast, Reliable)

@@ -171,9 +171,9 @@ private:
 
 public:
 
-	FORCEINLINE static int32 HexLength(const FHex& Hex)
+	FORCEINLINE static int32 HexLength(FHex Hex)
 	{
-		return Hex.GetMax();
+		return FMath::DivideAndRoundDown(FMath::Abs(Hex.X) + FMath::Abs(Hex.Y) + FMath::Abs(Hex.Z), 2);
 	}
 
 	FORCEINLINE static int32 HexDisplacement(const FHex& H1, const FHex& H2)

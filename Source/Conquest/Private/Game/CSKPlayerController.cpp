@@ -15,6 +15,7 @@
 #include "Tower.h"
 #include "TowerConstructionData.h"
 
+#include "TimerManager.h"
 #include "Components/InputComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
@@ -33,7 +34,9 @@ ACSKPlayerController::ACSKPlayerController()
 	bIsActionPhase = false;
 	SelectedAction = ECSKActionPhaseMode::None;
 	RemainingActions = ECSKActionPhaseMode::All;
-	bCanUseQuickEffect = false;
+	bCanSelectNullifyQuickEffect = false;
+	bCanSelectPostQuickEffect = false;
+	bCanSelectBonusSpellTarget = false;
 }
 
 void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
@@ -136,7 +139,8 @@ void ACSKPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(ACSKPlayerController, CastlePawn);
 	DOREPLIFETIME(ACSKPlayerController, bIsActionPhase);
 	DOREPLIFETIME(ACSKPlayerController, RemainingActions);
-	DOREPLIFETIME(ACSKPlayerController, bCanUseQuickEffect);
+	DOREPLIFETIME(ACSKPlayerController, bCanSelectNullifyQuickEffect);
+	DOREPLIFETIME(ACSKPlayerController, bCanSelectPostQuickEffect);
 	DOREPLIFETIME(ACSKPlayerController, bCanSelectBonusSpellTarget);
 }
 
@@ -150,7 +154,7 @@ void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> 
 
 void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
 {
-	if (IsLocalPlayerController() && (IsPerformingActionPhase() || bCanUseQuickEffect))
+	if (IsLocalPlayerController() && (IsPerformingActionPhase() || bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect))
 	{
 		SelectedSpellCard = InSpellCard;
 		
@@ -164,7 +168,7 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 			if (!DefaultSpell->RequiresTarget())
 			{
 				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
-				if (bCanUseQuickEffect)
+				if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 				{
 					Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
 				}
@@ -261,7 +265,7 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 	{
 		bDisplaySpellSelection = SelectedAction == ECSKActionPhaseMode::CastSpell;
 	}
-	else if (bCanUseQuickEffect || bCanSelectBonusSpellTarget)
+	else if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect || bCanSelectBonusSpellTarget)
 	{
 		bDisplaySpellSelection = true;
 	}
@@ -336,7 +340,7 @@ void ACSKPlayerController::SelectTile()
 	
 	// We can check this after as players can only perform
 	// quick effect attacks when not performing their action phase
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 	{
 		CastQuickEffectSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 		return;
@@ -515,8 +519,8 @@ void ACSKPlayerController::Client_OnCollectionPhaseResourcesTallied_Implementati
 
 void ACSKPlayerController::OnCollectionResourcesTallied_Implementation(const FCollectionPhaseResourcesTally& TalliedResources)
 {
-	// Just end immediately if not implemented
-	FinishCollectionSequenceEvent();
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimerForNextTick(this, &ACSKPlayerController::FinishCollectionSequenceEvent);
 }
 
 void ACSKPlayerController::FinishCollectionSequenceEvent()
@@ -589,7 +593,8 @@ void ACSKPlayerController::SetActionPhaseEnabled(bool bEnabled)
 			}
 			else
 			{
-				bCanUseQuickEffect = false;
+				bCanSelectNullifyQuickEffect = false;
+				bCanSelectPostQuickEffect = false;
 				bCanSelectBonusSpellTarget = false;
 			}
 
@@ -642,17 +647,36 @@ void ACSKPlayerController::BP_SetActionMode(ECSKActionPhaseMode NewMode)
 	SetActionMode(NewMode);
 }
 
-void ACSKPlayerController::SetQuickEffectUsageEnabled(bool bEnable)
+void ACSKPlayerController::SetNullifyQuickEffectSelectionEnabled(bool bEnable)
 {
-	if (HasAuthority() && bCanUseQuickEffect != bEnable)
+	if (HasAuthority() && bCanSelectNullifyQuickEffect != bEnable)
 	{
-		bCanUseQuickEffect = bEnable;
+		bCanSelectNullifyQuickEffect = bEnable;
 
 		if (IsLocalPlayerController())
 		{
-			OnRep_bCanUseQuickEffect();
+			OnRep_bCanSelectNullifyQuickEffect();
 		}
 	}
+}
+
+void ACSKPlayerController::SetPostQuickEffectSelectionEnabled(bool bEnable)
+{
+	if (HasAuthority() && bCanSelectPostQuickEffect != bEnable)
+	{
+		bCanSelectPostQuickEffect = bEnable;
+
+		if (IsLocalPlayerController())
+		{
+			OnRep_bCanSelectPostQuickEffect();
+		}
+	}
+}
+
+void ACSKPlayerController::ResetQuickEffectSelections()
+{
+	SetNullifyQuickEffectSelectionEnabled(false);
+	SetPostQuickEffectSelectionEnabled(false);
 }
 
 void ACSKPlayerController::SetBonusSpellSelectionEnabled(bool bEnable)
@@ -803,9 +827,21 @@ void ACSKPlayerController::OnRep_RemainingActions()
 	}
 }
 
-void ACSKPlayerController::OnRep_bCanUseQuickEffect()
+void ACSKPlayerController::OnRep_bCanSelectNullifyQuickEffect()
 {
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect)
+	{
+		SetCanSelectTile(true);
+	}
+	else if (ensure(!IsPerformingActionPhase()))
+	{
+		SetCanSelectTile(false);
+	}
+}
+
+void ACSKPlayerController::OnRep_bCanSelectPostQuickEffect()
+{
+	if (bCanSelectPostQuickEffect)
 	{
 		SetCanSelectTile(true);
 	}
@@ -821,7 +857,7 @@ void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 	{
 		SetCanSelectTile(true);
 	}
-	else
+	else if (!IsPerformingActionPhase())
 	{
 		SetCanSelectTile(false);
 	}
@@ -948,18 +984,18 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 {
 	SetCanSelectTile(false);
 
+	// Avoid setting it twice, as this function will get
+	// called twice before Finish if casting a bonus spell
+	if (!IsMoveInputIgnored())
+	{
+		SetIgnoreMoveInput(true);
+	}
+
 	ACSKPawn* CSKPawn = GetCSKPawn();
 	if (CSKPawn && TargetTile)
 	{
 		// Have players watch spell in action	
 		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
-
-		// Avoid setting it twice, as this function will get
-		// called twice before Finish if casting a bonus spell
-		if (!IsMoveInputIgnored())
-		{
-			SetIgnoreMoveInput(true);
-		}
 	}
 
 	// This can be reset here safely
@@ -982,24 +1018,26 @@ void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EAct
 	}
 }
 
-void ACSKPlayerController::Client_OnSelectCounterSpell_Implementation(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile)
+void ACSKPlayerController::Client_OnSelectCounterSpell_Implementation(bool bNullify, TSubclassOf<USpell> SpellToCounter, ATile* TargetTile)
 {
 	SetCanSelectTile(true);
+	SetIgnoreMoveInput(false);
 
 	if (CachedCSKHUD)
 	{
 		const USpell* DefaultSpell = SpellToCounter.GetDefaultObject();
-		CachedCSKHUD->OnQuickEffectSelection(true, DefaultSpell, TargetTile);
+		CachedCSKHUD->OnQuickEffectSelection(true, bNullify, DefaultSpell, TargetTile);
 	}
 }
 
-void ACSKPlayerController::Client_OnWaitForCounterSpell_Implementation()
+void ACSKPlayerController::Client_OnWaitForCounterSpell_Implementation(bool bNullify)
 {
 	SetCanSelectTile(false);
+	SetIgnoreMoveInput(false);
 
 	if (CachedCSKHUD)
 	{
-		CachedCSKHUD->OnQuickEffectSelection(false, nullptr, nullptr);
+		CachedCSKHUD->OnQuickEffectSelection(false, bNullify, nullptr, nullptr);
 	}
 }
 
@@ -1013,7 +1051,18 @@ void ACSKPlayerController::Client_OnSelectBonusSpellTarget_Implementation(TSubcl
 	if (CachedCSKHUD)
 	{
 		const USpell* DefaultSpell = BonusSpell.GetDefaultObject();
-		CachedCSKHUD->OnBonusSpellSelection(DefaultSpell);
+		CachedCSKHUD->OnBonusSpellSelection(true, DefaultSpell);
+	}
+}
+
+void ACSKPlayerController::Client_OnWaitForBonusSpell_Implementation()
+{
+	SetCanSelectTile(false);
+	SetIgnoreMoveInput(false);
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnBonusSpellSelection(false, nullptr);
 	}
 }
 
@@ -1097,7 +1146,7 @@ void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellC
 		return;
 	}
 
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 	{
 		if (HoveredTile)
 		{
@@ -1114,7 +1163,7 @@ void ACSKPlayerController::SkipQuickEffectSpell()
 		return;
 	}
 
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 	{
 		Server_SkipQuickEffectSelection();
 	}
@@ -1260,7 +1309,7 @@ void ACSKPlayerController::Server_RequestCastQuickEffectAction_Implementation(TS
 {
 	bool bSuccess = false;
 
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 	{
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
@@ -1285,7 +1334,7 @@ void ACSKPlayerController::Server_SkipQuickEffectSelection_Implementation()
 {
 	bool bSuccess = false;
 
-	if (bCanUseQuickEffect)
+	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 	{
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
@@ -1369,12 +1418,12 @@ void ACSKPlayerController::GetCastableSpells(TArray<TSubclassOf<USpellCard>>& Ou
 	}
 }
 
-void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+void ACSKPlayerController::GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells) const
 {
 	ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
 	if (CSKPlayerState)
 	{
-		CSKPlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards);
+		CSKPlayerState->GetQuickEffectSpellsPlayerCanCast(OutSpellCards, bNullifySpells);
 	}
 }
 

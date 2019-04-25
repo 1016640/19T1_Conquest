@@ -439,6 +439,8 @@ private:
 	/** Disables the action mode for active player. Will end this phase if no actions remain */
 	void DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode);
 
+	/** ----- MOVE ACTION ----- */
+
 	/** Starts movement request for active player. The request still has the chance of failing */
 	bool ConfirmCastleMove(const FBoardPath& BoardPath);
 
@@ -457,6 +459,8 @@ private:
 	Will return true if the win condition has been met, false otherwise */
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
+	/** ----- BUILD ACTION ----- */
+
 	/** Finalizes build request for active player. The request still has a chance of failing */
 	bool ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstructionData* ConstructData);
 
@@ -473,12 +477,14 @@ private:
 	UFUNCTION()
 	void OnPendingTowerBuildSequenceComplete();
 
+	/** ----- SPELL ACTION ----- */
+
 	/** Starts casting the spell. Will determine the instigator based on passed context */
 	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, 
 		ATile* Tile, EActiveSpellContext Context, bool bConsumeOnlyQuickEffect = false);
 
 	/** Finishes the spell currently be cast */
-	void FinishCastSpell(bool bIgnoreBonusCheck = false);
+	void FinishCastSpell(bool bIgnoreQuickEffectCheck = false, bool bIgnoreBonusCheck = false);
 
 	/** Spawns the spell actor for given spell at tile */
 	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, int32 AdditionalMana, ACSKPlayerState* PlayerState) const;
@@ -486,14 +492,23 @@ private:
 	/** Notify from timer that we should execute the spell cast */
 	void OnStartActiveSpellCast();
 
-	/** Saves the incoming spell request and informs opposing player to choose a counter */
-	void SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana);
+	/** Saves an incoming action spell request to be cast at a later time.
+	Will notify the opposing player to select a nullify spell request*/
+	void SaveActionSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, 
+		int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana);
 
-	/** Post spell action check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
+	/** Post action spell check to determine if the opposing player can
+	select a post quick effect spell. Get if a quick effect is being cast */
+	bool PostCastSpellWaitForCounterSelection();
+
+	/** Post action spell check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
 	bool PostCastSpellActivateBonusSpell();
 
 	/** Saves the incoming bonus spell and informs casting player to choose a target */
 	void SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> InBonusSpell);
+
+	/** Notifies players and game state to wait for quick effect selection */
+	void OnStartWaitForCounterSelection(bool bNullify, TSubclassOf<USpell> SpellToCounter, ATile* TargetTile) const;
 
 public:
 
@@ -521,7 +536,8 @@ private:
 	/** If we should allow any action requests */
 	FORCEINLINE bool ShouldAcceptRequests() const
 	{
-		return !(IsWaitingForAction() || !bWaitingOnQuickEffectSelection);
+		return !(IsWaitingForAction() || 
+			!(bWaitingOnNullifyQuickEffectSelection || bWaitingOnPostQuickEffectSelection || bWaitingOnBonusSpellSelection));
 	}
 
 	/** Resets all wait action flags */
@@ -534,16 +550,16 @@ private:
 		ActivePlayerPendingTower = nullptr;
 		ActivePlayerPendingTowerTile = nullptr;
 		
-		bWaitingOnQuickEffectSelection = false;
+		bWaitingOnNullifyQuickEffectSelection = false;
 		ActiveSpell = nullptr;
 		ActiveSpellCard = nullptr;
 		ActiveSpellActor = nullptr;
+		ActiveSpellTarget = nullptr;
 		ActiveSpellContext = EActiveSpellContext::None;
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
 
 		ActivePlayerPendingSpellRequest.Reset();
-		QuickEffectPendingSpellRequest.Reset();
 	}
 
 protected:
@@ -563,11 +579,15 @@ private:
 	/** If we are waiting for actives players spell action to complete */
 	uint32 bWaitingOnSpellAction : 1;
 
+	/** ----- MOVE ACTION ----- */
+
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
 
 	/** Delegate handle for when active players castle reaches its destination tile */
 	FDelegateHandle Handle_ActivePlayerPathComplete;
+
+	/** ----- BUILD ACTION ----- */
 
 	/** The tower that is in the process of being built. Keeping this here so we can
 	wait for it to initially replicate to all clients before placing on the board */
@@ -585,18 +605,21 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
-	/** If we are waiting on the opposing player (against active player) to select a quick effect counter */
-	uint32 bWaitingOnQuickEffectSelection : 1;
+	/** ----- SPELL ACTION ----- */
+
+	/** If we are waiting on a nullify quick effect selection  */
+	uint32 bWaitingOnNullifyQuickEffectSelection : 1;
+
+	/** If we are waiting on a post action quick effect selection */
+	uint32 bWaitingOnPostQuickEffectSelection : 1;
+
+	/** If we are waiting on the player who casted the current spell to select a target for the bonus spell */
+	uint32 bWaitingOnBonusSpellSelection : 1;
 
 	/** The active players pending spell request. This saves an incoming action spell
 	request while the opposing player selects a potential quick effect spell */
 	UPROPERTY(Transient)
 	FPendingSpellRequest ActivePlayerPendingSpellRequest;
-
-	/** The opposing players pending quick effect request. This is saved after a quick
-	effect has been selected and it doesn't immediately nullify active players spell */
-	UPROPERTY(Transient)
-	FPendingSpellRequest QuickEffectPendingSpellRequest;
 
 	/** The spell being cast by active player (Points to default object). */
 	UPROPERTY()
@@ -610,11 +633,12 @@ private:
 	UPROPERTY()
 	ASpellActor* ActiveSpellActor;
 
+	/** The target for the active spell */
+	UPROPERTY()
+	ATile* ActiveSpellTarget;
+
 	/** The context of the spell being cast */
 	EActiveSpellContext ActiveSpellContext;
-
-	/** If we are waiting on the player who casted the current spell to select a target for the bonus spell */
-	uint32 bWaitingOnBonusSpellSelection : 1;
 
 	/** The bonus spell that is waiting to be cast */
 	UPROPERTY()

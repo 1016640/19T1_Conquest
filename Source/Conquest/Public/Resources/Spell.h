@@ -6,6 +6,8 @@
 #include "Spell.generated.h"
 
 class ACSKPlayerState;
+class ACSKGameMode;
+class ACSKGameState;
 class ASpellActor;
 class ATile;
 class USpellWidget;
@@ -57,6 +59,16 @@ public:
 	they are willing to spend. By default, will return DiscountedCost + AdditionalMana */
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 DiscountedCost, int32 AdditionalMana) const;
+
+protected:
+
+	/** Helper function for retrieving the CSK Game Mode */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	ACSKGameMode* GetCSKGameMode(const ACSKPlayerState* CastingPlayer) const;
+
+	/** Helper function for retrieving the CSK Game State */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	ACSKGameState* GetCSKGameState(const ACSKPlayerState* CastingPlayer) const;
 
 public:
 

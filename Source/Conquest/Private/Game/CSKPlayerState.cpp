@@ -357,9 +357,9 @@ bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
 	return false;
 }
 
-bool ACSKPlayerState::CanCastQuickEffectSpell() const
+bool ACSKPlayerState::CanCastQuickEffectSpell(bool bNullifySpells) const
 {
-	return CanAffordSpellOfType(ESpellType::QuickEffect);
+	return CanAffordSpellOfType(ESpellType::QuickEffect, bNullifySpells);
 }
 
 void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
@@ -367,9 +367,9 @@ void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& Ou
 	GetAffordableSpells(OutSpellCards, ESpellType::ActionPhase);
 }
 
-void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells) const
 {
-	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect);
+	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect, bNullifySpells);
 }
 
 int32 ACSKPlayerState::GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) const
@@ -383,12 +383,12 @@ int32 ACSKPlayerState::GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) cons
 	return -1;
 }
 
-bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const
+bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType, bool bNullifySpells) const
 {
 	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
 	{
 		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType, bNullifySpells))
 		{
 			return true;
 		}
@@ -397,14 +397,14 @@ bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const
 	return false;
 }
 
-void ACSKPlayerState::GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const
+void ACSKPlayerState::GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType, bool bNullifySpells) const
 {
 	OutSpellCards.Empty();
 
 	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
 	{
 		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType, bNullifySpells))
 		{
 			OutSpellCards.Add(SpellCard);
 		}
@@ -472,11 +472,19 @@ void ACSKPlayerState::ResetTilesTraversed()
 	}
 }
 
-void ACSKPlayerState::IncrementSpellsCast()
+void ACSKPlayerState::IncrementSpellsCast(bool bIsQuickEffect)
 {
 	if (HasAuthority())
 	{
-		++SpellsCastThisRound;
+		if (bIsQuickEffect)
+		{
+			++TotalQuickEffectSpellsCast;
+		}
+		else
+		{
+			++SpellsCastThisRound;
+		}
+
 		++TotalSpellsCast;
 	}
 }

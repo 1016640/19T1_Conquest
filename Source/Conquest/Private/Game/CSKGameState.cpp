@@ -546,7 +546,7 @@ void ACSKGameState::HandleSpellRequestFinished()
 	}
 }
 
-void ACSKGameState::HandleQuickEffectSelectionStart()
+void ACSKGameState::HandleQuickEffectSelectionStart(bool bNullify)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
@@ -559,7 +559,7 @@ void ACSKGameState::HandleQuickEffectSelectionStart()
 			QuickEffectCounterTimeRemaining = -1.f;
 		}
 
-		Multi_HandleQuickEffectSelection();
+		Multi_HandleQuickEffectSelection(bNullify);
 	}
 }
 
@@ -968,10 +968,11 @@ void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* Targ
 void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
 {
 	SetFreezeActionPhaseTimer(false);
+	bCountdownQuickEffectTimer = false;
 	bCountdownBonusSpellTimer = false;
 }
 
-void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
+void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation(bool bNullify)
 {
 	// We want to count down the quick effect selection time
 	bCountdownQuickEffectTimer = true;

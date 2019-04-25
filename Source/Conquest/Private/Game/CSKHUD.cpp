@@ -185,21 +185,21 @@ void ACSKHUD::OnActionFinished(ECSKActionPhaseMode Mode, EActiveSpellContext Spe
 	}
 }
 
-void ACSKHUD::OnQuickEffectSelection(bool bInstigator, const USpell* SpellToCounter, ATile* TargetTile)
+void ACSKHUD::OnQuickEffectSelection(bool bInstigator, bool bNullify, const USpell* SpellToCounter, ATile* TargetTile)
 {
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
-		Widget->OnQuickEffectSelection(bInstigator, SpellToCounter, TargetTile);
+		Widget->OnQuickEffectSelection(bInstigator, bNullify, SpellToCounter, TargetTile);
 	}
 }
 
-void ACSKHUD::OnBonusSpellSelection(const USpell* BonusSpell)
+void ACSKHUD::OnBonusSpellSelection(bool bInstigator, const USpell* BonusSpell)
 {
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
-		Widget->OnBonusSpellSelection(BonusSpell);
+		Widget->OnBonusSpellSelection(bInstigator, BonusSpell);
 	}
 }
 

@@ -74,9 +74,9 @@ public:
 	/** Notify that a player has started to select a spell to counter a pending request.
 	This gets called for either our owner selecting or our owner waiting */
 	UFUNCTION(BlueprintImplementableEvent)
-	void OnQuickEffectSelection(bool bIsSelecting, const USpell* SpellToCounter, ATile* TargetTile);
+	void OnQuickEffectSelection(bool bIsSelecting, bool bNullify, const USpell* SpellToCounter, ATile* TargetTile);
 
 	/** Notify that the player is allowed to select a target for bonus spell */
 	UFUNCTION(BlueprintImplementableEvent)
-	void OnBonusSpellSelection(const USpell* BonusSpell);
+	void OnBonusSpellSelection(bool bIsSelecting, const USpell* BonusSpell);
 };

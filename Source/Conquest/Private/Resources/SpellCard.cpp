@@ -24,7 +24,7 @@ bool USpellCard::HasSpellOfType(ESpellType SpellType) const
 	return false;
 }
 
-bool USpellCard::CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellType SpellType) const
+bool USpellCard::CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellType SpellType, bool bNullifySpells) const
 {
 	if (!CastingPlayer)
 	{
@@ -42,6 +42,13 @@ bool USpellCard::CanAffordAnySpell(const ACSKPlayerState* CastingPlayer, ESpellT
 
 		if (DefaultSpell->GetSpellType() == SpellType)
 		{
+			// If querying quick effect spells, we either want nullify or post spells
+			if (DefaultSpell->GetSpellType() == ESpellType::QuickEffect &&
+				DefaultSpell->NullifiesOtherSpell() != bNullifySpells)
+			{
+				continue;
+			}
+
 			// We only compare static cost, we don't have the
 			// information to calculate a dynamic cost at this time
 			if (DefaultSpell->ExpectsAdditionalMana())

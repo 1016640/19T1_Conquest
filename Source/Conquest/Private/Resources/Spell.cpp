@@ -2,6 +2,7 @@
 
 #include "Spell.h"
 #include "SpellActor.h"
+#include "CSKPlayerState.h"
 
 #define LOCTEXT_NAMESPACE "USpell"
 
@@ -38,6 +39,16 @@ int32 USpell::CalculateFinalCost_Implementation(const ACSKPlayerState* CastingPl
 	{
 		return DiscountedCost;
 	}
+}
+
+ACSKGameMode* USpell::GetCSKGameMode(const ACSKPlayerState* CastingPlayer) const
+{
+	return UConquestFunctionLibrary::GetCSKGameMode(CastingPlayer);
+}
+
+ACSKGameState* USpell::GetCSKGameState(const ACSKPlayerState* CastingPlayer) const
+{
+	return UConquestFunctionLibrary::GetCSKGameState(CastingPlayer);
 }
 
 #undef LOCTEXT_NAMESPACE
