@@ -154,7 +154,7 @@ void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> 
 
 void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
 {
-	if (IsLocalPlayerController() && (IsPerformingActionPhase() || bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect))
+	if (IsLocalPlayerController() /*&& (IsPerformingActionPhase() || bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)*/)
 	{
 		SelectedSpellCard = InSpellCard;
 		
@@ -170,11 +170,11 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
 				if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 				{
-					Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+					//Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
 				}
 				else
 				{
-					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+					//Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
 				}
 			}
 		}
@@ -1024,6 +1024,10 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 {
 	SetCanSelectTile(false);
 
+	bCanSelectNullifyQuickEffect = false;
+	bCanSelectPostQuickEffect = false;
+	bCanSelectBonusSpellTarget = false;
+
 	// Avoid setting it twice, as this function will get
 	// called twice before Finish if casting a bonus spell
 	if (!IsMoveInputIgnored())
@@ -1045,6 +1049,9 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 	{
 		CachedCSKHUD->OnActionStart(ECSKActionPhaseMode::CastSpell, SpellContext);
 	}
+
+	SelectedSpellCard = nullptr;
+	SelectedSpellIndex = 0;
 }
 
 void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EActiveSpellContext SpellContext)

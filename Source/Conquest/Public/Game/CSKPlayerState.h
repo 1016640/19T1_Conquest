@@ -129,14 +129,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
 	void SetSpellDiscount(int32 Amount);
 
-	/** Retrieves a spell card from the spell deck and places in the players hand */
-	TSubclassOf<USpellCard> PickupCardFromDeck();
+	/** Retrieves a spell cards from the spell deck and places them in the players hand */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	TArray<TSubclassOf<USpellCard>> PickupCardsFromDeck(int32 Amount = 1);
 
 	/** Removes the given spell from players hand, adding it to the discard pile */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
 	void RemoveCardFromHand(TSubclassOf<USpellCard> Spell);
 
 	/** Resets the spell deck by copying then shuffling given spells */
-	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells);
+	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells, const FRandomStream& Stream);
 
 public:
 

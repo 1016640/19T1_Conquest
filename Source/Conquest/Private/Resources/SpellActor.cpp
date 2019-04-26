@@ -23,6 +23,10 @@ ASpellActor::ASpellActor()
 	ActivationCost = 0;
 	TargetedTile = nullptr;
 
+	bIsPrimarySpell = true;
+	bRunning = false;
+	bCancelled = false;
+
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
 	DummyRoot->SetMobility(EComponentMobility::Movable);
@@ -51,12 +55,14 @@ void ASpellActor::InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCas
 	}
 }
 
-void ASpellActor::BeginExecution()
+void ASpellActor::BeginExecution(bool bIsPrimeSpell)
 {
 	if (HasAuthority() && !bRunning)
 	{
+		bIsPrimarySpell = bIsPrimeSpell;
 		bRunning = true;
-		OnActivateSpell();
+
+		OnActivateSpell(bIsPrimeSpell);
 	}
 }
 
@@ -72,7 +78,7 @@ void ASpellActor::CancelExecution()
 	}
 }
 
-void ASpellActor::OnActivateSpell_Implementation()
+void ASpellActor::OnActivateSpell_Implementation(bool bIsPrimeSpell)
 {
 	UE_LOG(LogConquest, Warning, TEXT("Spell Actor Class %s has no implementation for OnActivateSpell. Finishing spell next frame"), *GetName());
 
@@ -93,7 +99,7 @@ void ASpellActor::FinishSpell()
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
-			GameMode->NotifyCastSpellFinished(bCancelled);
+			GameMode->NotifyCastSpellFinished(this, bCancelled);
 		}
 
 		bRunning = false;
@@ -150,6 +156,59 @@ void ASpellActor::UnbindPlayerInput()
 				Client_BindPlayerInput(false);
 
 				bIsInputBound = false;
+			}
+		}
+	}
+}
+
+ASpellActor* ASpellActor::CastSubSpell(TSubclassOf<USpell> InSpell, ATile* InTargetTile, int32 InAdditionalMana, int32 InOverrideCost)
+{
+	if (!bIsPrimarySpell)
+	{
+		return nullptr;
+	}
+
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		ASpellActor* SpellActor = GameMode->CastSubSpellForActiveSpell(InSpell, InTargetTile, InAdditionalMana, InOverrideCost);
+		if (SpellActor)
+		{
+			// Bind callbacks if it's our first sub spell
+			if (ActiveSubSpells.Num() == 0)
+			{
+				GameMode->OnSubSpellFinished.BindDynamic(this, &ASpellActor::OnSubSpellFinished);
+			}
+
+			ActiveSubSpells.Add(SpellActor);
+		}
+
+		return SpellActor;
+	}
+
+	return nullptr;
+}
+
+void ASpellActor::OnSubSpellFinished(ASpellActor* FinishedSpell)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (ensure(ActiveSubSpells.Contains(FinishedSpell)))
+	{
+		BP_OnSubSpellFinished(FinishedSpell);
+		ActiveSubSpells.Remove(FinishedSpell);
+
+		// Remove callbacks if we have no more spells
+		if (ActiveSubSpells.Num() == 0)
+		{
+			ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+			if (GameMode)
+			{
+				GameMode->OnSubSpellFinished.Unbind();
 			}
 		}
 	}

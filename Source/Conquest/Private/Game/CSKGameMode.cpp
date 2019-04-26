@@ -896,6 +896,8 @@ void ACSKGameMode::ForceCollectionPhaseSequenceEnd()
 
 void ACSKGameMode::ResetResourcesForPlayers()
 {
+	DeckReshuffleStream.GenerateNewSeed();
+
 	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
 	{
 		ResetPlayerResources(Players[i], i + 1);
@@ -973,15 +975,19 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 		bool bDeckReshuffled = false;
 		if (State->NeedsSpellDeckReshuffle())
 		{
-			State->ResetSpellDeck(AvailableSpellCards);
+			State->ResetSpellDeck(AvailableSpellCards, DeckReshuffleStream);
 			bDeckReshuffled = true;
 		}
 
 		// Player can only carry X amount of cards in hand
 		TSubclassOf<USpellCard> SpellCard = nullptr;
 		if (State->GetNumSpellsInHand() < MaxSpellCardsInHand)
-		{
-			SpellCard = State->PickupCardFromDeck();
+		{	
+			TArray<TSubclassOf<USpellCard>> Pickup = State->PickupCardsFromDeck(1);
+			if (Pickup.IsValidIndex(0))
+			{
+				SpellCard = Pickup[0];
+			}
 		}
 
 		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, bDeckReshuffled, SpellCard);
@@ -1512,11 +1518,115 @@ bool ACSKGameMode::RequestSkipBonusSpell()
 	return false;
 }
 
-void ACSKGameMode::NotifyCastSpellFinished(bool bWasCancelled)
+ASpellActor* ACSKGameMode::CastSubSpellForActiveSpell(TSubclassOf<USpell> SubSpell, ATile* TargetTile, int32 AdditionalMana, int32 OverrideCost)
+{
+	if (!SubSpell || !TargetTile)
+	{
+		return nullptr;
+	}
+
+	// Sub spells can only be used during spell casts
+	if (!(IsActionPhaseInProgress() && IsWaitingForSpellCast()))
+	{
+		return nullptr;
+	}
+
+	check(!bWaitingOnNullifyQuickEffectSelection);
+
+	// While waiting for these types of spells, we are still considered in a spell
+	// action, but these spells might be skipped, so we can't allow sub spells to be used
+	if (bWaitingOnPostQuickEffectSelection || bWaitingOnBonusSpellSelection)
+	{
+		return nullptr;
+	}
+
+	USpell* DefaultSpell = SubSpell.GetDefaultObject();
+
+	// The player casting the current active spell
+	ACSKPlayerController* SpellCaster = nullptr;
+
+	// We get player based on context but bonus context doesn't specify enough
+	EActiveSpellContext CurrentContext = ActiveSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActiveSpellContext;
+	switch (CurrentContext)
+	{
+		case EActiveSpellContext::Action:
+		{
+			SpellCaster = ActionPhaseActiveController;
+			break;
+		}
+		case EActiveSpellContext::Counter:
+		{
+			SpellCaster = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+			break;
+		}
+		default:
+		{
+			check(false);
+			break;
+		}
+	}
+
+	check(SpellCaster);
+
+	ACSKPlayerState* PlayerState = SpellCaster->GetCSKPlayerState();
+	check(PlayerState);
+
+	// Player still needs to be able to afford this spell
+	int32 FinalCost = 0;
+	{
+		// Spell isn't affordable (with discounts applied)
+		int32 DiscountedCost = 0;
+		if (!PlayerState->GetDiscountedManaIfAffordable(OverrideCost >= 0 ? OverrideCost : DefaultSpell->GetSpellStaticCost(), DiscountedCost))
+		{
+			return nullptr;
+		}
+
+		// Re-calculate as spell might use additional mana
+		FinalCost = DefaultSpell->CalculateFinalCost(PlayerState, TargetTile, DiscountedCost, AdditionalMana);
+		if (!PlayerState->HasRequiredMana(FinalCost, true))
+		{
+			return nullptr;
+		}
+	}
+
+	ASpellActor* SpellActor = SpawnSpellActor(DefaultSpell, TargetTile, FinalCost, AdditionalMana, PlayerState);
+	if (SpellActor)
+	{
+		// Cutdown version of Confirm Cast Spell
+		ActiveSubSpellActors.Add(SpellActor);
+
+		PlayerState->SetMana(PlayerState->GetMana() - FinalCost);
+
+		FTimerDelegate DelayedCallback;
+		DelayedCallback.BindUObject(this, &ACSKGameMode::OnStartSubSpellCast, SpellActor);
+
+		// Give the sub spell some time to replicate
+		FTimerHandle TempHandle;
+		FTimerManager& TimerManager = GetWorldTimerManager();
+		TimerManager.SetTimer(TempHandle, DelayedCallback, .5f, false);
+	}
+
+	return SpellActor;
+}
+
+void ACSKGameMode::NotifyCastSpellFinished(ASpellActor* FinishedSpell, bool bWasCancelled)
 {
 	if (IsActionPhaseInProgress() && IsWaitingForSpellCast())
 	{
-		FinishCastSpell();
+		if (FinishedSpell->IsPrimarySpell())
+		{
+			check(FinishedSpell == ActiveSpellActor);
+			FinishCastSpell();
+		}
+		else
+		{
+			if (ensure(ActiveSubSpellActors.Remove(FinishedSpell) > 0))
+			{
+				OnSubSpellFinished.ExecuteIfBound(FinishedSpell);
+			}
+
+			FinishedSpell->Destroy();
+		}
 	}
 }
 
@@ -2028,6 +2138,19 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreQuickEffectCheck, bool bIgnoreBon
 	check(bWaitingOnSpellAction);
 	check(IsActionPhaseInProgress());
 
+	// Destroy sub spells first (there shouldn't be any, but we must be certain)
+	for (ASpellActor* SubSpell : ActiveSubSpellActors)
+	{
+		if (SubSpell && !SubSpell->IsPendingKill())
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Sub Spell Actor %s is still alive (Not pending Kill) after active "
+				"spell has finished execution. Make sure to finish sub spells before finishing active spell"), *SubSpell->GetName());
+
+			//SubSpell->CancelExecution();
+			SubSpell->Destroy();
+		}
+	}
+
 	// We no longer need the spell actor
 	if (ActiveSpellActor && !ActiveSpellActor->IsPendingKill())
 	{
@@ -2154,6 +2277,10 @@ ASpellActor* ACSKGameMode::SpawnSpellActor(USpell* Spell, ATile* Tile, int32 Fin
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	SpawnParams.bDeferConstruction = true;
 
+	// Set owner to player we are spawning for, so client
+	// RPCs will execute on the client who owns them
+	SpawnParams.Owner = PlayerState->GetOwner();
+
 	ASpellActor* SpellActor = GetWorld()->SpawnActor<ASpellActor>(SpellActorClass, TileTransform, SpawnParams);
 	if (SpellActor)
 	{
@@ -2171,7 +2298,17 @@ void ACSKGameMode::OnStartActiveSpellCast()
 
 	// Execute spells effect
 	{
-		ActiveSpellActor->BeginExecution();
+		ActiveSpellActor->BeginExecution(true);
+	}
+}
+
+void ACSKGameMode::OnStartSubSpellCast(ASpellActor* SpellActor)
+{
+	// There is a chance that in between the delay, that the active spell has finished
+	if (SpellActor && !SpellActor->IsPendingKill())
+	{
+		check(IsWaitingForSpellCast());
+		SpellActor->BeginExecution(false);
 	}
 }
 
@@ -2571,7 +2708,23 @@ void ACSKGameMode::OnStartNextEndRoundAction()
 	}
 }
 
+void ACSKGameMode::GiveGoldToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const
+{
+	if (PlayerState)
+	{
+		int32 NewGold = PlayerState->GetGold() + Amount;
+		PlayerState->SetGold(ClampGoldToLimit(NewGold));
+	}
+}
 
+void ACSKGameMode::GiveManaToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const
+{
+	if (PlayerState)
+	{
+		int32 NewMana = PlayerState->GetMana() + Amount;
+		PlayerState->SetMana(ClampManaToLimit(NewMana));
+	}
+}
 
 TArray<FHealthChangeReport> ACSKGameMode::GetDamageHealthReports(bool bFilterOutDead) const
 {

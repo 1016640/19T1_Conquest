@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Templates/SubclassOf.h"
 #include "ConquestFunctionLibrary.generated.h"
 
 class ABoardManager;
@@ -12,6 +13,7 @@ class ACSKGameState;
 class ACSKPlayerState;
 class ATile;
 class UCSKGameInstance;
+class USpell;
 class UUserWidget;
 
 /** Information about a board piece to display to the user */
@@ -158,6 +160,10 @@ public:
 	/** Accumalates all the deltas of the given health reports */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	static int32 AccumulateHealthReportDeltas(const TArray<FHealthChangeReport>& Reports);
+
+	/** If given spell can be activated by player at tile */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	static bool CanActivateSpell(TSubclassOf<USpell> Spell, const ACSKPlayerState* CastingPlayer, const ATile* TargetTile);
 
 public:
 

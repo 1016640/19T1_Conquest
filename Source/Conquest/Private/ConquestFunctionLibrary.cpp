@@ -7,6 +7,7 @@
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
+#include "Resources/SpellCard.h"
 
 #include "UserWidget.h"
 #include "Engine/Engine.h"
@@ -96,6 +97,26 @@ int32 UConquestFunctionLibrary::AccumulateHealthReportDeltas(const TArray<FHealt
 	}
 
 	return Total;
+}
+
+bool UConquestFunctionLibrary::CanActivateSpell(TSubclassOf<USpell> Spell, const ACSKPlayerState* CastingPlayer, const ATile* TargetTile)
+{
+	if (Spell)
+	{
+		// Can Activate Spell expects these to be valid
+		if (!CastingPlayer || !TargetTile)
+		{
+			return false;
+		}
+
+		const USpell* DefaultSpell = Spell.GetDefaultObject();
+		if (DefaultSpell && DefaultSpell->CanActivateSpell(CastingPlayer, TargetTile))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void UConquestFunctionLibrary::AddWidgetToViewport(UUserWidget* Widget, int32 ZOrder)

@@ -213,19 +213,29 @@ void ACSKPlayerState::SetSpellDiscount(int32 Amount)
 	}
 }
 
-TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
+TArray<TSubclassOf<USpellCard>> ACSKPlayerState::PickupCardsFromDeck(int32 Amount)
 {
-	if (HasAuthority() && SpellCardDeck.IsValidIndex(0))
+	TArray<TSubclassOf<USpellCard>> PickedUpCards;
+
+	if (HasAuthority())
 	{
-		TSubclassOf<USpellCard> NextSpellCard = SpellCardDeck[0];
-		SpellCardsInHand.Add(NextSpellCard);
-		SpellCardDeck.RemoveAt(0);
+		Amount = FMath::Clamp(Amount, 0, SpellCardDeck.Num());
 
-		return NextSpellCard;
+		if (SpellCardDeck.IsValidIndex(Amount - 1))
+		{
+			// Remove all cards from deck and add them to out hand
+			for (int32 i = 0; i < Amount; ++i)
+			{
+				TSubclassOf<USpellCard> NextCard = SpellCardDeck[0];
+				SpellCardsInHand.Add(NextCard);
+				SpellCardDeck.RemoveAt(0);
+
+				PickedUpCards.Add(NextCard);
+			}
+		}
 	}
-
-	// Implicit construction
-	return nullptr;
+	
+	return PickedUpCards;
 }
 
 void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
@@ -239,7 +249,7 @@ void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
 	}
 }
 
-void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells)
+void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells, const FRandomStream& Stream)
 {
 	if (HasAuthority())
 	{
@@ -252,7 +262,7 @@ void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spel
 		int32 LastIndex = SpellCardDeck.Num() - 1;
 		for (int32 i = 0; i <= LastIndex; ++i)
 		{
-			int32 Index = FMath::RandRange(i, LastIndex);
+			int32 Index = Stream.RandRange(i, LastIndex);
 			if (i != Index)
 			{
 				SpellCardDeck.Swap(i, Index);

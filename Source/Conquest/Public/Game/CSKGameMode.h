@@ -24,6 +24,9 @@ class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
 
+/** Delegate for when a sub spell has finished execution */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FSubSpellFinished, ASpellActor*, FinishedSpell);
+
 /** Contains information about a pending spell request */
 USTRUCT()
 struct CONQUEST_API FPendingSpellRequest
@@ -430,9 +433,13 @@ public:
 	bool RequestSkipBonusSpell();
 
 public:
+	
+	/** DO NOT CALL THIS. Casts a sub spell for current activated spell. 
+	Cost can be changed by setting a value equal or greater than zero */
+	ASpellActor* CastSubSpellForActiveSpell(TSubclassOf<USpell> SubSpell, ATile* TargetTile, int32 AdditionalMana = 0, int32 OverrideCost = -1);
 
 	/** DO NOT CALL THIS. Notify that executing spell has finished */
-	void NotifyCastSpellFinished(bool bWasCancelled);
+	void NotifyCastSpellFinished(ASpellActor* FinishedSpell, bool bWasCancelled);
 
 private:
 
@@ -491,6 +498,9 @@ private:
 
 	/** Notify from timer that we should execute the spell cast */
 	void OnStartActiveSpellCast();
+
+	/** Notify from timer that we should begin execution of given sub spell */
+	void OnStartSubSpellCast(ASpellActor* SpellActor);
 
 	/** Saves an incoming action spell request to be cast at a later time.
 	Will notify the opposing player to select a nullify spell request*/
@@ -556,11 +566,18 @@ private:
 		ActiveSpellActor = nullptr;
 		ActiveSpellTarget = nullptr;
 		ActiveSpellContext = EActiveSpellContext::None;
+		ActiveSubSpellActors.Empty();
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
 
 		ActivePlayerPendingSpellRequest.Reset();
 	}
+
+public:
+
+	/** Event for when a sub spell has finished. This does
+	not get called for sub spells that were cancelled early */
+	FSubSpellFinished OnSubSpellFinished;
 
 protected:
 
@@ -640,6 +657,10 @@ private:
 	/** The context of the spell being cast */
 	EActiveSpellContext ActiveSpellContext;
 
+	/** Any secondary spell actors that have been spawned by the current spell actor */
+	UPROPERTY()
+	TArray<ASpellActor*> ActiveSubSpellActors; // TODO: Could be a TSet
+
 	/** The bonus spell that is waiting to be cast */
 	UPROPERTY()
 	TSubclassOf<USpell> PendingBonusSpell;
@@ -698,6 +719,14 @@ public:
 	/** Clamps value based on max mana allowed */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 ClampManaToLimit(int32 Mana) const { return FMath::Clamp(Mana, 0, MaxMana); }
+
+	/** Gives gold to given player state clamped to gold limit. Amount can be negative */
+	UFUNCTION(BlueprintCallable, Category = Resources)
+	void GiveGoldToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const;
+
+	/** Gives mana to given player state clamped to mana limit. Amount can be negative */
+	UFUNCTION(BlueprintCallable, Category = Resources)
+	void GiveManaToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const;
 
 	/** Get the max number of NORMAL towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumTowers() const { return MaxNumTowers; }
@@ -841,6 +870,9 @@ protected:
 	/** If players are only allowed to request one move action per turn */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	uint32 bLimitOneMoveActionPerTurn : 1;
+
+	/** Random stream used for shuffling a players spell deck */
+	FRandomStream DeckReshuffleStream;
 
 	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
