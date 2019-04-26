@@ -244,7 +244,9 @@ void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
 	{
 		if (SpellCardsInHand.Remove(Spell) > 0)
 		{
-			SpellCardsDiscarded.Add(Spell);
+			// We add these spell to the front to allow
+			// for easier reading of the latest discarded spells
+			SpellCardsDiscarded.Insert(Spell, 0);
 		}
 	}
 }

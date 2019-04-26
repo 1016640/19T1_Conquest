@@ -409,6 +409,10 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectBonusSpellTarget)
 	uint32 bCanSelectBonusSpellTarget : 1;
 
+	/** If we should ignore the CanSelect flags for spells. This is used
+	to allow input during spell actions (as spell actors can bind input) */
+	uint32 bIgnoreCanSelectSpellFlags : 1;
+
 public:
 
 	/** Notify that an action phase move request has been confirmed */

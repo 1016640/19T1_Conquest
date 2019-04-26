@@ -37,6 +37,7 @@ ACSKPlayerController::ACSKPlayerController()
 	bCanSelectNullifyQuickEffect = false;
 	bCanSelectPostQuickEffect = false;
 	bCanSelectBonusSpellTarget = false;
+	bIgnoreCanSelectSpellFlags = false;
 }
 
 void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass)
@@ -154,7 +155,7 @@ void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> 
 
 void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
 {
-	if (IsLocalPlayerController() /*&& (IsPerformingActionPhase() || bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)*/)
+	if (IsLocalPlayerController() /*&&*/)
 	{
 		SelectedSpellCard = InSpellCard;
 		
@@ -162,19 +163,26 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 		if (DefaultSpellCard && DefaultSpellCard->GetSpellAtIndex(InSpellIndex))
 		{
 			SelectedSpellIndex = InSpellIndex;
-			
+
+			// Stop here if ignoring spell selections
+			if (bIgnoreCanSelectSpellFlags)
+			{
+				return;
+			}
+
 			// If the selected spell doesn't require a target, we can simply cast the spell now instead of waiting or a tile to be selected
 			const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
 			if (!DefaultSpell->RequiresTarget())
 			{
 				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
-				if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
+				if (IsPerformingActionPhase())
 				{
-					//Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+					
 				}
-				else
+				else if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 				{
-					//Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
+					Server_RequestCastQuickEffectAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
 				}
 			}
 		}
@@ -350,16 +358,9 @@ void ACSKPlayerController::SelectTile()
 		return;
 	}
 
-	// temp fix: problem is that spell actors binding input are being overriden by IsPerformingActionPhase()
-	if ((CustomCanSelectTile.IsBound() && CustomCanSelectTile.Execute(HoveredTile)))
-	{
-		Server_ExecuteCustomOnSelectTile(HoveredTile);
-		return;
-	}
-
 	// We have to check this before hand, as players can use bonus
 	// spells both during their action phase and while waiting
-	if (bCanSelectBonusSpellTarget)
+	if (!bIgnoreCanSelectSpellFlags && bCanSelectBonusSpellTarget)
 	{
 		CastBonusElementalSpellAtHoveredTile();
 		return;
@@ -373,26 +374,28 @@ void ACSKPlayerController::SelectTile()
 			case ECSKActionPhaseMode::MoveCastle:
 			{
 				MoveCastleToHoveredTile();
-				break;
+				return;
 			}
 			case ECSKActionPhaseMode::BuildTowers:
 			{
 				BuildTowerAtHoveredTile(SelectedTowerConstructionData);
-				break;
+				return;
 			}
 			case ECSKActionPhaseMode::CastSpell:
 			{
-				CastSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
+				if (!bIgnoreCanSelectSpellFlags)
+				{
+					CastSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
+					return;
+				}
 				break;
 			}
 		}
-
-		return;
 	}
 	
 	// We can check this after as players can only perform
 	// quick effect attacks when not performing their action phase
-	if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
+	if (!bIgnoreCanSelectSpellFlags && (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect))
 	{
 		CastQuickEffectSpellAtHoveredTile(SelectedSpellCard, SelectedSpellIndex, SelectedSpellAdditionalMana);
 		return;
@@ -400,11 +403,11 @@ void ACSKPlayerController::SelectTile()
 
 	// Execute custom selection last. We check CanSelect both on client and the server
 	// (We can skip the check here completely if we are the server to prevent the check twice)
-	/*if (HasAuthority() || (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(HoveredTile)))
+	if (HasAuthority() || (!CustomCanSelectTile.IsBound() || CustomCanSelectTile.Execute(HoveredTile)))
 	{
 		Server_ExecuteCustomOnSelectTile(HoveredTile);
 		return;
-	}*/
+	}
 }
 
 void ACSKPlayerController::ResetCamera()
@@ -872,6 +875,9 @@ void ACSKPlayerController::OnRep_bCanSelectNullifyQuickEffect()
 	if (bCanSelectNullifyQuickEffect)
 	{
 		SetCanSelectTile(true);
+
+		// In this case, this should already be null
+		bIgnoreCanSelectSpellFlags = false;
 	}
 	else if (ensure(!IsPerformingActionPhase()))
 	{
@@ -884,6 +890,9 @@ void ACSKPlayerController::OnRep_bCanSelectPostQuickEffect()
 	if (bCanSelectPostQuickEffect)
 	{
 		SetCanSelectTile(true);
+
+		// We can safely disable this again as no spell is active right now
+		bIgnoreCanSelectSpellFlags = false;
 	}
 	else if (ensure(!IsPerformingActionPhase()))
 	{
@@ -896,6 +905,9 @@ void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 	if (bCanSelectBonusSpellTarget)
 	{
 		SetCanSelectTile(true);
+
+		// We can safely disable this again as no spell is active right now
+		bIgnoreCanSelectSpellFlags = false;
 	}
 	else if (!IsPerformingActionPhase())
 	{
@@ -1024,9 +1036,8 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 {
 	SetCanSelectTile(false);
 
-	bCanSelectNullifyQuickEffect = false;
-	bCanSelectPostQuickEffect = false;
-	bCanSelectBonusSpellTarget = false;
+	// We want to ignore any spell selections at this point
+	bIgnoreCanSelectSpellFlags = true;
 
 	// Avoid setting it twice, as this function will get
 	// called twice before Finish if casting a bonus spell
@@ -1058,6 +1069,9 @@ void ACSKPlayerController::Client_OnCastSpellRequestFinished_Implementation(EAct
 {
 	SetCanSelectTile(true);
 	SetIgnoreMoveInput(false);
+
+	// We may be able to select another spell again
+	bIgnoreCanSelectSpellFlags = false;
 
 	if (CachedCSKHUD)
 	{
@@ -1171,7 +1185,7 @@ void ACSKPlayerController::BuildTowerAtHoveredTile(TSubclassOf<UTowerConstructio
 void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
 {
 	// Only local players should cast
-	if (!IsLocalPlayerController())
+	if (!IsLocalPlayerController() && bIgnoreCanSelectSpellFlags)
 	{
 		return;
 	}
@@ -1188,7 +1202,7 @@ void ACSKPlayerController::CastSpellAtHoveredTile(TSubclassOf<USpellCard> SpellC
 void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellCard> SpellCard, int32 SpellIndex, int32 AdditionalMana)
 {
 	// Only local players should cast
-	if (!IsLocalPlayerController())
+	if (!IsLocalPlayerController() && bIgnoreCanSelectSpellFlags)
 	{
 		return;
 	}
@@ -1205,7 +1219,7 @@ void ACSKPlayerController::CastQuickEffectSpellAtHoveredTile(TSubclassOf<USpellC
 void ACSKPlayerController::SkipQuickEffectSpell()
 {
 	// Only local players should cast
-	if (!IsLocalPlayerController())
+	if (!IsLocalPlayerController() && bIgnoreCanSelectSpellFlags)
 	{
 		return;
 	}
@@ -1219,7 +1233,7 @@ void ACSKPlayerController::SkipQuickEffectSpell()
 void ACSKPlayerController::CastBonusElementalSpellAtHoveredTile()
 {
 	// Only local players should cast
-	if (!IsLocalPlayerController())
+	if (!IsLocalPlayerController() && bIgnoreCanSelectSpellFlags)
 	{
 		return;
 	}
@@ -1236,7 +1250,7 @@ void ACSKPlayerController::CastBonusElementalSpellAtHoveredTile()
 void ACSKPlayerController::SkipBonusElementalSpell()
 {
 	// Only local players should cast
-	if (!IsLocalPlayerController())
+	if (!IsLocalPlayerController() && bIgnoreCanSelectSpellFlags)
 	{
 		return;
 	}
@@ -1478,8 +1492,7 @@ void ACSKPlayerController::SetTileCandidatesSelectionState(ETileSelectionState S
 {
 	for (ATile* Tile : SelectedActionTileCandidates)
 	{
-		// Tiles shouldn't be null if in this array, but there are some cases
-		// where they seem to be, so this acts a pre-caution to prevent a crash
+		// Tiles should always be valid, this is a safety check in case
 		if (ensure(Tile))
 		{
 			Tile->SetSelectionState(SelectionState);
