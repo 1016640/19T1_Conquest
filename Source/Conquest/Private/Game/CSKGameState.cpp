@@ -416,6 +416,17 @@ ACSKPlayerState* ACSKGameState::GetPlayerStateWithID(int32 PlayerID) const
 	return nullptr;
 }
 
+ACSKPlayerState* ACSKGameState::GetOpposingPlayerState(ACSKPlayerState* Player) const
+{
+	if (Player)
+	{
+		int32 OpposingPlayerID = FMath::Abs(Player->GetCSKPlayerID() - 1);
+		return GetPlayerStateWithID(OpposingPlayerID);
+	}
+
+	return nullptr;
+}
+
 float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;

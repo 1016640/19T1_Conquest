@@ -174,7 +174,23 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 			const USpell* DefaultSpell = DefaultSpellCard->GetSpellAtIndex(SelectedSpellIndex).GetDefaultObject();
 			if (!DefaultSpell->RequiresTarget())
 			{
+				ACSKPlayerState* CSKPlayerState = GetCSKPlayerState();
+
+				// Spell should player state to be valid
+				if (!CSKPlayerState)
+				{
+					return;
+				}
+
+				// Tile might expect the castles tile to be the target
 				ATile* TargetTile = CastlePawn ? CastlePawn->GetCachedTile() : nullptr;
+
+				if (!DefaultSpell->CanActivateSpell(CSKPlayerState, TargetTile))
+				{
+					return;
+				}
+
+				// Execute instantly
 				if (IsPerformingActionPhase())
 				{
 					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);

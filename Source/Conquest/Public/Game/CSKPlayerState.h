@@ -295,8 +295,8 @@ protected:
 	/** Cached map for counting how many of a certain type of any tower this players owns */
 	TMap<TSubclassOf<ATower>, int32> CachedUniqueTowerCount;
 
-	/** The spells cards in the spell deck. This only exists on the server */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources)/*Replicated,*/ 
+	/** The spells cards in the spell deck. This only exists on the server and the owners client */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources) 
 	TArray<TSubclassOf<USpellCard>> SpellCardDeck;
 
 	/** The spells in the players hand. This only exists on the server and the owners client */

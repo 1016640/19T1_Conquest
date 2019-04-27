@@ -43,7 +43,7 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, Mana);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, BonusTileMovements, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
-	//DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsDiscarded, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);

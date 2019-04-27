@@ -200,8 +200,12 @@ public:
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
 	/** Get a player state based off a player ID */
-	UFUNCTION(BlueprintPure, Category = Rules)
+	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetPlayerStateWithID(int32 PlayerID) const;
+
+	/** Get the opposings player state based off given player state */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerState* GetOpposingPlayerState(ACSKPlayerState* Player) const;
 
 	/** Get the time remaining for current action taking place (this
 	can either action phase turn time, quick effect counter time) */
