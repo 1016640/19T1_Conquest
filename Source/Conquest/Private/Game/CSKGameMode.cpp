@@ -13,6 +13,7 @@
 #include "BoardPathFollowingComponent.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "CoinSequenceActor.h"
 #include "GameDelegates.h"
 #include "HealthComponent.h"
 #include "Spell.h"
@@ -89,7 +90,7 @@ void ACSKGameMode::Tick(float DeltaTime)
 	// Keep checking till we can start the match
 	if (GameState->GetServerWorldTimeSeconds() > InitialMatchDelay && ShouldStartMatch())
 	{
-		StartMatch();
+		EnterMatchState(ECSKMatchState::CoinFlip);
 	}
 }
 
@@ -576,6 +577,45 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 	WorldSettings->NotifyBeginPlay();
 }
 
+void ACSKGameMode::OnCoinFlipStart()
+{
+	ACoinSequenceActor* SequenceActor = nullptr;
+
+	UWorld* World = GetWorld();
+	for (TActorIterator<ACoinSequenceActor> It(World); It; ++It)
+	{
+		SequenceActor = *It;
+	}
+
+	if (SequenceActor)
+	{
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnCoinSequenceStart(SequenceActor);
+		}
+
+		// TODO: We would want to delay this so we have a nice smooth transition
+		// for now
+		SequenceActor->StartCoinSequence();
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match"));
+
+		StartingPlayerID = GenerateCoinFlipWinner() ? 0 : 1;
+		
+		// Start match after a small delay // TODO: Make function
+		{
+			FTimerDelegate TimerCallback;
+			TimerCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::Running);
+
+			FTimerHandle TempHandle;
+			FTimerManager& TimerManager = GetWorldTimerManager();
+			TimerManager.SetTimer(TempHandle, TimerCallback, 1.f, false);
+		}
+	}
+}
+
 // TODO: Fixup this process once I get a better understanding of how game mode initiates itself and clients
 void ACSKGameMode::OnMatchStart()
 {
@@ -594,9 +634,6 @@ void ACSKGameMode::OnMatchStart()
 
 	// Give players the default resources
 	ResetResourcesForPlayers();
-
-	// For now (move to coin flip section)
-	StartingPlayerID = CoinFlip() ? 0 : 1;
 
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyMatchStarted();
@@ -772,6 +809,11 @@ void ACSKGameMode::HandleMatchStateChange(ECSKMatchState OldState, ECSKMatchStat
 			OnStartWaitingPreMatch();
 			break;
 		}
+		case ECSKMatchState::CoinFlip:
+		{
+			OnCoinFlipStart();
+			break;
+		}
 		case ECSKMatchState::Running:
 		{
 			OnMatchStart();
@@ -826,10 +868,25 @@ void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundStat
 
 
 
-bool ACSKGameMode::CoinFlip_Implementation() const
+bool ACSKGameMode::GenerateCoinFlipWinner_Implementation() const
 {
 	int32 RandomValue = FMath::Rand();
 	return (RandomValue % 2) == 1;
+}
+
+void ACSKGameMode::OnStartingPlayerDecided(int32 WinningPlayerID)
+{
+	StartingPlayerID = FMath::Clamp(WinningPlayerID, 0, 1);
+	
+	// Start match after a delay
+	{
+		FTimerDelegate TimerCallback;
+		TimerCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::Running);
+
+		FTimerHandle TempHandle;
+		FTimerManager& TimerManager = GetWorldTimerManager();
+		TimerManager.SetTimer(TempHandle, TimerCallback, 5.f, false);
+	}
 }
 
 ACSKPlayerController* ACSKGameMode::GetActivePlayerForActionPhase(int32 Phase) const
@@ -2726,26 +2783,6 @@ void ACSKGameMode::GiveManaToPlayer(ACSKPlayerState* PlayerState, int32 Amount) 
 	}
 }
 
-TArray<FHealthChangeReport> ACSKGameMode::GetDamageHealthReports(bool bFilterOutDead) const
-{
-	return QueryPreviousHealthReports(true, nullptr, bFilterOutDead);
-}
-
-TArray<FHealthChangeReport> ACSKGameMode::GetHealingHealthReports() const
-{
-	return QueryPreviousHealthReports(false, nullptr, false);
-}
-
-TArray<FHealthChangeReport> ACSKGameMode::GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead) const
-{
-	return QueryPreviousHealthReports(true, PlayerState, bFilterOutDead);
-}
-
-TArray<FHealthChangeReport> ACSKGameMode::GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const
-{
-	return QueryPreviousHealthReports(false, PlayerState, false);
-}
-
 void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta)
 {
 	// Get script interface as damage board piece could either be a castle or tower
@@ -2846,46 +2883,23 @@ void ACSKGameMode::ClearHealthReports()
 {
 	ActiveActionHealthReports.Empty();
 	PreviousActionHealthReports.Empty();
+
+	ACSKGameState* CSKGameState = CastChecked<ACSKGameState>(GameState);
+	if (CSKGameState)
+	{
+		CSKGameState->SetLatestActionHealthReports(PreviousActionHealthReports);
+	}
 }
 
 void ACSKGameMode::CacheAndClearHealthReports()
 {
 	PreviousActionHealthReports = MoveTemp(ActiveActionHealthReports);
-}
 
-TArray<FHealthChangeReport> ACSKGameMode::QueryPreviousHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const
-{
-	TArray<FHealthChangeReport> Reports;
-	for (const FHealthChangeReport& Repo : PreviousActionHealthReports)
+	ACSKGameState* CSKGameState = CastChecked<ACSKGameState>(GameState);
+	if (CSKGameState)
 	{
-		// Filter owner
-		if (InOwner)
-		{
-			if (Repo.Owner != InOwner)
-			{
-				continue;
-			}
-		}
-
-		// Filter out differen type
-		if (bDamaged != Repo.bWasDamaged)
-		{
-			continue;
-		}
-
-		// Only filter killed if checking damaged
-		if (bDamaged)
-		{			
-			if (bExcludeDead && Repo.bKilled)
-			{
-				continue;
-			}
-		}
-
-		Reports.Add(Repo);
+		CSKGameState->SetLatestActionHealthReports(PreviousActionHealthReports);
 	}
-
-	return Reports;
 }
 
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)

@@ -141,6 +141,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
 	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
 	DOREPLIFETIME(ACSKGameState, BonusSpellCounterTimerRemaining);
+	DOREPLIFETIME(ACSKGameState, LatestActionHealthReports);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -317,6 +318,11 @@ void ACSKGameState::HandleMatchStateChange(ECSKMatchState NewState)
 
 	switch (NewState)
 	{
+		case ECSKMatchState::CoinFlip:
+		{
+			NotifyPerformCoinFlip();
+			break;
+		}
 		case ECSKMatchState::Running:
 		{
 			NotifyMatchStart();
@@ -389,6 +395,14 @@ void ACSKGameState::Multi_SetWinDetails_Implementation(int32 WinnerID, ECSKMatch
 {
 	MatchWinnerPlayerID = WinnerID;
 	MatchWinCondition = WinCondition;
+}
+
+void ACSKGameState::SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports)
+{
+	if (HasAuthority())
+	{
+		LatestActionHealthReports = InHealthReports;
+	}
 }
 
 int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
@@ -468,6 +482,26 @@ float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 	return 0.f;
 }
 
+TArray<FHealthChangeReport> ACSKGameState::GetDamageHealthReports(bool bFilterOutDead) const
+{
+	return QueryLatestHealthReports(true, nullptr, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetHealingHealthReports() const
+{
+	return QueryLatestHealthReports(false, nullptr, true);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead) const
+{
+	return QueryLatestHealthReports(true, PlayerState, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const
+{
+	return QueryLatestHealthReports(false, PlayerState, true);
+}
+
 void ACSKGameState::AddBonusActionPhaseTime()
 {
 	if (IsActionPhaseTimed())
@@ -498,6 +532,41 @@ void ACSKGameState::ResetActionPhaseProperties()
 	{
 		ActionPhasePlayerID = -1;
 	}
+}
+
+TArray<FHealthChangeReport> ACSKGameState::QueryLatestHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const
+{
+	TArray<FHealthChangeReport> Reports;
+	for (const FHealthChangeReport& Repo : LatestActionHealthReports)
+	{
+		// Filter owner
+		if (InOwner)
+		{
+			if (Repo.Owner != InOwner)
+			{
+				continue;
+			}
+		}
+
+		// Filter out differen type
+		if (bDamaged != Repo.bWasDamaged)
+		{
+			continue;
+		}
+
+		// Only filter killed if checking damaged
+		if (bDamaged)
+		{
+			if (bExcludeDead && Repo.bKilled)
+			{
+				continue;
+			}
+		}
+
+		Reports.Add(Repo);
+	}
+
+	return Reports;
 }
 
 void ACSKGameState::HandleMoveRequestConfirmed()

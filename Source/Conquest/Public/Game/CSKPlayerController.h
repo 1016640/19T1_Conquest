@@ -9,6 +9,7 @@
 
 class ACastle;
 class ACastleAIController;
+class ACoinSequenceActor;
 class ACSKHUD;
 class ACSKPawn;
 class ACSKPlayerState;
@@ -257,8 +258,9 @@ protected:
 
 public:
 
-	/** Called to inform player that coin flip is taking place */
-	void OnReadyForCoinFlip(); // Refactor
+	/** Notify that the coin sequence has started */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCoinSequenceStart(ACoinSequenceActor* SequenceActor);
 
 	/** Called by the game mode when transitioning to the board */
 	void OnTransitionToBoard(); // Refactor

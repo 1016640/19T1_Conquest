@@ -272,6 +272,7 @@ protected:
 
 	/** Match state notifies */
 	virtual void OnStartWaitingPreMatch();
+	virtual void OnCoinFlipStart();
 	virtual void OnMatchStart();
 	virtual void OnMatchFinished();
 	virtual void OnFinishedWaitingPostMatch();
@@ -323,11 +324,12 @@ private:
 public:
 
 	/** Function called when deciding which player gets to go first.
-	True will result in Player 1 going first, false for player 2 */
+	This is called by the coin being flipped to determine what side to land on */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	bool CoinFlip() const;
+	bool GenerateCoinFlipWinner() const;
 
-
+	/** Notify from the coin sequence actor that the sequence has finished */
+	void OnStartingPlayerDecided(int32 WinningPlayerID);
 
 public:
 
@@ -891,24 +893,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, AdvancedDisplay, Category = Rules, meta = (ClampMin = 1))
 	float PostMatchDelay;
 
-public:
-
-	/** Get all the towers that were damaged during the previous action */
-	UFUNCTION(BlueprintPure, Category = "CSK|Game")
-	TArray<FHealthChangeReport> GetDamageHealthReports(bool bFilterOutDead = false) const;
-
-	/** Get all the towers that were healed during the previous action */
-	UFUNCTION(BlueprintPure, Category = "CSK|Game")
-	TArray<FHealthChangeReport> GetHealingHealthReports() const;
-
-	/** Get all the towers that were damaged during the previous action that belong to specified player */
-	UFUNCTION(BlueprintPure, Category = "CSK|Game")
-	TArray<FHealthChangeReport> GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead = false) const;
-
-	/** Get all the towers that were healed during the previous action that belong to specified player */
-	UFUNCTION(BlueprintPure, Category = "CSK|Game")
-	TArray<FHealthChangeReport> GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const;
-
 protected:
 
 	/** Callback for when a tower/castle has taken damage. This
@@ -921,11 +905,6 @@ protected:
 
 	/** Caches all the active action health reports then clearing it for a new action */
 	void CacheAndClearHealthReports();
-
-private:
-
-	/** Generates a new array containing health reports filtered by passed in arguments */
-	TArray<FHealthChangeReport> QueryPreviousHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const;
 
 protected:
 

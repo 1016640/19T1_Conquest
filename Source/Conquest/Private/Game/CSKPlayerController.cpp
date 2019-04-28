@@ -10,6 +10,7 @@
 #include "BoardManager.h"
 #include "Castle.h"
 #include "CastleAIController.h"
+#include "CoinSequenceActor.h"
 #include "Spell.h"
 #include "SpellCard.h"
 #include "Tower.h"
@@ -537,6 +538,14 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 	}
 }
 
+void ACSKPlayerController::Client_OnCoinSequenceStart_Implementation(ACoinSequenceActor* SequenceActor)
+{
+	if (SequenceActor)
+	{
+		SetViewTargetWithBlend(SequenceActor);
+	}
+}
+
 void ACSKPlayerController::OnTransitionToBoard()
 {
 	if (HasAuthority())
@@ -937,6 +946,8 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 	ACSKPawn* CSKPawn = GetCSKPawn();
 	if (CSKPawn)
 	{
+		SetViewTargetWithBlend(CSKPawn);
+
 		if (CastlePawn)
 		{
 			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);

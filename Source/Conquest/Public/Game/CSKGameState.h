@@ -180,6 +180,9 @@ protected:
 
 public:
 
+	/** Updates the latest action health reports */
+	void SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports);
+
 	/** Get if action phase is timed */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	bool IsActionPhaseTimed() const { return ActionPhaseTimeRemaining != -1.f; }
@@ -212,6 +215,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
 
+	/** Get all the towers that were damaged during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetDamageHealthReports(bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetHealingHealthReports() const;
+
+	/** Get all the towers that were damaged during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const;
+
 protected:
 
 	/** Helper function for checking if phase timer should count down */
@@ -239,6 +258,9 @@ private:
 
 	/** Resets action phase variables */
 	void ResetActionPhaseProperties();
+
+	/** Generates a new array containing health reports filtered by passed in arguments */
+	TArray<FHealthChangeReport> QueryLatestHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const;
 
 protected:
 
@@ -277,6 +299,10 @@ protected:
 	/** Time remaining for player to select a target for bonus spell */
 	UPROPERTY(Transient, Replicated)
 	float BonusSpellCounterTimerRemaining;
+
+	/** The health reports from the latest action */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = "CSK|Game")
+	TArray<FHealthChangeReport> LatestActionHealthReports;
 
 public:
 
