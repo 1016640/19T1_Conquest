@@ -7,6 +7,7 @@
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
+#include "Resources/SpellCard.h"
 
 #include "UserWidget.h"
 #include "Engine/Engine.h"
@@ -81,6 +82,38 @@ bool UConquestFunctionLibrary::AreTilesWithingRange(const ATile* T1, const ATile
 	{
 		OutDistance = FHexGrid::HexDisplacement(T1->GetGridHexValue(), T2->GetGridHexValue());
 		return OutDistance <= Range;
+	}
+
+	return false;
+}
+
+int32 UConquestFunctionLibrary::AccumulateHealthReportDeltas(const TArray<FHealthChangeReport>& Reports)
+{
+	int32 Total = 0;
+
+	for (const FHealthChangeReport& Repo : Reports)
+	{
+		Total += Repo.Delta;
+	}
+
+	return Total;
+}
+
+bool UConquestFunctionLibrary::CanActivateSpell(TSubclassOf<USpell> Spell, const ACSKPlayerState* CastingPlayer, const ATile* TargetTile)
+{
+	if (Spell)
+	{
+		// Can Activate Spell expects these to be valid
+		if (!CastingPlayer || !TargetTile)
+		{
+			return false;
+		}
+
+		const USpell* DefaultSpell = Spell.GetDefaultObject();
+		if (DefaultSpell && DefaultSpell->CanActivateSpell(CastingPlayer, TargetTile))
+		{
+			return true;
+		}
 	}
 
 	return false;

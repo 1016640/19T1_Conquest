@@ -4,13 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Templates/SubclassOf.h"
 #include "ConquestFunctionLibrary.generated.h"
 
 class ABoardManager;
 class ACSKGameMode;
 class ACSKGameState;
+class ACSKPlayerState;
 class ATile;
 class UCSKGameInstance;
+class USpell;
 class UUserWidget;
 
 /** Information about a board piece to display to the user */
@@ -39,11 +42,73 @@ public:
 
 	/** The player that owns the board piece */
 	UPROPERTY(BlueprintReadOnly)
-	const class ACSKPlayerState* Owner;
+	const ACSKPlayerState* Owner;
 
 	/** The board piece associated with this data */
 	UPROPERTY(BlueprintReadWrite)
 	const AActor* BoardPiece;
+};
+
+/** Information about a building being damaged or healed */
+USTRUCT(BlueprintType)
+struct CONQUEST_API FHealthChangeReport
+{
+	GENERATED_BODY()
+
+public:
+
+	FHealthChangeReport()
+		: Building(nullptr)
+		, Owner(nullptr)
+		, bIsCastle(false)
+		, bWasDamaged(false)
+		, bKilled(false)
+		, Delta(0)
+	{
+
+	}
+
+	FHealthChangeReport(AActor* InBuilding, ACSKPlayerState* InOwner, bool bInIsCastle, bool bInKilled, int32 InDelta)
+		: Building(InBuilding)
+		, Owner(InOwner)
+		, bIsCastle(bInIsCastle)
+		, bKilled(bInKilled)
+		, Delta(FMath::Abs(InDelta))
+	{
+		ensure(InDelta != 0);
+
+		// Damage results in a negative deltas, 
+		// healing will produce positive deltas
+		bWasDamaged = bKilled || InDelta < 0;
+	}
+
+public:
+
+	/** The actor that had their health changed. This is either a tower or an castle.
+	Be sure to check if valid, as this tower may be destroyed if it was killed */
+	UPROPERTY(BlueprintReadOnly)
+	AActor* Building;
+
+	/** The owner of the tower */
+	UPROPERTY(BlueprintReadOnly)
+	ACSKPlayerState* Owner;
+
+	/** If the effected actor was a castle or a tower */
+	UPROPERTY(BlueprintReadOnly)
+	uint8 bIsCastle : 1;
+
+	/** If the change was a result of being damaged (If false, meant we were healed) */
+	UPROPERTY(BlueprintReadOnly)
+	uint8 bWasDamaged : 1;
+
+	/** If this change resulted in actor being killed.
+	Will always be false if WasDamaged is not true */
+	UPROPERTY(BlueprintReadOnly)
+	uint8 bKilled : 1;
+
+	/** The delta of the change (This value will always be positive) */
+	UPROPERTY(BlueprintReadOnly)
+	int32 Delta;
 };
 
 /**
@@ -86,9 +151,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
 
+public:
+
 	/** Get if two tiles are within given amount of range of each other */
 	UFUNCTION(BlueprintPure, Category = Board)
 	static bool AreTilesWithingRange(const ATile* T1, const ATile* T2, int32 Range, int32& OutDistance);
+
+	/** Accumalates all the deltas of the given health reports */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	static int32 AccumulateHealthReportDeltas(const TArray<FHealthChangeReport>& Reports);
+
+	/** If given spell can be activated by player at tile */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	static bool CanActivateSpell(TSubclassOf<USpell> Spell, const ACSKPlayerState* CastingPlayer, const ATile* TargetTile);
 
 public:
 

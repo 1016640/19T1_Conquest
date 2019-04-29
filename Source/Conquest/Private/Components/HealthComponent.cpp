@@ -55,11 +55,7 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 		}
 
 		int32 NewHealth = FMath::Max(0, Health - Amount);
-
-		// Subtract the new health from current health to get the correct delta,
-		// we want the delta health change for damage to be negative, so if our
-		// health was 5 and is now 2, the delta should be -3 (2 - 5 = -3)
-		int32 Delta = Health - NewHealth;
+		int32 Delta = NewHealth - Health;
 
 		Health = NewHealth;
 
@@ -74,7 +70,7 @@ int32 UHealthComponent::ApplyDamage(int32 Amount)
 
 int32 UHealthComponent::RestoreHealth(int32 Amount)
 {
-	if (GetOwnerRole() == ROLE_Authority && !IsDead())
+	if (GetOwnerRole() == ROLE_Authority && !(IsDead() || IsFullyHealed()))
 	{
 		if (Amount <= 0)
 		{
@@ -82,7 +78,7 @@ int32 UHealthComponent::RestoreHealth(int32 Amount)
 			return 0;
 		}
 
-		int32 NewHealth = FMath::Max(MaxHealth, Health + Amount);
+		int32 NewHealth = FMath::Min(MaxHealth, Health + Amount);
 		int32 Delta = NewHealth - Health;
 
 		Health = NewHealth;
@@ -114,7 +110,7 @@ void UHealthComponent::IncreaseMaxHealth(int32 Amount, bool bIncreaseHealth)
 			}
 			else
 			{
-				ApplyDamage(Delta);
+				ApplyDamage(-Delta);
 			}
 		}
 

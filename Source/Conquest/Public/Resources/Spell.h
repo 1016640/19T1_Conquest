@@ -6,6 +6,8 @@
 #include "Spell.generated.h"
 
 class ACSKPlayerState;
+class ACSKGameMode;
+class ACSKGameState;
 class ASpellActor;
 class ATile;
 class USpellWidget;
@@ -58,6 +60,16 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = Spells)
 	int32 CalculateFinalCost(const ACSKPlayerState* CastingPlayer, const ATile* TargetTile, int32 DiscountedCost, int32 AdditionalMana) const;
 
+protected:
+
+	/** Helper function for retrieving the CSK Game Mode */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	ACSKGameMode* GetCSKGameMode(const ACSKPlayerState* CastingPlayer) const;
+
+	/** Helper function for retrieving the CSK Game State */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	ACSKGameState* GetCSKGameState(const ACSKPlayerState* CastingPlayer) const;
+
 public:
 
 	/** Get this spells name */
@@ -77,6 +89,12 @@ public:
 
 	/** Get this spells actor class */
 	FORCEINLINE TSubclassOf<ASpellActor> GetSpellActorClass() const { return SpellActorClass; }
+
+	/** Get if this spell expects additional mana */
+	FORCEINLINE bool ExpectsAdditionalMana() const { return bSpellExpectsAdditionalMana; }
+
+	/** Get if this spell nullifies other spells (only valid for quick effects ) */
+	FORCEINLINE bool NullifiesOtherSpell() const { return bSpellNullifiesSpells; }
 
 protected:
 
@@ -112,6 +130,10 @@ protected:
 
 	/** If this spell expects additional mana. This will simply alter the default behavior of CalculateFinalCost
 	with true returning DiscountedCost + AdditionalMana while false simply returns DiscountedCost */
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = Spells)
-	uint8 bExpectsAdditionalMana : 1;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Spells, meta = (DisplayName="Expects Additional Mana"))
+	uint8 bSpellExpectsAdditionalMana : 1;
+
+	/** If this spell is a quick effect, do we instantly nullify the opponents spell or activate afterwards */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Quick Effect", meta = (DisplayName = "Nullifies Other Spells"))
+	uint8 bSpellNullifiesSpells : 1;
 };
