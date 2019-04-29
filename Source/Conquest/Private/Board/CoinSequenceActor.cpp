@@ -27,6 +27,22 @@ ACoinSequenceActor::ACoinSequenceActor()
 	bIsSequenceRunning = false;
 }
 
+void ACoinSequenceActor::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// We need to set these here, since we will become view target before we actually start the sequence
+	if (Coin)
+	{
+		FVector StartPosition = GetActorTransform().TransformPosition(FlipCameraLocation);
+		Camera->SetWorldLocation(StartPosition);
+
+		FVector Displacement = Coin->GetCoinLocation() - StartPosition;
+		FRotator Rotation = FRotationMatrix::MakeFromX(Displacement).Rotator();
+		Camera->SetWorldRotation(Rotation);
+	}
+}
+
 void ACoinSequenceActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -35,12 +51,18 @@ void ACoinSequenceActor::Tick(float DeltaTime)
 	{
 		// Move camera first (So Look At uses best values)
 		FVector NewLocation = FMath::VInterpTo(Camera->GetComponentLocation(), CameraDesiredLocation, DeltaTime, 5.f);
-		Camera->SetWorldLocation(NewLocation);	
+		Camera->SetWorldLocation(NewLocation);
 
 		// Get the rotation needed for camera to face the coin
-		FVector Displacement = Coin->GetCoinLocation() - Camera->GetComponentLocation();
+		FVector Displacement = Coin->GetCoinLocation() - NewLocation;
 		FRotator Rotation = FRotationMatrix::MakeFromX(Displacement).Rotator();
 		Camera->SetWorldRotation(Rotation);
+
+		// Sequence technically concludes once we reach the final camera location
+		/*if (FVector::PointsAreNear(NewLocation, CameraDesiredLocation, 1.f))
+		{
+			SetActorTickEnabled(false);
+		}*/
 	}
 }
 
@@ -55,6 +77,7 @@ void ACoinSequenceActor::StartCoinSequence()
 	{
 		if (Coin)
 		{
+			// We only handle this on the server
 			Coin->OnCoinFlipComplete.AddDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
 			Multi_StartCoinFlip();
 		}
@@ -66,13 +89,16 @@ void ACoinSequenceActor::Multi_StartCoinFlip_Implementation()
 	if (Coin)
 	{
 		Coin->OnCoinFlipComplete.AddDynamic(this, &ACoinSequenceActor::ClientHandleCoinFlipFinished);
-		Coin->Flip();
 
+		// Desired location in world space
 		CameraDesiredLocation = GetActorTransform().TransformPosition(FlipCameraLocation);
 		Camera->SetWorldLocation(CameraDesiredLocation);
 
-		bIsSequenceRunning = true;
 		SetActorTickEnabled(true);
+
+		// Locally simulate the coin flip
+		Coin->Flip();
+		bIsSequenceRunning = true;
 	}
 }
 

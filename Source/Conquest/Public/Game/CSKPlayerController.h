@@ -12,6 +12,7 @@ class ACastleAIController;
 class ACoinSequenceActor;
 class ACSKHUD;
 class ACSKPawn;
+class ACSKPlayerCameraManager;
 class ACSKPlayerState;
 class ATile;
 class ATower;
@@ -84,6 +85,8 @@ UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+	friend class ACSKPlayerCameraManager;
 	
 public:
 
@@ -151,6 +154,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetCSKPlayerState() const;
 
+	/** Get camera manager as CSK camera manager */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerCameraManager* GetCSKPlayerCameraManager() const;
+
 	/** Get cached CSK HUD (only valid on clients) */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKHUD* GetCSKHUD() const;
@@ -165,6 +172,11 @@ protected:
 	can be null, to signal that the player is no longer over a tile */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	void OnNewTileHovered(ATile* NewTile);
+
+private:
+
+	/** Notify from camera manager that fade out/in has finished */
+	void NotifyFadeOutInSequenceFinished();
 
 public:
 
@@ -258,9 +270,17 @@ protected:
 
 public:
 
-	/** Notify that the coin sequence has started */
+	/** Notify to transition to the coin sequence */
 	UFUNCTION(Client, Reliable)
-	void Client_OnCoinSequenceStart(ACoinSequenceActor* SequenceActor);
+	void Client_TransitionToCoinSequence(ACoinSequenceActor* SequenceActor);
+
+	/** Notify that the winner of the coin toss has been decided */
+	UFUNCTION(Client, Reliable)
+	void Client_OnStartingPlayerDecided(bool bStartingPlayer);
+
+	/** Notify to transition to the board (our pawn) */
+	UFUNCTION(Client, Reliable)
+	void Client_TransitionToBoard();
 
 	/** Called by the game mode when transitioning to the board */
 	void OnTransitionToBoard(); // Refactor
@@ -268,6 +288,12 @@ public:
 	/** Notify that the match has concluded */
 	UFUNCTION(Client, Reliable)
 	void Client_OnMatchFinished(bool bIsWinner);
+
+private:
+
+	/** Informs the server that this client has finished transition to the coin sequence area */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_TransitionedToCoinSequence();
 
 public:
 

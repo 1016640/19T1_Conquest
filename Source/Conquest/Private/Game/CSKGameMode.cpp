@@ -410,6 +410,26 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 {
 	if (NewState != MatchState)
 	{
+		if (Handle_EnterMatchState.IsValid())
+		{
+			// A new state might be delayed with this call interrupting it,
+			// we are disabling it to avoid rapid succession of state changes
+			FTimerManager& TimerManager = GetWorldTimerManager();
+			TimerManager.ClearTimer(Handle_EnterMatchState);
+
+			Handle_EnterMatchState.Invalidate();
+
+			// I wanted to add a log check here to inform developers if this function was
+			// called while a delay change was pending, but FTimerManager doesn't offer the
+			// ability to get a timers status, so .IsTimerActive() would return true even
+			// if the this function was being executed by the timer manager.
+
+			// TODO?
+			// Another option would be to make another function that the timer is set to call instead,
+			// where the timer is disabled before calling this function. This would result in the
+			// timer only be active in this function if a delayed change is pending.
+		}
+
 		#if WITH_EDITOR
 		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKMatchState"));
 		UE_LOG(LogConquest, Log, TEXT("Entering Match State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
@@ -579,59 +599,52 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 
 void ACSKGameMode::OnCoinFlipStart()
 {
-	ACoinSequenceActor* SequenceActor = nullptr;
+	// We want to make sure these are done before we start any match operations (including the coin flip)
+	{
+		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+		{
+			APlayerController* PlayerController = Iterator->Get();
+			if (PlayerController && (PlayerController->GetPawn() == nullptr) && PlayerCanRestart(PlayerController))
+			{
+				RestartPlayer(PlayerController);
+			}
+		}
 
+		// Wait for level streaming to finish loading
+		GEngine->BlockTillLevelStreamingCompleted(GetWorld());
+	}
+
+	PlayersAtCoinSequence = 0;
+	bExecutingCoinSequnce = false;
+
+	// We need to find a sequence actor to use
 	UWorld* World = GetWorld();
 	for (TActorIterator<ACoinSequenceActor> It(World); It; ++It)
 	{
-		SequenceActor = *It;
+		CoinSequenceActor = *It;
 	}
 
-	if (SequenceActor)
+	if (CoinSequenceActor)
 	{
+		// Notify players to transition to board (Who will report back to us once done)
 		for (ACSKPlayerController* Controller : Players)
 		{
-			Controller->Client_OnCoinSequenceStart(SequenceActor);
+			Controller->Client_TransitionToCoinSequence(CoinSequenceActor);
 		}
-
-		// TODO: We would want to delay this so we have a nice smooth transition
-		// for now
-		SequenceActor->StartCoinSequence();
 	}
 	else
 	{
-		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match"));
+		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match in 5 seconds"));
 
+		// Force match to start
 		StartingPlayerID = GenerateCoinFlipWinner() ? 0 : 1;
-		
-		// Start match after a small delay // TODO: Make function
-		{
-			FTimerDelegate TimerCallback;
-			TimerCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::Running);
-
-			FTimerHandle TempHandle;
-			FTimerManager& TimerManager = GetWorldTimerManager();
-			TimerManager.SetTimer(TempHandle, TimerCallback, 1.f, false);
-		}
+		EnterMatchStateAfterDelay(ECSKMatchState::Running, 5.f);
 	}
 }
 
 // TODO: Fixup this process once I get a better understanding of how game mode initiates itself and clients
 void ACSKGameMode::OnMatchStart()
 {
-	// Restart all players (even those that aren't participating
-	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
-	{
-		APlayerController* PlayerController = Iterator->Get();
-		if (PlayerController && (PlayerController->GetPawn() == nullptr) && PlayerCanRestart(PlayerController))
-		{
-			RestartPlayer(PlayerController);
-		}
-	}
-
-	// Wait for level streaming to finish loading
-	GEngine->BlockTillLevelStreamingCompleted(GetWorld());
-
 	// Give players the default resources
 	ResetResourcesForPlayers();
 
@@ -678,13 +691,12 @@ void ACSKGameMode::OnMatchFinished()
 		Controller->Client_OnMatchFinished(Controller == MatchWinner);
 	}
 
-	// Delay exiting so players can read post match states
-	FTimerDelegate DelayedCallback;
-	DelayedCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::LeavingGame);
-
-	FTimerHandle TempHandle;
+	// Clear potential round state delay
 	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.SetTimer(TempHandle, DelayedCallback, FMath::Max(1.f, PostMatchDelay), false);
+	TimerManager.ClearTimer(Handle_EnterRoundState);
+
+	// Delay exiting so players can read post match states
+	EnterMatchStateAfterDelay(ECSKMatchState::LeavingGame, FMath::Max(1.f, PostMatchDelay));
 }
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
@@ -762,6 +774,37 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 		UE_LOG(LogConquest, Log, TEXT("Skipping End Round Phase for round %i as no placed towers can perform actions"), CSKGameState->GetRound());
 
 		EnterRoundStateAfterDelay(ECSKRoundState::CollectionPhase, 2.f);
+	}
+}
+
+void ACSKGameMode::EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay)
+{
+	if (MatchState == NewState)
+	{
+		return;
+	}
+
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	if (TimerManager.IsTimerActive(Handle_EnterMatchState))
+	{
+		TimerManager.ClearTimer(Handle_EnterMatchState);
+
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameMode::EnterMatchStateAfterDelay: Cancelling existing delay since "
+			"a new delay has been requested (This might be called during that delays callback execution though!)."));
+	}
+
+	// Create delegate with param state set
+	FTimerDelegate DelayedCallback;
+	DelayedCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, NewState);
+
+	if (Delay > 0.f)
+	{
+		TimerManager.SetTimer(Handle_EnterMatchState, DelayedCallback, Delay, false);
+	}
+	else
+	{
+		TimerManager.SetTimerForNextTick(DelayedCallback);
+		Handle_EnterMatchState.Invalidate();
 	}
 }
 
@@ -874,18 +917,70 @@ bool ACSKGameMode::GenerateCoinFlipWinner_Implementation() const
 	return (RandomValue % 2) == 1;
 }
 
+void ACSKGameMode::OnPlayerReadyForCoinFlip()
+{
+	if (MatchState == ECSKMatchState::CoinFlip)
+	{
+		// We are waiting for both players to transition back to the board
+		if (bExecutingCoinSequnce)
+		{
+			if (PlayersAtCoinSequence > 0)
+			{
+				--PlayersAtCoinSequence;
+				if (PlayersAtCoinSequence == 0)
+				{
+					CoinSequenceActor->Destroy();
+					bExecutingCoinSequnce = false;
+
+					EnterMatchState(ECSKMatchState::Running);
+				}
+			}
+		}
+		// We are waiting for both players to transition to the coin sequence
+		else
+		{
+			// We can't perform the coin flip without the sequence actor
+			if (!CoinSequenceActor)
+			{
+				return;
+			}
+
+			// Start the coin flip once both players are ready
+			if (PlayersAtCoinSequence < CSK_MAX_NUM_PLAYERS)
+			{
+				++PlayersAtCoinSequence;
+				if (PlayersAtCoinSequence == CSK_MAX_NUM_PLAYERS)
+				{
+					CoinSequenceActor->StartCoinSequence();
+					bExecutingCoinSequnce = true;
+				}
+			}
+		}
+	}
+}
+
 void ACSKGameMode::OnStartingPlayerDecided(int32 WinningPlayerID)
 {
 	StartingPlayerID = FMath::Clamp(WinningPlayerID, 0, 1);
 	
-	// Start match after a delay
+	// Notify each client of the winner
+	for (ACSKPlayerController* Controller : Players)
 	{
-		FTimerDelegate TimerCallback;
-		TimerCallback.BindUObject(this, &ACSKGameMode::EnterMatchState, ECSKMatchState::Running);
+		bool bIsStartingPlayer = Controller->CSKPlayerID == StartingPlayerID;
+		Controller->Client_OnStartingPlayerDecided(bIsStartingPlayer);
+	}
 
-		FTimerHandle TempHandle;
-		FTimerManager& TimerManager = GetWorldTimerManager();
-		TimerManager.SetTimer(TempHandle, TimerCallback, 5.f, false);
+	// We can wait a bit to give each player some time
+	// to read and understand which player is going first
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_PostCoinFlipDelay, this, &ACSKGameMode::PostCoinFlipDelayFinished, 5.f, false);
+}
+
+void ACSKGameMode::PostCoinFlipDelayFinished()
+{
+	for (ACSKPlayerController* Controller : Players)
+	{
+		Controller->Client_TransitionToBoard();
 	}
 }
 

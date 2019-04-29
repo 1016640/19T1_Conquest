@@ -8,6 +8,7 @@
 
 class ACSKPlayerState;
 class ATile;
+class UCoinTossResultWidget;
 class UCSKHUDWidget;
 class UUserWidget;
 class USpell;
@@ -63,7 +64,10 @@ public:
 
 public:
 
-	/** Notify that the match has finished and the post match widget should */
+	/** Notify to toggle the coin toss result widget */
+	void OnToggleCoinTossResult(bool bDisplay, bool bIsWinner);
+
+	/** Notify that the match has finished and the post match widget should be display */
 	void OnMatchFinished(bool bIsWinner);
 
 private:
@@ -72,6 +76,10 @@ private:
 	UCSKHUDWidget* GetCSKHUDInstance(bool bCreateIfNull = true);
 
 protected:
+
+	/** Instance of the coin toss result widget */
+	UPROPERTY()
+	UCoinTossResultWidget* CoinTossWidgetInstance;
 
 	/** Instance of the CSKHUD widget */
 	UPROPERTY()
@@ -82,6 +90,10 @@ protected:
 	UUserWidget* PostMatchWidgetInstance;
 
 protected:
+
+	/** The widget to use to display the coin toss result */
+	UPROPERTY(EditAnywhere, Category = CSK)
+	TSubclassOf<UCoinTossResultWidget> CoinTossWidgetTemplate;
 	
 	/** The widget to use when entering game loop */
 	UPROPERTY(EditAnywhere, Category = CSK)

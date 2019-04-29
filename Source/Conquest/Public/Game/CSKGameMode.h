@@ -10,6 +10,7 @@
 
 class ACastle;
 class ACastleAIController;
+class ACoinSequenceActor;
 class ACSKPlayerController;
 class ACSKPlayerState;
 class APlayerStart;
@@ -286,7 +287,10 @@ protected:
 
 private:
 
-	/** Helper function for setting entering given round state after given delay */
+	/** Helper function for entering given match state after given delay */
+	void EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay);
+
+	/** Helper function for entering given round state after given delay */
 	void EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay);
 
 	/** Determines the match state change event to call based on previous and new match state */
@@ -315,11 +319,11 @@ protected:
 
 private:
 
+	/** Timer handle to the small delay before entering a new match state */
+	FTimerHandle Handle_EnterMatchState;
+
 	/** Timer handle to the small delay before entering a new round state */
 	FTimerHandle Handle_EnterRoundState;
-
-
-
 
 public:
 
@@ -328,8 +332,34 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
 	bool GenerateCoinFlipWinner() const;
 
+public:
+
+	/** Notify from a player that they are ready for the coin flip */
+	void OnPlayerReadyForCoinFlip();
+
 	/** Notify from the coin sequence actor that the sequence has finished */
 	void OnStartingPlayerDecided(int32 WinningPlayerID);
+
+private:
+
+	/** Notifies the clients to begin transitioning back to board */
+	void PostCoinFlipDelayFinished();
+
+private:
+
+	/** The coin sequence actor that is simulating a coin flip */
+	UPROPERTY(Transient)
+	ACoinSequenceActor* CoinSequenceActor;
+
+	/** How many players have transitioned to the coin sequence actor. This is also used
+	(but reverse) for how many players remaing at the sequence actor when sequence is done */
+	int8 PlayersAtCoinSequence;
+
+	/** If we are currently running the coin sequence */
+	uint32 bExecutingCoinSequnce : 1;
+
+	/** Handle for small delay between the end of the coin flip and transitioning back to the board */
+	FTimerHandle Handle_PostCoinFlipDelay;
 
 public:
 
@@ -349,9 +379,6 @@ protected:
 	/** The ID of the player who goes first */
 	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	int32 StartingPlayerID;
-
-
-
 
 private:
 

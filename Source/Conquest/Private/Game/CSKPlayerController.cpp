@@ -6,6 +6,7 @@
 #include "CSKHUD.h"
 #include "CSKLocalPlayer.h"
 #include "CSKPawn.h"
+#include "CSKPlayerCameraManager.h"
 #include "CSKPlayerState.h"
 #include "BoardManager.h"
 #include "Castle.h"
@@ -24,6 +25,7 @@
 ACSKPlayerController::ACSKPlayerController()
 {
 	bShowMouseCursor = true;
+	PlayerCameraManagerClass = ACSKPlayerCameraManager::StaticClass();
 
 	CachedCSKHUD = nullptr;
 	CastleController = nullptr;
@@ -156,7 +158,7 @@ void ACSKPlayerController::SetSelectedTower(TSubclassOf<UTowerConstructionData> 
 
 void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex)
 {
-	if (IsLocalPlayerController() /*&&*/)
+	if (IsLocalPlayerController())
 	{
 		SelectedSpellCard = InSpellCard;
 		
@@ -253,6 +255,11 @@ ACSKPawn* ACSKPlayerController::GetCSKPawn() const
 ACSKPlayerState* ACSKPlayerController::GetCSKPlayerState() const
 {
 	return GetPlayerState<ACSKPlayerState>();
+}
+
+ACSKPlayerCameraManager* ACSKPlayerController::GetCSKPlayerCameraManager() const
+{
+	return Cast<ACSKPlayerCameraManager>(PlayerCameraManager);
 }
 
 ACSKHUD* ACSKPlayerController::GetCSKHUD() const
@@ -353,6 +360,11 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 			SelectedActionTileCandidates.Empty();
 		}
 	}
+}
+
+void ACSKPlayerController::NotifyFadeOutInSequenceFinished()
+{
+	Server_TransitionedToCoinSequence();
 }
 
 void ACSKPlayerController::SetCanSelectTile(bool bEnable)
@@ -538,11 +550,34 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 	}
 }
 
-void ACSKPlayerController::Client_OnCoinSequenceStart_Implementation(ACoinSequenceActor* SequenceActor)
+void ACSKPlayerController::Client_TransitionToCoinSequence_Implementation(ACoinSequenceActor* SequenceActor)
 {
-	if (SequenceActor)
+	ACSKPlayerCameraManager* CameraManager = GetCSKPlayerCameraManager();
+	if (CameraManager)
 	{
-		SetViewTargetWithBlend(SequenceActor);
+		CameraManager->StartFadeInAndOutSequence(SequenceActor, 1.f);
+	}
+}
+
+void ACSKPlayerController::Client_OnStartingPlayerDecided_Implementation(bool bStartingPlayer)
+{
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnToggleCoinTossResult(true, bStartingPlayer);
+	}
+}
+
+void ACSKPlayerController::Client_TransitionToBoard_Implementation()
+{
+	ACSKPlayerCameraManager* CameraManager = GetCSKPlayerCameraManager();
+	if (CameraManager)
+	{
+		CameraManager->StartFadeInAndOutSequence(GetPawn(), 1.f);
+	}
+
+	if (CachedCSKHUD)
+	{
+		CachedCSKHUD->OnToggleCoinTossResult(false, false);
 	}
 }
 
@@ -566,6 +601,20 @@ void ACSKPlayerController::OnTransitionToBoard()
 
 		// Have client handle any local transition requirements
 		Client_OnTransitionToBoard();
+	}
+}
+
+bool ACSKPlayerController::Server_TransitionedToCoinSequence_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_TransitionedToCoinSequence_Implementation()
+{
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		GameMode->OnPlayerReadyForCoinFlip();
 	}
 }
 

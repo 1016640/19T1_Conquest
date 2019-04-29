@@ -8,19 +8,23 @@
 #include "BoardManager.h"
 #include "UserWidget.h"
 #include "Tile.h"
+#include "Widgets/CoinTossResultWidget.h"
 #include "Widgets/CSKHUDWidget.h"
 
 #define LOCTEXT_NAMESPACE "CSKHUD"
 
 ACSKHUD::ACSKHUD()
 {
+	CoinTossWidgetInstance = nullptr;
 	CSKHUDInstance = nullptr;
+	PostMatchWidgetInstance = nullptr;
 }
 
 void ACSKHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
+	UConquestFunctionLibrary::RemoveWidgetFromParent(CoinTossWidgetInstance);
 	UConquestFunctionLibrary::RemoveWidgetFromParent(CSKHUDInstance);
 	UConquestFunctionLibrary::RemoveWidgetFromParent(PostMatchWidgetInstance);
 }
@@ -126,10 +130,10 @@ void ACSKHUD::OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellC
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
-		Widget->OnActionStart();
+			Widget->OnActionStart();
 
-		switch (Mode)
-		{
+			switch (Mode)
+			{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
 				Widget->OnMoveCastleActionStart();
@@ -144,10 +148,6 @@ void ACSKHUD::OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellC
 			{
 				Widget->OnCastSpellActionStart(SpellContext);
 				break;
-			}
-			default:
-			{
-				
 			}
 		}
 	}
@@ -177,10 +177,6 @@ void ACSKHUD::OnActionFinished(ECSKActionPhaseMode Mode, EActiveSpellContext Spe
 				Widget->OnCastSpellActionFinished(SpellContext);
 				break;
 			}
-			default:
-			{
-				
-			}
 		}
 	}
 }
@@ -200,6 +196,29 @@ void ACSKHUD::OnBonusSpellSelection(bool bInstigator, const USpell* BonusSpell)
 	if (Widget)
 	{
 		Widget->OnBonusSpellSelection(bInstigator, BonusSpell);
+	}
+}
+
+void ACSKHUD::OnToggleCoinTossResult(bool bDisplay, bool bIsWinner)
+{
+	if (bDisplay)
+	{
+		if (!CoinTossWidgetTemplate)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKHUD::OnToggleCoinTossResult: Result Widget template is null"));
+			return;
+		}
+
+		CoinTossWidgetInstance = CreateWidget<UCoinTossResultWidget, APlayerController>(PlayerOwner, CoinTossWidgetTemplate);
+		if (CoinTossWidgetInstance)
+		{
+			CoinTossWidgetInstance->DisplayWinner(bIsWinner);
+			UConquestFunctionLibrary::AddWidgetToViewport(CoinTossWidgetInstance);
+		}
+	}
+	else
+	{
+		UConquestFunctionLibrary::RemoveWidgetFromParent(CoinTossWidgetInstance);
 	}
 }
 

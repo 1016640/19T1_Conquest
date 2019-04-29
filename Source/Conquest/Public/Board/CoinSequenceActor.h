@@ -27,6 +27,7 @@ public:
 public:
 
 	// Begin AActor Interface
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void CalcCamera(float DeltaTime, struct FMinimalViewInfo& OutResult) override;
 	virtual bool HasActiveCameraComponent() const override { return true; }
@@ -49,11 +50,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Sequence)
 	ACoin* Coin;
 
-	/** The location to use when watching the coin flip */
+	/** The location to use when watching the coin flip (Local Space) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Sequence, meta = (MakeEditWidget="true"))
 	FVector FlipCameraLocation;
 
-	/** The location to use after the coin flip has finished */
+	/** The location to use after the coin flip has finished (Local Space) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Sequence, meta = (MakeEditWidget = "true"))
 	FVector FocusCameraLocation;
 
