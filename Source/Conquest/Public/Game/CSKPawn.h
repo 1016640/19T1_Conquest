@@ -83,7 +83,7 @@ public:
 
 	/** Moves this pawn over to the desired location overtime */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void TravelToLocation(const FVector& Location, bool bCancellable = true);
+	void TravelToLocation(const FVector& Location, float TravelTime, bool bCancellable = true);
 
 	/** Tracks the given actor (can be null to track none) */
 	UFUNCTION(BlueprintCallable, Category = CSK)

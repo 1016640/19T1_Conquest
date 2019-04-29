@@ -444,7 +444,7 @@ void ACSKPlayerController::ResetCamera()
 	ACSKPawn* CSKPawn = GetCSKPawn();
 	if (CSKPawn && CastlePawn)
 	{
-		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation());
+		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 1.5f);
 	}
 }
 
@@ -505,7 +505,7 @@ void ACSKPlayerController::OnRoundStateChanged(ECSKRoundState NewState)
 			if (CSKPawn && CastlePawn)
 			{
 				// Focus on our castle while we wait for tallied resources
-				CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+				CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 2.f, false);
 			}
 
 			bWaitingOnTallyEvent = false;
@@ -916,7 +916,7 @@ void ACSKPlayerController::OnRep_bIsActionPhase()
 		ACSKPawn* CSKPawn = GetCSKPawn();
 		if (CSKPawn && CastlePawn)
 		{
-			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), true);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 1.f, true);
 		}
 
 		SetCanSelectTile(true);
@@ -999,7 +999,7 @@ void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
 
 		if (CastlePawn)
 		{
-			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), false);
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 2.f, false);
 		}
 	}
 	else
@@ -1068,7 +1068,7 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 	if (CSKPawn && TargetTile)
 	{
 		// Have players watch get tower built		
-		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.5f, false);
 		SetIgnoreMoveInput(true);
 	}
 
@@ -1125,8 +1125,8 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 	ACSKPawn* CSKPawn = GetCSKPawn();
 	if (CSKPawn && TargetTile)
 	{
-		// Have players watch spell in action	
-		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), false);
+		// Have players watch spell in action 
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.f, false);
 	}
 
 	// This can be reset here safely
