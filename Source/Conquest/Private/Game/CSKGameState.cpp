@@ -141,6 +141,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
 	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
 	DOREPLIFETIME(ACSKGameState, BonusSpellCounterTimerRemaining);
+	DOREPLIFETIME(ACSKGameState, LatestActionHealthReports);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
@@ -317,6 +318,11 @@ void ACSKGameState::HandleMatchStateChange(ECSKMatchState NewState)
 
 	switch (NewState)
 	{
+		case ECSKMatchState::CoinFlip:
+		{
+			NotifyPerformCoinFlip();
+			break;
+		}
 		case ECSKMatchState::Running:
 		{
 			NotifyMatchStart();
@@ -391,6 +397,14 @@ void ACSKGameState::Multi_SetWinDetails_Implementation(int32 WinnerID, ECSKMatch
 	MatchWinCondition = WinCondition;
 }
 
+void ACSKGameState::SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports)
+{
+	if (HasAuthority())
+	{
+		LatestActionHealthReports = InHealthReports;
+	}
+}
+
 int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
 {
 	const int32* Num = TowerInstanceTable.Find(Tower);
@@ -411,6 +425,17 @@ ACSKPlayerState* ACSKGameState::GetPlayerStateWithID(int32 PlayerID) const
 		{
 			return PlayerState;
 		}
+	}
+
+	return nullptr;
+}
+
+ACSKPlayerState* ACSKGameState::GetOpposingPlayerState(ACSKPlayerState* Player) const
+{
+	if (Player)
+	{
+		int32 OpposingPlayerID = FMath::Abs(Player->GetCSKPlayerID() - 1);
+		return GetPlayerStateWithID(OpposingPlayerID);
 	}
 
 	return nullptr;
@@ -457,6 +482,26 @@ float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 	return 0.f;
 }
 
+TArray<FHealthChangeReport> ACSKGameState::GetDamageHealthReports(bool bFilterOutDead) const
+{
+	return QueryLatestHealthReports(true, nullptr, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetHealingHealthReports() const
+{
+	return QueryLatestHealthReports(false, nullptr, true);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead) const
+{
+	return QueryLatestHealthReports(true, PlayerState, bFilterOutDead);
+}
+
+TArray<FHealthChangeReport> ACSKGameState::GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const
+{
+	return QueryLatestHealthReports(false, PlayerState, true);
+}
+
 void ACSKGameState::AddBonusActionPhaseTime()
 {
 	if (IsActionPhaseTimed())
@@ -487,6 +532,41 @@ void ACSKGameState::ResetActionPhaseProperties()
 	{
 		ActionPhasePlayerID = -1;
 	}
+}
+
+TArray<FHealthChangeReport> ACSKGameState::QueryLatestHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const
+{
+	TArray<FHealthChangeReport> Reports;
+	for (const FHealthChangeReport& Repo : LatestActionHealthReports)
+	{
+		// Filter owner
+		if (InOwner)
+		{
+			if (Repo.Owner != InOwner)
+			{
+				continue;
+			}
+		}
+
+		// Filter out differen type
+		if (bDamaged != Repo.bWasDamaged)
+		{
+			continue;
+		}
+
+		// Only filter killed if checking damaged
+		if (bDamaged)
+		{
+			if (bExcludeDead && Repo.bKilled)
+			{
+				continue;
+			}
+		}
+
+		Reports.Add(Repo);
+	}
+
+	return Reports;
 }
 
 void ACSKGameState::HandleMoveRequestConfirmed()
@@ -546,7 +626,7 @@ void ACSKGameState::HandleSpellRequestFinished()
 	}
 }
 
-void ACSKGameState::HandleQuickEffectSelectionStart()
+void ACSKGameState::HandleQuickEffectSelectionStart(bool bNullify)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
@@ -559,7 +639,7 @@ void ACSKGameState::HandleQuickEffectSelectionStart()
 			QuickEffectCounterTimeRemaining = -1.f;
 		}
 
-		Multi_HandleQuickEffectSelection();
+		Multi_HandleQuickEffectSelection(bNullify);
 	}
 }
 
@@ -817,6 +897,7 @@ void ACSKGameState::UpdateRules()
 		ActionPhaseTime = GameMode->GetActionPhaseTime();
 		MaxNumTowers = GameMode->GetMaxNumTowers();
 		MaxNumDuplicatedTowers = GameMode->GetMaxNumDuplicatedTowers();
+		MaxNumDuplicatedTowerTypes = GameMode->GetMaxNumDuplicatedTowerTypes();
 		MaxNumLegendaryTowers = GameMode->GetMaxNumLegendaryTowers();
 		MaxBuildRange = GameMode->GetMaxBuildRange();
 		MinTileMovements = GameMode->GetMinTileMovementsPerTurn();
@@ -862,7 +943,7 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	if (DefaultTower->IsLegendaryTower())
 	{
 		// Has player built max amount of legendary towers allowed?
-		if (PlayerState->GetNumLegendaryTowersOwned() >= MaxNumLegendaryTowers)
+		if (MaxNumLegendaryTowers > 0 && PlayerState->GetNumLegendaryTowersOwned() >= MaxNumLegendaryTowers)
 		{
 			return false;
 		}
@@ -876,15 +957,27 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	else
 	{
 		// Has player built the max amount of normal towers allowed?
-		if (PlayerState->GetNumNormalTowersOwned() >= MaxNumTowers)
+		if (MaxNumTowers > 0 && PlayerState->GetNumNormalTowersOwned() >= MaxNumTowers)
 		{
 			return false;
 		}
 
-		// Has player already built the max amount of duplicates?
-		if (PlayerState->GetNumOwnedTowerDuplicates(TowerClass) >= MaxNumDuplicatedTowers)
+		int32 TowerInstanceCount = PlayerState->GetNumOwnedTowerDuplicates(TowerClass);
+
+		// Has player already built the max amount of duplicates for this tower?
+		if (MaxNumDuplicatedTowers > 0 && TowerInstanceCount >= MaxNumDuplicatedTowers)
 		{
 			return false;
+		}
+
+		// Has player already created too many duplicates for different towers?
+		if (MaxNumDuplicatedTowerTypes > 0 && PlayerState->GetNumOwnedTowerDuplicateTypes() >= MaxNumDuplicatedTowerTypes)
+		{
+			// Player might be attempting to build duplicate of this building
+			if ((TowerInstanceCount + 1) > 1)
+			{
+				return false;
+			}
 		}
 	}
 
@@ -955,10 +1048,11 @@ void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* Targ
 void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
 {
 	SetFreezeActionPhaseTimer(false);
+	bCountdownQuickEffectTimer = false;
 	bCountdownBonusSpellTimer = false;
 }
 
-void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation()
+void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation(bool bNullify)
 {
 	// We want to count down the quick effect selection time
 	bCountdownQuickEffectTimer = true;

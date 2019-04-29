@@ -9,7 +9,10 @@
 class USpell;
 
 /** Delegate for when spell card has been selected */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FSpellSelected, TSubclassOf<USpell>, Spell, int32, SpellIndex);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FSpellSelected, TSubclassOf<USpell>, Spell, int32, SpellIndex, int32, AdditionalMana);
+
+/** Delegate for when additional mana has been changed */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAdditionalManaChanged, int32, AdditionalMana);
 
 /**
  * Base for widgets that represent a spell card
@@ -24,6 +27,10 @@ public:
 	/** Event that is called when a spell has been selected */
 	UPROPERTY(BlueprintAssignable, BlueprintCallable)
 	FSpellSelected OnSpellSelected;
+
+	/** Event that is called when additional mana has been changed */
+	UPROPERTY(BlueprintAssignable, BlueprintCallable)
+	FAdditionalManaChanged OnAdditionalManaChanged;
 
 private:
 

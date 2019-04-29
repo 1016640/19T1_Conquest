@@ -34,10 +34,10 @@ protected:
 public:
 
 	/** Sets all activation info */
-	void InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, ATile* InTargetedTile);
+	void InitSpellActor(ACSKPlayerState* InCastingPlayer, USpell* InCastingSpell, int32 InActivationCost, int32 InAdditionalMana, ATile* InTargetedTile);
 
 	/** Notify from game mode to begin execution of this spell */
-	void BeginExecution();
+	void BeginExecution(bool bIsPrimeSpell);
 
 	/** Notify from game mode to cancel execution of this spell */
 	void CancelExecution();
@@ -47,7 +47,7 @@ protected:
 	/** Actives this spell, any effects the spell may have should be applied on this event. This event runs on the server,
 	Once all events have concluded, FinishSpell() should be called to end activation of this spell */
 	UFUNCTION(BlueprintNativeEvent, Category = Spells)
-	void OnActivateSpell();
+	void OnActivateSpell(bool bIsPrimeSpell);
 
 	/** Finishes casting this spell. Only runs on the server and notifies game mode.
 	This does not need to be called if the spell was cancelled */
@@ -61,6 +61,12 @@ protected:
 
 public:
 
+	/** If this spell is a primary or secondary spell */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	bool IsPrimarySpell() const { return bIsPrimarySpell; }
+
+public:
+
 	/** The player currently executing this event */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
 	ACSKPlayerState* CastingPlayer;
@@ -69,9 +75,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
 	USpell* CastingSpell;
 
-	/** The amount paid to activate this spell */
+	/** The amount paid to activate this spell (discount applied) */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
 	int32 ActivationCost;
+
+	/** The additional mana provided by the caster */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
+	int32 AdditionalMana;
 
 	/** The tile the player targeted this spell with */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Activation)
@@ -79,9 +89,71 @@ public:
 
 private:
 
+	/** If this spell is the primary spell being cast. If this is false,
+	it means this spell actor was spawned from an already active spell */
+	uint8 bIsPrimarySpell : 1;
+
 	/** If this spell is running */
 	uint8 bRunning : 1;
 
 	/** If this spell has been cancelled */
 	uint8 bCancelled : 1;
+
+protected:
+
+	/** Enables input from our casters player controller. On Tile Selected
+	will only be called on the server, all other inputs on the client */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	void BindPlayerInput();
+
+	/** Disables input from our casters player controller. Will automatically
+	be called when ending execution while input has been bound */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	void UnbindPlayerInput();
+
+	/** If the player is allowed to select the given tile for spell.
+	This can run on both the owning players client and the server */
+	UFUNCTION(BlueprintImplementableEvent, Category = Spells, meta = (DisplayName = "Can Select Tile for Spell"))
+	bool BP_CanSelectTileForSpell(ATile* TargetTile);
+
+	/** Called when player has selected the given tile for spell. This only
+	executes on the server and when CanSelectTileForSpell has returned true */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Spells, meta = (DisplayName = "On Tile Selected for Spell"))
+	void BP_OnTileSelectedForSpell(ATile* TargetTile);
+
+private:
+
+	/** Binds custom tile selection callbacks client side */
+	UFUNCTION(Client, Reliable)
+	void Client_BindPlayerInput(bool bBind);
+
+private:
+
+	/** If custom tile selection callbacks have been bound */
+	uint8 bIsInputBound : 1;
+
+protected:
+
+	/** Casts a sub spell with this spells caster also being the caster. Takes in an optional cost override, 
+	with any value equal or greater than zero being a valid override. This spell could potentially override 
+	this spells input bindings (same if spawning multiple), be sure to keep this in mind.	
+	Will return a valid spell actor if spell cast was successfull, null if not.*/
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	ASpellActor* CastSubSpell(TSubclassOf<USpell> InSpell, ATile* InTargetTile, int32 InAdditionalMana = 0, int32 InOverrideCost = -1);
+
+	/** Notify that one of the sub spells we cast has finished execution. This is only called on the server */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Spells, meta = (DisplayName = "On Sub Spell Finished"))
+	void BP_OnSubSpellFinished(ASpellActor* FinishedSpell);
+
+private:
+
+	/** Callback that a sub spell has finished. This spell should belong to us */
+	UFUNCTION()
+	void OnSubSpellFinished(ASpellActor* FinishedSpell);
+
+private:
+
+	/** The sub spells we have cast. Only valid if a primary spell */
+	UPROPERTY(VisibleInstanceOnly, Transient, AdvancedDisplay, Category = Spells)
+	TSet<ASpellActor*> ActiveSubSpells;
 };

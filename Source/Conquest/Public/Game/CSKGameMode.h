@@ -4,23 +4,101 @@
 
 #include "Conquest.h"
 #include "GameFramework/GameModeBase.h"
+#include "BoardPieceInterface.h"
 #include "BoardTypes.h"
 #include "CSKGameMode.generated.h"
 
 class ACastle;
 class ACastleAIController;
+class ACoinSequenceActor;
 class ACSKPlayerController;
 class ACSKPlayerState;
 class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
+class IBoardPieceInterface;
 class UHealthComponent;
 class USpell;
 class USpellCard;
 class UTowerConstructionData;
 
 using FCSKPlayerControllerArray = TArray<ACSKPlayerController*, TFixedAllocator<CSK_MAX_NUM_PLAYERS>>;
+
+/** Delegate for when a sub spell has finished execution */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FSubSpellFinished, ASpellActor*, FinishedSpell);
+
+/** Contains information about a pending spell request */
+USTRUCT()
+struct CONQUEST_API FPendingSpellRequest
+{
+	GENERATED_BODY()
+
+public:
+
+	FPendingSpellRequest()
+		: SpellIndex(0)
+		, TargetTile(nullptr)
+		, CalculatedCost(0)
+		, AdditionalMana(0)
+		, bIsSet(false)
+	{
+
+	}
+
+public:
+
+	/** Sets this request */
+	void Set(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InCalculatedCost, int32 InAdditionalMana)
+	{
+		SpellCard = InSpellCard;
+		SpellIndex = InSpellIndex;
+		TargetTile = InTargetTile;
+		CalculatedCost = InCalculatedCost;
+		AdditionalMana = InAdditionalMana;
+
+		bIsSet = true;
+	}
+
+	/** Resets this request */
+	void Reset()
+	{
+		SpellCard = nullptr;
+		SpellIndex = 0;
+		TargetTile = nullptr;
+		CalculatedCost = 0;
+		AdditionalMana = 0;
+
+		bIsSet = false;
+	}
+
+	/** If this request is valid */
+	FORCEINLINE bool IsValid() const { return bIsSet; }
+
+public:
+
+	/** The spell card to use */
+	UPROPERTY()
+	TSubclassOf<USpellCard> SpellCard;
+
+	/** The index of the spell to use */
+	int32 SpellIndex;
+
+	/** The target of this spell */
+	UPROPERTY()
+	ATile* TargetTile;
+
+	/** The calculated final cost of this request (discounted + additional mana) */
+	int32 CalculatedCost;
+
+	/** The additional mana that was provided to this spell */
+	int32 AdditionalMana;
+
+private:
+
+	/** If this request is valid */
+	uint8 bIsSet : 1;
+};
 
 /**
  * Manages and handles events present in CSK
@@ -195,6 +273,7 @@ protected:
 
 	/** Match state notifies */
 	virtual void OnStartWaitingPreMatch();
+	virtual void OnCoinFlipStart();
 	virtual void OnMatchStart();
 	virtual void OnMatchFinished();
 	virtual void OnFinishedWaitingPostMatch();
@@ -208,7 +287,10 @@ protected:
 
 private:
 
-	/** Helper function for setting entering given round state after given delay */
+	/** Helper function for entering given match state after given delay */
+	void EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay);
+
+	/** Helper function for entering given round state after given delay */
 	void EnterRoundStateAfterDelay(ECSKRoundState NewState, float Delay);
 
 	/** Determines the match state change event to call based on previous and new match state */
@@ -237,20 +319,47 @@ protected:
 
 private:
 
+	/** Timer handle to the small delay before entering a new match state */
+	FTimerHandle Handle_EnterMatchState;
+
 	/** Timer handle to the small delay before entering a new round state */
 	FTimerHandle Handle_EnterRoundState;
-
-
-
 
 public:
 
 	/** Function called when deciding which player gets to go first.
-	True will result in Player 1 going first, false for player 2 */
+	This is called by the coin being flipped to determine what side to land on */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	bool CoinFlip() const;
+	bool GenerateCoinFlipWinner() const;
 
+public:
 
+	/** Notify from a player that they are ready for the coin flip */
+	void OnPlayerReadyForCoinFlip();
+
+	/** Notify from the coin sequence actor that the sequence has finished */
+	void OnStartingPlayerDecided(int32 WinningPlayerID);
+
+private:
+
+	/** Notifies the clients to begin transitioning back to board */
+	void PostCoinFlipDelayFinished();
+
+private:
+
+	/** The coin sequence actor that is simulating a coin flip */
+	UPROPERTY(Transient)
+	ACoinSequenceActor* CoinSequenceActor;
+
+	/** How many players have transitioned to the coin sequence actor. This is also used
+	(but reverse) for how many players remaing at the sequence actor when sequence is done */
+	int8 PlayersAtCoinSequence;
+
+	/** If we are currently running the coin sequence */
+	uint32 bExecutingCoinSequnce : 1;
+
+	/** Handle for small delay between the end of the coin flip and transitioning back to the board */
+	FTimerHandle Handle_PostCoinFlipDelay;
 
 public:
 
@@ -270,9 +379,6 @@ protected:
 	/** The ID of the player who goes first */
 	UPROPERTY(BlueprintReadOnly, Category = CSK)
 	int32 StartingPlayerID;
-
-
-
 
 private:
 
@@ -349,21 +455,27 @@ public:
 	bool RequestSkipQuickEffect();
 
 	/** Will attempt to cast the current pending bonus spell */
-	UFUNCTION(BlueprintCallable, Category = CSL)
+	UFUNCTION(BlueprintCallable, Category = CSK)
 	bool RequestCastBonusSpell(ATile* TargetTile);
 
 	/** Will attempt to skip the bonus spell target selecting without casting the spell */
 	bool RequestSkipBonusSpell();
 
 public:
+	
+	/** DO NOT CALL THIS. Casts a sub spell for current activated spell. 
+	Cost can be changed by setting a value equal or greater than zero */
+	ASpellActor* CastSubSpellForActiveSpell(TSubclassOf<USpell> SubSpell, ATile* TargetTile, int32 AdditionalMana = 0, int32 OverrideCost = -1);
 
 	/** DO NOT CALL THIS. Notify that executing spell has finished */
-	void NotifyCastSpellFinished(bool bWasCancelled);
+	void NotifyCastSpellFinished(ASpellActor* FinishedSpell, bool bWasCancelled);
 
 private:
 
 	/** Disables the action mode for active player. Will end this phase if no actions remain */
 	void DisableActionModeForActivePlayer(ECSKActionPhaseMode ActionMode);
+
+	/** ----- MOVE ACTION ----- */
 
 	/** Starts movement request for active player. The request still has the chance of failing */
 	bool ConfirmCastleMove(const FBoardPath& BoardPath);
@@ -383,6 +495,8 @@ private:
 	Will return true if the win condition has been met, false otherwise */
 	bool PostCastleMoveCheckWinCondition(ATile* SegmentTile);
 
+	/** ----- BUILD ACTION ----- */
+
 	/** Finalizes build request for active player. The request still has a chance of failing */
 	bool ConfirmBuildTower(ATower* Tower, ATile* Tile, UTowerConstructionData* ConstructData);
 
@@ -399,26 +513,41 @@ private:
 	UFUNCTION()
 	void OnPendingTowerBuildSequenceComplete();
 
+	/** ----- SPELL ACTION ----- */
+
 	/** Starts casting the spell. Will determine the instigator based on passed context */
-	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, ATile* Tile, EActiveSpellContext Context);
+	bool ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpellActor* SpellActor, int32 FinalCost, 
+		ATile* Tile, EActiveSpellContext Context, bool bConsumeOnlyQuickEffect = false);
 
 	/** Finishes the spell currently be cast */
-	void FinishCastSpell(bool bIgnoreBonusCheck = false);
+	void FinishCastSpell(bool bIgnoreQuickEffectCheck = false, bool bIgnoreBonusCheck = false);
 
 	/** Spawns the spell actor for given spell at tile */
-	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, ACSKPlayerState* PlayerState) const;
+	ASpellActor* SpawnSpellActor(USpell* Spell, ATile* Tile, int32 FinalCost, int32 AdditionalMana, ACSKPlayerState* PlayerState) const;
 
 	/** Notify from timer that we should execute the spell cast */
 	void OnStartActiveSpellCast();
 
-	/** Saves the incoming spell request and informs opposing player to choose a counter */
-	void SaveSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost);
+	/** Notify from timer that we should begin execution of given sub spell */
+	void OnStartSubSpellCast(ASpellActor* SpellActor);
 
-	/** Post spell action check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
+	/** Saves an incoming action spell request to be cast at a later time.
+	Will notify the opposing player to select a nullify spell request*/
+	void SaveActionSpellRequestAndWaitForCounterSelection(TSubclassOf<USpellCard> InSpellCard, 
+		int32 InSpellIndex, ATile* InTargetTile, int32 InFinalCost, int32 AdditionalMana);
+
+	/** Post action spell check to determine if the opposing player can
+	select a post quick effect spell. Get if a quick effect is being cast */
+	bool PostCastSpellWaitForCounterSelection();
+
+	/** Post action spell check to determine if a bonus spell should be cast. Get if a bonus spell is being cast */
 	bool PostCastSpellActivateBonusSpell();
 
 	/** Saves the incoming bonus spell and informs casting player to choose a target */
 	void SaveBonusSpellAndWaitForTargetSelection(TSubclassOf<USpell> InBonusSpell);
+
+	/** Notifies players and game state to wait for quick effect selection */
+	void OnStartWaitForCounterSelection(bool bNullify, TSubclassOf<USpell> SpellToCounter, ATile* TargetTile) const;
 
 public:
 
@@ -446,7 +575,8 @@ private:
 	/** If we should allow any action requests */
 	FORCEINLINE bool ShouldAcceptRequests() const
 	{
-		return !(IsWaitingForAction() || !bWaitingOnQuickEffectSelection);
+		return !(IsWaitingForAction() || 
+			!(bWaitingOnNullifyQuickEffectSelection || bWaitingOnPostQuickEffectSelection || bWaitingOnBonusSpellSelection));
 	}
 
 	/** Resets all wait action flags */
@@ -459,19 +589,24 @@ private:
 		ActivePlayerPendingTower = nullptr;
 		ActivePlayerPendingTowerTile = nullptr;
 		
-		bWaitingOnQuickEffectSelection = false;
+		bWaitingOnNullifyQuickEffectSelection = false;
+		ActiveSpell = nullptr;
+		ActiveSpellCard = nullptr;
+		ActiveSpellActor = nullptr;
+		ActiveSpellTarget = nullptr;
 		ActiveSpellContext = EActiveSpellContext::None;
-		ActiveSpellRequestSpellCard = nullptr;
-		ActiveSpellRequestSpellIndex = 0;
-		ActiveSpellRequestSpellTile = nullptr;
-		ActiveSpellRequestCalculatedCost = 0;
-		ActivePlayerSpell = nullptr;
-		ActivePlayerSpellCard = nullptr;
-		ActivePlayerSpellActor = nullptr;
-		ActivePlayerSpellContext = EActiveSpellContext::None;
+		ActiveSubSpellActors.Empty();
 		bWaitingOnBonusSpellSelection = false;
 		BonusSpellContext = EActiveSpellContext::None;
+
+		ActivePlayerPendingSpellRequest.Reset();
 	}
+
+public:
+
+	/** Event for when a sub spell has finished. This does
+	not get called for sub spells that were cancelled early */
+	FSubSpellFinished OnSubSpellFinished;
 
 protected:
 
@@ -490,11 +625,15 @@ private:
 	/** If we are waiting for actives players spell action to complete */
 	uint32 bWaitingOnSpellAction : 1;
 
+	/** ----- MOVE ACTION ----- */
+
 	/** Delegate handle for when active players castle completes a segment of its path following */
 	FDelegateHandle Handle_ActivePlayerPathSegment;
 
 	/** Delegate handle for when active players castle reaches its destination tile */
 	FDelegateHandle Handle_ActivePlayerPathComplete;
+
+	/** ----- BUILD ACTION ----- */
 
 	/** The tower that is in the process of being built. Keeping this here so we can
 	wait for it to initially replicate to all clients before placing on the board */
@@ -512,47 +651,44 @@ private:
 	/** Delegate handle for when pending towers build sequence has completed */
 	FDelegateHandle Handle_ActivePlayerBuildSequenceComplete;
 
-	/** The type of spell that is currently active */
-	EActiveSpellContext ActiveSpellContext;
+	/** ----- SPELL ACTION ----- */
 
-	/** If we are waiting on the opposing player (against active player) to select a quick effect counter */
-	uint32 bWaitingOnQuickEffectSelection : 1;
+	/** If we are waiting on a nullify quick effect selection  */
+	uint32 bWaitingOnNullifyQuickEffectSelection : 1;
 
-	/** The spell card the active player attempted to cast. We track
-	this here in-case the opposing player decides not to counter */
-	UPROPERTY()
-	TSubclassOf<USpellCard> ActiveSpellRequestSpellCard;
-
-	/** The index of the spell the active player attempted to cast. We 
-	track this here in-case the opposing player decides not to counter */
-	int32 ActiveSpellRequestSpellIndex;
-
-	/** The tile the active player attempted to cast their spell on. We 
-	track this here in-case the opposing player decides not to counter */
-	UPROPERTY()
-	ATile* ActiveSpellRequestSpellTile;
-
-	/** The cost that was calculated or active players spell request. We 
-	track this here in-case the opposing player decides not to counter */
-	int32 ActiveSpellRequestCalculatedCost;
-
-	/** The spell being cast by active player (Points to default object). */
-	UPROPERTY()
-	USpell* ActivePlayerSpell;
-
-	/** The spell card associated with the spell being cast (Points to default object). */
-	UPROPERTY()
-	USpellCard* ActivePlayerSpellCard;
-
-	/** Instanced actor provided executing the spells logic */
-	UPROPERTY()
-	ASpellActor* ActivePlayerSpellActor;
-
-	/** The context of the spell being cast */
-	EActiveSpellContext ActivePlayerSpellContext;
+	/** If we are waiting on a post action quick effect selection */
+	uint32 bWaitingOnPostQuickEffectSelection : 1;
 
 	/** If we are waiting on the player who casted the current spell to select a target for the bonus spell */
 	uint32 bWaitingOnBonusSpellSelection : 1;
+
+	/** The active players pending spell request. This saves an incoming action spell
+	request while the opposing player selects a potential quick effect spell */
+	UPROPERTY(Transient)
+	FPendingSpellRequest ActivePlayerPendingSpellRequest;
+
+	/** The spell being cast by active player (Points to default object). */
+	UPROPERTY()
+	USpell* ActiveSpell;
+
+	/** The spell card associated with the spell being cast (Points to default object). */
+	UPROPERTY()
+	USpellCard* ActiveSpellCard;
+
+	/** Instanced actor provided executing the spells logic */
+	UPROPERTY()
+	ASpellActor* ActiveSpellActor;
+
+	/** The target for the active spell */
+	UPROPERTY()
+	ATile* ActiveSpellTarget;
+
+	/** The context of the spell being cast */
+	EActiveSpellContext ActiveSpellContext;
+
+	/** Any secondary spell actors that have been spawned by the current spell actor */
+	UPROPERTY()
+	TArray<ASpellActor*> ActiveSubSpellActors; // TODO: Could be a TSet
 
 	/** The bonus spell that is waiting to be cast */
 	UPROPERTY()
@@ -613,11 +749,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 ClampManaToLimit(int32 Mana) const { return FMath::Clamp(Mana, 0, MaxMana); }
 
+	/** Gives gold to given player state clamped to gold limit. Amount can be negative */
+	UFUNCTION(BlueprintCallable, Category = Resources)
+	void GiveGoldToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const;
+
+	/** Gives mana to given player state clamped to mana limit. Amount can be negative */
+	UFUNCTION(BlueprintCallable, Category = Resources)
+	void GiveManaToPlayer(ACSKPlayerState* PlayerState, int32 Amount) const;
+
 	/** Get the max number of NORMAL towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumTowers() const { return MaxNumTowers; }
 
 	/** Get the max number of duplicate NORMAL towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumDuplicatedTowers() const { return MaxNumDuplicatedTowers; }
+
+	/** Get the max number of duplicate NORMAL tower types the player is allowed to build */
+	FORCEINLINE int32 GetMaxNumDuplicatedTowerTypes() const { return MaxNumDuplicatedTowerTypes; }
 
 	/** Get the max number of LEGENDARY towers the player is allowed to build */
 	FORCEINLINE int32 GetMaxNumLegendaryTowers() const { return MaxNumLegendaryTowers; }
@@ -668,9 +815,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumTowers;
 
-	/** The max amount of duplicates of the same NORMAL tower a player can construct (zero means indefinite) */
+	/** The max amount of duplicates of a single NORMAL tower a player can construct (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	int32 MaxNumDuplicatedTowers;
+
+	/** The max amount of duplicated types of all NORMAL towers player can have (zero means indefinite) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
+	int32 MaxNumDuplicatedTowerTypes;
 
 	/** The max amount of LEGENDARY towers a player can have constructed at once (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
@@ -749,6 +900,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
 	uint32 bLimitOneMoveActionPerTurn : 1;
 
+	/** Random stream used for shuffling a players spell deck */
+	FRandomStream DeckReshuffleStream;
+
 	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
 	float QuickEffectCounterTime;
@@ -772,6 +926,24 @@ protected:
 	function checks if given tower/castle has been destroyed */
 	UFUNCTION()
 	void OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32 NewHealth, int32 Delta);
+
+	/** Clears both health report arrays */
+	void ClearHealthReports();
+
+	/** Caches all the active action health reports then clearing it for a new action */
+	void CacheAndClearHealthReports();
+
+protected:
+
+	/** Reports of health changed during the current action, sorted in the order
+	they were recieved. Actions are a spell cast or a towers end round phase action */
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "CSK|Game")
+	TArray<FHealthChangeReport> ActiveActionHealthReports;
+
+	/** The health change reports from the previous action */
+	// TODO: The game state needs these, so clients can also access them!
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CSK|Game")
+	TArray<FHealthChangeReport> PreviousActionHealthReports;
 
 protected:
 

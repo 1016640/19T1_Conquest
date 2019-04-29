@@ -9,8 +9,10 @@
 
 class ACastle;
 class ACastleAIController;
+class ACoinSequenceActor;
 class ACSKHUD;
 class ACSKPawn;
+class ACSKPlayerCameraManager;
 class ACSKPlayerState;
 class ATile;
 class ATower;
@@ -25,7 +27,7 @@ DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(bool, FCanSelectTileSignature, ATile*, 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnSelectTileSignature, ATile*, SelectedTile);
 
 /** Struct containing tallied amount of resources to give to a player */
-USTRUCT()
+USTRUCT(BlueprintType)
 struct CONQUEST_API FCollectionPhaseResourcesTally
 {
 	GENERATED_BODY()
@@ -59,20 +61,20 @@ public:
 public:
 
 	/** Gold tallied */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	int32 Gold; // (uint8?)
 
 	/** Mana tallied */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	int32 Mana; // (uint8?)
 
 	/** If spell deck was reshuffled */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	uint8 bDeckReshuffled : 1;
 
 	/** The spell card the player picked up.
 	Will be invalid if no card was picked up */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	TSubclassOf<USpellCard> SpellCard;
 };
 
@@ -83,6 +85,8 @@ UCLASS(ClassGroup = (CSK))
 class CONQUEST_API ACSKPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+	friend class ACSKPlayerCameraManager;
 	
 public:
 
@@ -132,6 +136,16 @@ public:
 
 public:
 
+	/** Get if player has given tower construction data selected */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasTowerSelected(TSubclassOf<UTowerConstructionData> InConstructData) const;
+
+	/** Get if player has given spell selected */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool HasSpellSelected(TSubclassOf<USpell> InSpell) const;
+
+public:
+
 	/** Get possessed pawn as a CSK pawn */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPawn* GetCSKPawn() const;
@@ -139,6 +153,10 @@ public:
 	/** Get player state as CSK player state */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetCSKPlayerState() const;
+
+	/** Get camera manager as CSK camera manager */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerCameraManager* GetCSKPlayerCameraManager() const;
 
 	/** Get cached CSK HUD (only valid on clients) */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -157,16 +175,21 @@ protected:
 
 private:
 
+	/** Notify from camera manager that fade out/in has finished */
+	void NotifyFadeOutInSequenceFinished();
+
+public:
+
+	/** Sets whether we can select tiles */
+	void SetCanSelectTile(bool bEnable);
+
+private:
+
 	/** Attempts to perform an action using the current hovered tile */
 	void SelectTile();
 
 	/** Resets our camera to focus on our castle */
 	void ResetCamera();
-
-public: // Temp
-
-	/** Sets whethere we can select tiles */
-	void SetCanSelectTile(bool bEnable);
 
 protected:
 
@@ -247,8 +270,17 @@ protected:
 
 public:
 
-	/** Called to inform player that coin flip is taking place */
-	void OnReadyForCoinFlip(); // Refactor
+	/** Notify to transition to the coin sequence */
+	UFUNCTION(Client, Reliable)
+	void Client_TransitionToCoinSequence(ACoinSequenceActor* SequenceActor);
+
+	/** Notify that the winner of the coin toss has been decided */
+	UFUNCTION(Client, Reliable)
+	void Client_OnStartingPlayerDecided(bool bStartingPlayer);
+
+	/** Notify to transition to the board (our pawn) */
+	UFUNCTION(Client, Reliable)
+	void Client_TransitionToBoard();
 
 	/** Called by the game mode when transitioning to the board */
 	void OnTransitionToBoard(); // Refactor
@@ -256,6 +288,12 @@ public:
 	/** Notify that the match has concluded */
 	UFUNCTION(Client, Reliable)
 	void Client_OnMatchFinished(bool bIsWinner);
+
+private:
+
+	/** Informs the server that this client has finished transition to the coin sequence area */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_TransitionedToCoinSequence();
 
 public:
 
@@ -268,7 +306,7 @@ protected:
 	/** Event for when this players collection phase resources has been tallied. This runs on the client and should
 	ultimately call FinishCollectionTallyEvent when any local events have concluded (e.g. displaying the tallies) */
 	UFUNCTION(BlueprintNativeEvent, Category = CSK)
-	void OnCollectionResourcesTallied(int32 Gold, int32 Mana, bool bDeckReshuffled, TSubclassOf<USpellCard> SpellCard);
+	void OnCollectionResourcesTallied(const FCollectionPhaseResourcesTally& TalliedResources);
 
 	/** Finishes the collection phase event. This must be called after collection resources tallied event */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -305,8 +343,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (DisplayName="Set Action Mode"))
 	void BP_SetActionMode(ECSKActionPhaseMode NewMode);
 
-	/** Enables/Disables this players quick effect ussage */
-	void SetQuickEffectUsageEnabled(bool bEnable);
+	/** Enables/Disables this players nullify quick effect selection */
+	void SetNullifyQuickEffectSelectionEnabled(bool bEnable);
+
+	/** Enables/Disables this players post quick effect selection */
+	void SetPostQuickEffectSelectionEnabled(bool bEnable);
+
+	/** Resets both quick effect selection options */
+	void ResetQuickEffectSelections();
 
 	/** Enables/Disables this players bonus spell selection */
 	void SetBonusSpellSelectionEnabled(bool bEnable);
@@ -355,9 +399,13 @@ private:
 	UFUNCTION()
 	void OnRep_RemainingActions();
 
-	/** Notify that can use quick effect has been replicated */
+	/** Notify that can select quick effect has been replicated */
 	UFUNCTION()
-	void OnRep_bCanUseQuickEffect();
+	void OnRep_bCanSelectNullifyQuickEffect();
+
+	/** Notify that can select quick effect target has been replicated */
+	UFUNCTION()
+	void OnRep_bCanSelectPostQuickEffect();
 
 	/** Notify than can select bonus spell target has been replicated */
 	UFUNCTION()
@@ -377,13 +425,21 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingActions)
 	ECSKActionPhaseMode RemainingActions;
 
-	/** If this player is allowed to select a counter spell */
-	UPROPERTY(ReplicatedUsing = OnRep_bCanUseQuickEffect)
-	uint32 bCanUseQuickEffect : 1;
+	/** If this player is allowed to select a nullify counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectNullifyQuickEffect)
+	uint32 bCanSelectNullifyQuickEffect : 1;
+
+	/** If this player is allowed to select a post action spell counter spell */
+	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectPostQuickEffect)
+	uint32 bCanSelectPostQuickEffect : 1;
 
 	/** If this player can select a bonus spell target */
 	UPROPERTY(ReplicatedUsing = OnRep_bCanSelectBonusSpellTarget)
 	uint32 bCanSelectBonusSpellTarget : 1;
+
+	/** If we should ignore the CanSelect flags for spells. This is used
+	to allow input during spell actions (as spell actors can bind input) */
+	uint32 bIgnoreCanSelectSpellFlags : 1;
 
 public:
 
@@ -411,17 +467,22 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnCastSpellRequestFinished(EActiveSpellContext SpellContext);
 
-	/** Notify that this player is able to counter an incoming spell cast */
+	/** Notify that this player is able to counter an incoming spell cast
+	(and if the spell is selection is a nullify or post action counter )*/
 	UFUNCTION(Client, Reliable)
-	void Client_OnSelectCounterSpell(TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
+	void Client_OnSelectCounterSpell(bool bNullify, TSubclassOf<USpell> SpellToCounter, ATile* TargetTile);
 
 	/** Notify that this players spell request is pending as the opposing player is selecting a counter */
 	UFUNCTION(Client, Reliable)
-	void Client_OnWaitForCounterSpell();
+	void Client_OnWaitForCounterSpell(bool bNullify);
 
-	/** Notify that this player is able to select a tile to use bonus spell on */
+	/** Notify that this player is able to select a tile to use a bonus spell on */
 	UFUNCTION(Client, Reliable)
 	void Client_OnSelectBonusSpellTarget(TSubclassOf<USpell> BonusSpell);
+
+	/** Notify that the opposing player is able to select a tile to use a bonus spell on */
+	UFUNCTION(Client, Reliable)
+	void Client_OnWaitForBonusSpell();
 
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
@@ -512,7 +573,7 @@ public:
 
 	/** Get the list of quick effect spells this player can cast (in hand) */
 	UFUNCTION(BlueprintPure, Category = CSK)
-	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+	void GetCastableQuickEffectSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells = true) const;
 
 	/** Get the bonus elemental spell this player can cast */
 	UFUNCTION(BlueprintPure, Category = CSK)

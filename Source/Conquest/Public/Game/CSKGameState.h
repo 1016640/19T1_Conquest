@@ -180,6 +180,9 @@ protected:
 
 public:
 
+	/** Updates the latest action health reports */
+	void SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports);
+
 	/** Get if action phase is timed */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	bool IsActionPhaseTimed() const { return ActionPhaseTimeRemaining != -1.f; }
@@ -200,13 +203,33 @@ public:
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
 	/** Get a player state based off a player ID */
-	UFUNCTION(BlueprintPure, Category = Rules)
+	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetPlayerStateWithID(int32 PlayerID) const;
+
+	/** Get the opposings player state based off given player state */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	ACSKPlayerState* GetOpposingPlayerState(ACSKPlayerState* Player) const;
 
 	/** Get the time remaining for current action taking place (this
 	can either action phase turn time, quick effect counter time) */
 	UFUNCTION(BlueprintPure, Category = Rules)
 	float GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
+
+	/** Get all the towers that were damaged during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetDamageHealthReports(bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetHealingHealthReports() const;
+
+	/** Get all the towers that were damaged during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersDamagedHealthReports(ACSKPlayerState* PlayerState, bool bFilterOutDead = false) const;
+
+	/** Get all the towers that were healed during the previous action that belong to specified player */
+	UFUNCTION(BlueprintPure, Category = "CSK|Game")
+	TArray<FHealthChangeReport> GetPlayersHealingHealthReports(ACSKPlayerState* PlayerState) const;
 
 protected:
 
@@ -235,6 +258,9 @@ private:
 
 	/** Resets action phase variables */
 	void ResetActionPhaseProperties();
+
+	/** Generates a new array containing health reports filtered by passed in arguments */
+	TArray<FHealthChangeReport> QueryLatestHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const;
 
 protected:
 
@@ -274,6 +300,10 @@ protected:
 	UPROPERTY(Transient, Replicated)
 	float BonusSpellCounterTimerRemaining;
 
+	/** The health reports from the latest action */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = "CSK|Game")
+	TArray<FHealthChangeReport> LatestActionHealthReports;
+
 public:
 
 	/** Notify that a move request has been confirmed and is starting */
@@ -295,7 +325,7 @@ public:
 	void HandleSpellRequestFinished();
 
 	/** Notify that a quick effect is being selected */
-	void HandleQuickEffectSelectionStart();
+	void HandleQuickEffectSelectionStart(bool bNullify);
 
 	/** Notify that a bonus spell is being targeted */
 	void HandleBonusSpellSelectionStart();
@@ -328,7 +358,7 @@ private:
 
 	/** Handle quick effect selection client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleQuickEffectSelection();
+	void Multi_HandleQuickEffectSelection(bool bNullify);
 
 	/** Handle bonus spell selection client side */
 	UFUNCTION(NetMulticast, Reliable)
@@ -409,6 +439,10 @@ protected:
 	/** The max number of duplicated NORMAL towers a player can have built at once */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	int32 MaxNumDuplicatedTowers;
+
+	/** The max amount of duplicated types of all NORMAL towers player can have built at once */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	int32 MaxNumDuplicatedTowerTypes;
 
 	/** The max number of LEGENDARY towers a player can have built at once */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)

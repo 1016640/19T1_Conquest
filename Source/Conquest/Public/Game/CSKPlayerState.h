@@ -129,14 +129,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
 	void SetSpellDiscount(int32 Amount);
 
-	/** Retrieves a spell card from the spell deck and places in the players hand */
-	TSubclassOf<USpellCard> PickupCardFromDeck();
+	/** Retrieves a spell cards from the spell deck and places them in the players hand */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
+	TArray<TSubclassOf<USpellCard>> PickupCardsFromDeck(int32 Amount = 1);
 
 	/** Removes the given spell from players hand, adding it to the discard pile */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells)
 	void RemoveCardFromHand(TSubclassOf<USpellCard> Spell);
 
 	/** Resets the spell deck by copying then shuffling given spells */
-	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells);
+	void ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells, const FRandomStream& Stream);
 
 public:
 
@@ -154,9 +156,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = Resources)
 	bool GetDiscountedManaIfAffordable(int32 RequiredAmount, int32& OutAmount) const;
 
+	/** If this player has required amount of mana that is discounted
+	plus the additional provided mana atop of the discounted amount */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool HasRequiredManaPlusAdditionalAmount(int32 RequiredAmount, int32 MinAdditionalAmount = 1) const;
+
+	/** If this player has the required amount of mana (based off HasRequiredManaPlusAdditionalAmount).
+	This will also return the max additional max that this player can give if we have required mana */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	bool GetMaxAdditionalManaIfAffordable(int32 RequiredAmount, int32 MinAdditionalAmount, int32& OutMaxAmount) const;
+
 	/** Get how many of given type of tower this player owns */
 	UFUNCTION(BlueprintPure, Category = Resources)
 	int32 GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const;
+
+	/** Get how many duplicates of different tower types this player on */
+	UFUNCTION(BlueprintPure, Category = Resources)
+	int32 GetNumOwnedTowerDuplicateTypes() const;
 
 	/** Get if this player is able to cast another spell based on how many spells we can use.
 	Can optionally check if we can afford to cast any of the spells currently in our hand */
@@ -165,7 +181,7 @@ public:
 
 	/** Get if this player is able to cast a quick effect spell. This checks for the cost of the spell */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	bool CanCastQuickEffectSpell() const;
+	bool CanCastQuickEffectSpell(bool bNullifySpells) const;
 
 	/** Get if this player has infinite spell uses */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -177,7 +193,7 @@ public:
 
 	/** Get all the quick effect spells this player is able to cast */
 	UFUNCTION(BlueprintPure, Category = Resources)
-	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const;
+	void GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells) const;
 
 	/** Get the cost of given spell discounted by this players spell discount */
 	UFUNCTION(BlueprintPure, Category = Resources)
@@ -186,10 +202,10 @@ public:
 private:
 
 	/** Get if this player is able to afford any spell of type */
-	bool CanAffordSpellOfType(ESpellType SpellType) const;
+	bool CanAffordSpellOfType(ESpellType SpellType, bool bNullifySpells = true) const;
 
 	/** Get the spells of type this player can afford */
-	void GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const;
+	void GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType, bool bNullifySpells = true) const;
 
 public:
 
@@ -279,8 +295,8 @@ protected:
 	/** Cached map for counting how many of a certain type of any tower this players owns */
 	TMap<TSubclassOf<ATower>, int32> CachedUniqueTowerCount;
 
-	/** The spells cards in the spell deck. This only exists on the server */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Resources)/*Replicated,*/ 
+	/** The spells cards in the spell deck. This only exists on the server and the owners client */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources) 
 	TArray<TSubclassOf<USpellCard>> SpellCardDeck;
 
 	/** The spells in the players hand. This only exists on the server and the owners client */
@@ -314,7 +330,7 @@ public:
 	void ResetTilesTraversed();
 
 	/** Increments the spells we have cast this round */
-	void IncrementSpellsCast();
+	void IncrementSpellsCast(bool bIsQuickEffect);
 
 	/** Resets the spells cast count for next round */
 	void ResetSpellsCast();

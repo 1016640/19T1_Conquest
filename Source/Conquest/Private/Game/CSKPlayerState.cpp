@@ -43,7 +43,7 @@ void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ACSKPlayerState, Mana);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, BonusTileMovements, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, OwnedTowers, COND_OwnerOnly);
-	//DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardDeck, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsInHand, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, SpellCardsDiscarded, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(ACSKPlayerState, MaxNumSpellUses, COND_OwnerOnly);
@@ -213,19 +213,29 @@ void ACSKPlayerState::SetSpellDiscount(int32 Amount)
 	}
 }
 
-TSubclassOf<USpellCard> ACSKPlayerState::PickupCardFromDeck()
+TArray<TSubclassOf<USpellCard>> ACSKPlayerState::PickupCardsFromDeck(int32 Amount)
 {
-	if (HasAuthority() && SpellCardDeck.IsValidIndex(0))
+	TArray<TSubclassOf<USpellCard>> PickedUpCards;
+
+	if (HasAuthority())
 	{
-		TSubclassOf<USpellCard> NextSpellCard = SpellCardDeck[0];
-		SpellCardsInHand.Add(NextSpellCard);
-		SpellCardDeck.RemoveAt(0);
+		Amount = FMath::Clamp(Amount, 0, SpellCardDeck.Num());
 
-		return NextSpellCard;
+		if (SpellCardDeck.IsValidIndex(Amount - 1))
+		{
+			// Remove all cards from deck and add them to out hand
+			for (int32 i = 0; i < Amount; ++i)
+			{
+				TSubclassOf<USpellCard> NextCard = SpellCardDeck[0];
+				SpellCardsInHand.Add(NextCard);
+				SpellCardDeck.RemoveAt(0);
+
+				PickedUpCards.Add(NextCard);
+			}
+		}
 	}
-
-	// Implicit construction
-	return nullptr;
+	
+	return PickedUpCards;
 }
 
 void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
@@ -234,12 +244,14 @@ void ACSKPlayerState::RemoveCardFromHand(TSubclassOf<USpellCard> Spell)
 	{
 		if (SpellCardsInHand.Remove(Spell) > 0)
 		{
-			SpellCardsDiscarded.Add(Spell);
+			// We add these spell to the front to allow
+			// for easier reading of the latest discarded spells
+			SpellCardsDiscarded.Insert(Spell, 0);
 		}
 	}
 }
 
-void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells)
+void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spells, const FRandomStream& Stream)
 {
 	if (HasAuthority())
 	{
@@ -252,7 +264,7 @@ void ACSKPlayerState::ResetSpellDeck(const TArray<TSubclassOf<USpellCard>>& Spel
 		int32 LastIndex = SpellCardDeck.Num() - 1;
 		for (int32 i = 0; i <= LastIndex; ++i)
 		{
-			int32 Index = FMath::RandRange(i, LastIndex);
+			int32 Index = Stream.RandRange(i, LastIndex);
 			if (i != Index)
 			{
 				SpellCardDeck.Swap(i, Index);
@@ -288,6 +300,28 @@ bool ACSKPlayerState::GetDiscountedManaIfAffordable(int32 RequiredAmount, int32&
 	return false;
 }
 
+bool ACSKPlayerState::HasRequiredManaPlusAdditionalAmount(int32 RequiredAmount, int32 MinAdditionalAmount) const
+{
+	// Lowest amount of mana to spend is one
+	RequiredAmount = (RequiredAmount - SpellDiscount) + MinAdditionalAmount;
+	return Mana >= RequiredAmount;
+}
+
+bool ACSKPlayerState::GetMaxAdditionalManaIfAffordable(int32 RequiredAmount, int32 MinAdditionalAmount, int32& OutMaxAmount) const
+{
+	OutMaxAmount = 0;
+
+	// Lowest amount of mana to spend is one
+	int32 MinRequiredAmount = (RequiredAmount - SpellDiscount) + MinAdditionalAmount;
+	if (Mana >= MinRequiredAmount)
+	{
+		OutMaxAmount = Mana - RequiredAmount;
+		return true;
+	}
+
+	return false;
+}
+
 int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) const
 {
 	if (Tower)
@@ -300,6 +334,24 @@ int32 ACSKPlayerState::GetNumOwnedTowerDuplicates(TSubclassOf<ATower> Tower) con
 	}
 
 	return 0;
+}
+
+int32 ACSKPlayerState::GetNumOwnedTowerDuplicateTypes() const
+{
+	TArray<int32> TowerCounts;
+	CachedUniqueTowerCount.GenerateValueArray(TowerCounts);
+
+	int32 NumTypes = 0;
+	for (int32 Count : TowerCounts)
+	{
+		// Owning two of the same type means we have a duplicate
+		if (Count >= 2)
+		{
+			++NumTypes;
+		}
+	}
+
+	return NumTypes;
 }
 
 bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
@@ -317,9 +369,9 @@ bool ACSKPlayerState::CanCastAnotherSpell(bool bCheckCost) const
 	return false;
 }
 
-bool ACSKPlayerState::CanCastQuickEffectSpell() const
+bool ACSKPlayerState::CanCastQuickEffectSpell(bool bNullifySpells) const
 {
-	return CanAffordSpellOfType(ESpellType::QuickEffect);
+	return CanAffordSpellOfType(ESpellType::QuickEffect, bNullifySpells);
 }
 
 void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
@@ -327,9 +379,9 @@ void ACSKPlayerState::GetSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& Ou
 	GetAffordableSpells(OutSpellCards, ESpellType::ActionPhase);
 }
 
-void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards) const
+void ACSKPlayerState::GetQuickEffectSpellsPlayerCanCast(TArray<TSubclassOf<USpellCard>>& OutSpellCards, bool bNullifySpells) const
 {
-	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect);
+	GetAffordableSpells(OutSpellCards, ESpellType::QuickEffect, bNullifySpells);
 }
 
 int32 ACSKPlayerState::GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) const
@@ -343,12 +395,12 @@ int32 ACSKPlayerState::GetSpellCostAfterDiscount(TSubclassOf<USpell> Spell) cons
 	return -1;
 }
 
-bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const
+bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType, bool bNullifySpells) const
 {
 	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
 	{
 		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType, bNullifySpells))
 		{
 			return true;
 		}
@@ -357,14 +409,14 @@ bool ACSKPlayerState::CanAffordSpellOfType(ESpellType SpellType) const
 	return false;
 }
 
-void ACSKPlayerState::GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType) const
+void ACSKPlayerState::GetAffordableSpells(TArray<TSubclassOf<USpellCard>>& OutSpellCards, ESpellType SpellType, bool bNullifySpells) const
 {
 	OutSpellCards.Empty();
 
 	for (TSubclassOf<USpellCard> SpellCard : SpellCardsInHand)
 	{
 		const USpellCard* DefaultSpellCard = SpellCard.GetDefaultObject();
-		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType))
+		if (DefaultSpellCard && DefaultSpellCard->CanAffordAnySpell(this, SpellType, bNullifySpells))
 		{
 			OutSpellCards.Add(SpellCard);
 		}
@@ -432,11 +484,19 @@ void ACSKPlayerState::ResetTilesTraversed()
 	}
 }
 
-void ACSKPlayerState::IncrementSpellsCast()
+void ACSKPlayerState::IncrementSpellsCast(bool bIsQuickEffect)
 {
 	if (HasAuthority())
 	{
-		++SpellsCastThisRound;
+		if (bIsQuickEffect)
+		{
+			++TotalQuickEffectSpellsCast;
+		}
+		else
+		{
+			++SpellsCastThisRound;
+		}
+
 		++TotalSpellsCast;
 	}
 }
