@@ -12,6 +12,18 @@
 #include "UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+
+bool FMapSelectionDetails::IsValid() const
+{
+	FString TempString = MapFileName;
+	if (GEngine && GEngine->MakeSureMapNameIsValid(TempString))
+	{
+		return true;
+	}
+
+	return false;
+}
 
 bool UConquestFunctionLibrary::IsWithEditor()
 {

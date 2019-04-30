@@ -4,7 +4,6 @@
 
 #include "Conquest.h"
 #include "UObject/NoExportTypes.h"
-#include "Styling/SlateBrush.h"
 #include "TowerConstructionData.generated.h"
 
 class ATower;
