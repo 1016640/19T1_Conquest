@@ -27,6 +27,10 @@ public:
 
 protected:
 
+	// Begin APlayerState Interface
+	virtual void CopyProperties(APlayerState* PlayerState) override;
+	// End APlayerState Interface
+
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface

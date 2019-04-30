@@ -6,6 +6,8 @@
 #include "SpellCard.h"
 #include "Tower.h"
 
+#include "LobbyPlayerState.h"
+
 ACSKPlayerState::ACSKPlayerState()
 {
 	CSKPlayerID = -1;
@@ -29,6 +31,17 @@ ACSKPlayerState::ACSKPlayerState()
 	SpellsCastThisRound = 0;
 	TotalSpellsCast = 0;
 	TotalQuickEffectSpellsCast = 0;
+}
+
+void ACSKPlayerState::CopyProperties(APlayerState* PlayerState)
+{
+	Super::CopyProperties(PlayerState);
+
+	ALobbyPlayerState* LobbyPlayerState = Cast<ALobbyPlayerState>(PlayerState);
+	if (LobbyPlayerState)
+	{
+		AssignedColor = LobbyPlayerState->GetAssignedColor();
+	}
 }
 
 void ACSKPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

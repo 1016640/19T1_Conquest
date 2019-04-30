@@ -122,7 +122,8 @@ void ALobbyGameMode::Logout(AController* Exiting)
 				}
 			}
 
-			// Notify controller
+			// Refresh the clients lobby member player states
+			SendPlayerLobbyPlayerStates(Controller);
 		}
 
 		// We could possibly be counting down, we have to make sure to stop
@@ -199,6 +200,37 @@ void ALobbyGameMode::NotifyPlayerReady(ALobbyPlayerController* Player, bool bIsR
 	}
 }
 
+void ALobbyGameMode::NotifyChangeColor(ALobbyPlayerController* Player, const FColor& Color)
+{
+	if (bTravellingToMatch)
+	{
+		return;
+	}
+
+	if (Player)
+	{
+		// We don't need to continue if no change will occur
+		ALobbyPlayerState* PlayerState = Player->GetLobbyPlayerState();
+		if (!PlayerState || PlayerState->GetAssignedColor() == Color)
+		{
+			return;
+		}
+
+		// We don't want both players to have the same color
+		ALobbyPlayerController* OpponentsController = Players[FMath::Abs(Player->CSKPlayerID - 1)];
+		if (OpponentsController)
+		{
+			ALobbyPlayerState* OpponentsState = OpponentsController->GetLobbyPlayerState();
+			if (OpponentsState && OpponentsState->GetAssignedColor() == Color)
+			{
+				return;
+			}
+		}
+
+		PlayerState->SetAssignedColor(Color);
+	}
+}
+
 void ALobbyGameMode::NotifySelectMap(const FMapSelectionDetails& MapDetails)
 {
 	if (bTravellingToMatch)
@@ -267,6 +299,25 @@ bool ALobbyGameMode::AreAllPlayersReady() const
 	}
 
 	return false;
+}
+
+void ALobbyGameMode::RefreshPlayersLobbyPlayerStates(ALobbyPlayerController* Controller)
+{
+	SendPlayerLobbyPlayerStates(Controller);
+}
+
+void ALobbyGameMode::SendPlayerLobbyPlayerStates(ALobbyPlayerController* Controller) const
+{
+	if (Controller)
+	{
+		ALobbyPlayerController* HostController = GetPlayer1Controller();
+		ALobbyPlayerState* HostState = HostController ? HostController->GetLobbyPlayerState() : nullptr;
+
+		ALobbyPlayerController* GuestController = GetPlayer2Controller();
+		ALobbyPlayerState* GuestState = GuestController ? GuestController->GetLobbyPlayerState() : nullptr;
+
+		Controller->Client_RecieveLobbyMembersPlayerStats(HostState, GuestState);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

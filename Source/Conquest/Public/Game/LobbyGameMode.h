@@ -67,6 +67,9 @@ public:
 	/** Notify that the given player has toggled their ready status */
 	void NotifyPlayerReady(ALobbyPlayerController* Player, bool bIsReady);
 
+	/** Notify that the given player has switched their assigned color */
+	void NotifyChangeColor(ALobbyPlayerController* Player, const FColor& Color);
+
 	/** Notify that the host has selected the given map */
 	void NotifySelectMap(const FMapSelectionDetails& MapDetails);
 
@@ -104,4 +107,15 @@ public:
 	/** Checks if both players are ready and the countdown can start */
 	UFUNCTION(BlueprintPure, Category = Lobby)
 	bool AreAllPlayersReady() const;
+
+public:
+
+	/** Request from a client to refresh the lobby member player states */
+	void RefreshPlayersLobbyPlayerStates(ALobbyPlayerController* Controller);
+
+private:
+
+	/** Sends the lobby members player states to given player. This is used when
+	players join or leave, in order for host and guest states be specified */
+	void SendPlayerLobbyPlayerStates(ALobbyPlayerController* Controller) const;
 };

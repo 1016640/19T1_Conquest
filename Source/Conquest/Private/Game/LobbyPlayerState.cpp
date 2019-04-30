@@ -2,11 +2,24 @@
 
 #include "LobbyPlayerState.h"
 
+#include "CSKPlayerState.h"
+
 ALobbyPlayerState::ALobbyPlayerState()
 {
 	CSKPlayerID = -1;
 	bIsPlayerReady = false;
 	AssignedColor = FColor(80, 50, 20); // Bronze
+}
+
+void ALobbyPlayerState::CopyProperties(APlayerState* PlayerState)
+{
+	Super::CopyProperties(PlayerState);
+
+	ACSKPlayerState* CSKPlayerState = Cast<ACSKPlayerState>(PlayerState);
+	if (CSKPlayerState)
+	{
+		AssignedColor = CSKPlayerState->GetAssignedColor();
+	}
 }
 
 void ALobbyPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
