@@ -273,7 +273,9 @@ ACastle* ACSKGameMode::SpawnCastleAtPortal(ACSKPlayerController* Controller, TSu
 		ATile* PortalTile = BoardManager->GetPlayerPortalTile(Controller->CSKPlayerID);
 		if (PortalTile)
 		{
+			// Remove scale from transform
 			FTransform TileTransform = PortalTile->GetTransform();
+			TileTransform.SetScale3D(FVector::OneVector);
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.ObjectFlags |= RF_Transient;
@@ -2106,7 +2108,9 @@ ATower* ACSKGameMode::SpawnTowerFor(TSubclassOf<ATower> Template, ATile* Tile, U
 		return nullptr;
 	}
 
+	// Remove scale from transform
 	FTransform TileTransform = Tile->GetTransform();
+	TileTransform.SetScale3D(FVector::OneVector);
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
@@ -2306,6 +2310,10 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreQuickEffectCheck, bool bIgnoreBon
 	// Some spells will utilize the actions of other spells (mainly quick effects)
 	// Save now incase bonus spells or post quick effect spells need them
 	CacheAndClearHealthReports();
+
+	// We can now destroy the towers that were destroyed during the spell cast. We do
+	// this now so all towers remain valid for spells to use while their still active
+	ClearDestroyedTowers();
 
 	if (!bIgnoreQuickEffectCheck)
 	{
@@ -2678,6 +2686,8 @@ void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 {
 	if ((bRunningTowerEndRoundAction || bInitiatingTowerEndRoundAction) && Tower)
 	{
+		ClearDestroyedTowers();
+
 		// If we should end the end round phase and move back onto the collection phase
 		bool bEndPhase = false;
 
@@ -2792,6 +2802,9 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 	{
 		check(IsEndRoundPhaseInProgress());
 
+		// TODO: Double check if this tower can run now (as previous actions
+		// might have changed whether it can perform an end action phase!)
+
 		ATower* TowerToRun = EndRoundActionTowers[Index];
 		if (ensure(TowerToRun))
 		{
@@ -2813,6 +2826,18 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 
 	// Safety lock
 	bInitiatingTowerEndRoundAction = false;
+
+	if (bResult)
+	{
+		check(EndRoundActionTowers.IsValidIndex(EndRoundRunningTower));
+
+		// Notify players to concentrate on tower
+		ATile* TileWithTower = EndRoundActionTowers[EndRoundRunningTower]->GetCachedTile();
+		for (ACSKPlayerController* Controller : Players)
+		{
+			Controller->Client_OnTowerActionStart(TileWithTower);
+		}
+	}
 
 	return bResult;
 }
@@ -2901,45 +2926,45 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 		}
 		else
 		{
-			// TODO: Move to function
+			ATower* DestroyedTower = CastChecked<ATower>(CompOwner);
+
+			// Remove references from both board and player
 			{
-				ATower* DestroyedTower = CastChecked<ATower>(CompOwner);
+				ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+				BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
 
-				// Remove references from both board and player
+				PlayerState->RemoveTower(DestroyedTower);
+			}
+
+			// Allow tower to clean up itself
+			{
+				DestroyedTower->SetActorHiddenInGame(true);
+				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
+			}
+
+			// We need to make sure this tower is removed from end round phase actions
+			if (IsEndRoundPhaseInProgress())
+			{
+				// TODO: THis tower might be the tower running (but for now)
+
+				// This tower could possibly be a tower with an end round action
+				int32 Index = EndRoundActionTowers.Find(DestroyedTower);
+				if (Index != -1)
 				{
-					ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-					BoardManager->ClearBoardPieceOnTile(DestroyedTower->GetCachedTile());
-
-					PlayerState->RemoveTower(DestroyedTower);
-				}
-
-				// Allow tower to clean up itself
-				{
-					DestroyedTower->SetActorHiddenInGame(true);
-					DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
-				}
-
-				// We need to make sure this tower is removed from end round phase actions
-				if (IsEndRoundPhaseInProgress())
-				{
-					// TODO: THis tower might be the tower running (but for now)
-
-					// We need to revert the index back one if this tower has already executed,
-					// as not doing so will skip one towers end round action
-					int32 Index = EndRoundActionTowers.Find(DestroyedTower);
+					// We need to revert the index back one if this tower has already,
+					// executed as not doing so will skip one towers end round action
 					if (Index >= EndRoundRunningTower)
 					{
+
 						--EndRoundRunningTower;
 					}
 
 					EndRoundActionTowers.RemoveAt(Index);
 				}
-
-				// Destroy after small delay (so any RPCs can get executed)
-				FTimerHandle TempHandle;
-				FTimerManager& TimerManager = GetWorldTimerManager();
-				TimerManager.SetTimer(TempHandle, DestroyedTower, &AActor::K2_DestroyActor, 2.f);
 			}
+
+			// Cache this tower to be destroyed after the current action
+			ActiveActionsDestroyedTowers.Add(DestroyedTower);
 		}
 
 		UE_LOG(LogConquest, Log, TEXT("Board piece %s (owned by Player %i) has been destroyed"),
@@ -2987,6 +3012,22 @@ void ACSKGameMode::CacheAndClearHealthReports()
 	if (CSKGameState)
 	{
 		CSKGameState->SetLatestActionHealthReports(PreviousActionHealthReports);
+	}
+}
+
+void ACSKGameMode::ClearDestroyedTowers()
+{
+	// We move over the towers for two reasons:
+	// 1. It empties the active actions array
+	// 2. Destroying objects in a UPROPERTY marked array are immediately removed from said array
+	// Meaning it's annoying to loop through each actor in order to simply destroy it
+	TArray<ATower*> TowersToDestroy = MoveTemp(ActiveActionsDestroyedTowers);
+	for (ATower* Tower : TowersToDestroy)
+	{
+		if (Tower)
+		{
+			Tower->Destroy();
+		}
 	}
 }
 

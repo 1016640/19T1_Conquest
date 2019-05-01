@@ -88,29 +88,34 @@ void ATower::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// TODO: make config variable
-	static const float InterpSpeed = 2.f;
-
-	FVector CurLocation = GetActorLocation();
-	FVector TarLocation = CachedTile->GetActorLocation();
-
-	float CurZ = CurLocation.Z;
-	float TarZ = TarLocation.Z;
-	float NewZ = FMath::FInterpTo(CurZ, TarZ, DeltaTime, InterpSpeed);
-
-	// Are we now ontop of tile?
-	if (FMath::IsNearlyEqual(NewZ, TarZ, 1.f))
+	// We only perform this during the build sequence, we have
+	// to check as some derived buildings might also use tick
+	if (bIsRunningBuildSequence)
 	{
-		// Snap ourselves to our target tile
-		SetActorLocation(TarLocation);
+		// TODO: make config variable
+		static const float InterpSpeed = 2.f;
 
-		FinishBuildSequence();
-	}
-	else
-	{
-		// Move ourselves towards goal
-		CurLocation.Z = NewZ;
-		SetActorLocation(CurLocation);
+		FVector CurLocation = GetActorLocation();
+		FVector TarLocation = CachedTile->GetActorLocation();
+
+		float CurZ = CurLocation.Z;
+		float TarZ = TarLocation.Z;
+		float NewZ = FMath::FInterpTo(CurZ, TarZ, DeltaTime, InterpSpeed);
+
+		// Are we now ontop of tile?
+		if (FMath::IsNearlyEqual(NewZ, TarZ, 1.f))
+		{
+			// Snap ourselves to our target tile
+			SetActorLocation(TarLocation);
+
+			FinishBuildSequence();
+		}
+		else
+		{
+			// Move ourselves towards goal
+			CurLocation.Z = NewZ;
+			SetActorLocation(CurLocation);
+		}
 	}
 }
 
@@ -120,6 +125,7 @@ void ATower::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimePr
 
 	DOREPLIFETIME_CONDITION(ATower, ConstructData, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ATower, OwnerPlayerState, COND_InitialOnly);
+	DOREPLIFETIME(ATower, bIsRunningEndRoundAction);
 }
 
 void ATower::ExecuteEndRoundPhaseAction()
@@ -128,6 +134,9 @@ void ATower::ExecuteEndRoundPhaseAction()
 	{
 		bIsRunningEndRoundAction = true;
 		StartEndRoundAction();
+
+		// We want RunnedEndRoundAction to replicated as soon as possible
+		ForceNetUpdate();
 	}
 }
 
@@ -151,35 +160,46 @@ void ATower::FinishEndRoundAction()
 		
 		GameMode->NotifyEndRoundActionFinished(this);	
 		bIsRunningEndRoundAction = false;
+
+		// We want RunnedEndRoundAction to replicated as soon as possible
+		ForceNetUpdate();
 	}
 }
 
 void ATower::StartBuildSequence()
 {
-	// Start off under the board, our sequence involves us moving on top of it
-	ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-	if (BoardManager)
+	if (!bIsRunningBuildSequence)
 	{
-		BoardManager->MoveBoardPieceUnderBoard(this, BuildSequenceUndergroundScale);
+		// Start off under the board, our sequence involves us moving on top of it
+		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
+		if (BoardManager)
+		{
+			BoardManager->MoveBoardPieceUnderBoard(this, BuildSequenceUndergroundScale);
+		}
+
+		// Start the building sequence
+		SetActorHiddenInGame(false);
+		SetActorTickEnabled(true);
+
+		bIsRunningBuildSequence = true;
+		BP_OnStartBuildSequence();
 	}
-
-	// Start the building sequence
-	SetActorHiddenInGame(false);
-	SetActorTickEnabled(true);
-
-	BP_OnStartBuildSequence();
 }
 
 void ATower::FinishBuildSequence()
 {
-	// Only needed to tick to move ourselves into place
-	SetActorTickEnabled(false);
-
-	BP_OnFinishBuildSequence();
-
-	if (HasAuthority())
+	if (bIsRunningBuildSequence)
 	{
-		OnBuildSequenceComplete.Broadcast();
+		// Only needed to tick to move ourselves into place
+		SetActorTickEnabled(false);
+
+		bIsRunningBuildSequence = false;
+		BP_OnFinishBuildSequence();
+
+		if (HasAuthority())
+		{
+			OnBuildSequenceComplete.Broadcast();
+		}
 	}
 }
 

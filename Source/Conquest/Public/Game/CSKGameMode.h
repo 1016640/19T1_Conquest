@@ -933,6 +933,11 @@ protected:
 	/** Caches all the active action health reports then clearing it for a new action */
 	void CacheAndClearHealthReports();
 
+private:
+
+	/** Actually destroys the towers that were destroyed during the latest action */
+	void ClearDestroyedTowers();
+
 protected:
 
 	/** Reports of health changed during the current action, sorted in the order
@@ -944,6 +949,14 @@ protected:
 	// TODO: The game state needs these, so clients can also access them!
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CSK|Game")
 	TArray<FHealthChangeReport> PreviousActionHealthReports;
+
+private:
+
+	/** The towers that have been destroyed during the current action (action
+	being either a spell cast or end round action from a tower). We record
+	these to destroy them after said action has completed, rather than during it */
+	UPROPERTY(Transient)
+	TArray<ATower*> ActiveActionsDestroyedTowers;
 
 protected:
 
