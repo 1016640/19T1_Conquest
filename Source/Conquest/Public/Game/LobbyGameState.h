@@ -44,7 +44,7 @@ public:
 
 	/** Sets the selected map, this should be a valid map */
 	UFUNCTION(BlueprintCallable, Category = Lobby)
-	void SetSelectedMap(const FMapSelectionDetails& MapDetails);
+	void SetSelectedMap(int32 MapIndex);
 
 	/** Get if all players are ready */
 	UFUNCTION(BlueprintPure, Category = Lobby)
@@ -53,7 +53,8 @@ public:
 public:
 
 	/** Get the selected map */
-	FORCEINLINE const FMapSelectionDetails& GetSelectedMap() const { return SelectedMap; }
+	UFUNCTION(BlueprintPure, Category = Lobby)
+	FMapSelectionDetails GetSelectedMap() const;
 
 protected:
 
@@ -77,9 +78,9 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, ReplicatedUsing = OnRep_bAllPlayersReady, Category = Lobby)
 	uint32 bAllPlayersReady : 1;
 
-	/** The currently selected map */
+	/** The index of the currently selected map */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Transient, ReplicatedUsing = OnRep_SelectedMap, Category = Lobby)
-	FMapSelectionDetails SelectedMap;
+	int32 SelectedMapIndex;
 
 	/** The time remaining before the match will start */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Transient, Replicated, Category = Lobby)

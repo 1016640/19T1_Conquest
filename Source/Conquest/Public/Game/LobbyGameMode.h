@@ -70,8 +70,8 @@ public:
 	/** Notify that the given player has switched their assigned color */
 	void NotifyChangeColor(ALobbyPlayerController* Player, const FColor& Color);
 
-	/** Notify that the host has selected the given map */
-	void NotifySelectMap(const FMapSelectionDetails& MapDetails);
+	/** Notify that the host has selected the map at given index */
+	void NotifySelectMap(int32 MapIndex);
 
 	/** Notify that the countdown has finished */
 	void NotifyCountdownFinished();
@@ -92,15 +92,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Lobby)
 	TArray<FMapSelectionDetails> SelectableMaps;
 
-	#if WITH_EDITORONLY_DATA
-	/** Debug color to give to player 1 in a PIE session */
+	/** The color to assign to the first joining player. This will
+	be used for guest if host is using guests default color */
 	UPROPERTY(EditAnywhere, Category = "Lobby|Debug")
-	FColor P1AssignedColor;
+	FColor HostAssignedColor;
 
-	/** Debug color to given to player 2 in a PIE session */
+	/** The color to assign to the guest joining the lobby */
 	UPROPERTY(EditAnywhere, Category = "Lobby|Debug")
-	FColor P2AssignedColor;
-	#endif WITH_EDITORONLY_DATA
+	FColor GuestAssignedColor;
 
 public:
 

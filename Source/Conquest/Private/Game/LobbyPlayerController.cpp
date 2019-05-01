@@ -99,13 +99,13 @@ void ALobbyPlayerController::ChangePlayerColor(FColor Color)
 	}
 }
 
-void ALobbyPlayerController::SelectMap(const FMapSelectionDetails& MapDetails)
+void ALobbyPlayerController::SelectMap(int32 MapIndex)
 {
 	if (IsLocalPlayerController())
 	{
 		if (IsLobbyHost())
 		{
-			Server_NotifySelectMap(MapDetails);
+			Server_NotifySelectMap(MapIndex);
 		}
 	}
 }
@@ -142,19 +142,19 @@ void ALobbyPlayerController::Server_NotifyChangeColor_Implementation(FColor Colo
 	}
 }
 
-bool ALobbyPlayerController::Server_NotifySelectMap_Validate(const FMapSelectionDetails& MapDetails)
+bool ALobbyPlayerController::Server_NotifySelectMap_Validate(int32 MapIndex)
 {
 	return true;
 }
 
-void ALobbyPlayerController::Server_NotifySelectMap_Implementation(const FMapSelectionDetails& MapDetails)
+void ALobbyPlayerController::Server_NotifySelectMap_Implementation(int32 MapIndex)
 {
 	UWorld* World = GetWorld();
 	ALobbyGameMode* GameMode = World ? World->GetAuthGameMode<ALobbyGameMode>() : nullptr;
 
 	if (GameMode)
 	{
-		GameMode->NotifySelectMap(MapDetails);
+		GameMode->NotifySelectMap(MapIndex);
 	}
 }
 

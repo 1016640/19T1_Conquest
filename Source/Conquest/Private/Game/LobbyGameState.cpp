@@ -38,7 +38,7 @@ void ALobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ALobbyGameState, bAllPlayersReady);
-	DOREPLIFETIME(ALobbyGameState, SelectedMap);
+	DOREPLIFETIME(ALobbyGameState, SelectedMapIndex);
 	DOREPLIFETIME(ALobbyGameState, StartCountdownTimeRemaining);
 	DOREPLIFETIME(ALobbyGameState, StartCountdownTime);
 
@@ -62,13 +62,13 @@ void ALobbyGameState::SetSelectableMaps(const TArray<FMapSelectionDetails>& MapD
 	}
 }
 
-void ALobbyGameState::SetSelectedMap(const FMapSelectionDetails& MapDetails)
+void ALobbyGameState::SetSelectedMap(int32 MapIndex)
 {
 	if (HasAuthority())
 	{
-		if (MapDetails.IsValid())
+		if (SelectableMaps.IsValidIndex(MapIndex))
 		{
-			SelectedMap = MapDetails;
+			SelectedMapIndex = MapIndex;
 			OnRep_SelectedMap();
 		}
 		else
@@ -98,6 +98,16 @@ bool ALobbyGameState::AreAllPlayersReady() const
 	return false;
 }
 
+FMapSelectionDetails ALobbyGameState::GetSelectedMap() const
+{
+	if (SelectableMaps.IsValidIndex(SelectedMapIndex))
+	{
+		return SelectableMaps[SelectedMapIndex];
+	}
+
+	return FMapSelectionDetails();
+}
+
 void ALobbyGameState::OnRep_bAllPlayersReady()
 {
 	SetActorTickEnabled(bAllPlayersReady);
@@ -110,7 +120,14 @@ void ALobbyGameState::OnRep_bAllPlayersReady()
 
 void ALobbyGameState::OnRep_SelectedMap()
 {
-	OnSelectedMapChanged.Broadcast(SelectedMap);
+	if (SelectableMaps.IsValidIndex(SelectedMapIndex))
+	{
+		OnSelectedMapChanged.Broadcast(SelectableMaps[SelectedMapIndex]);
+	}
+	else
+	{
+		OnSelectedMapChanged.Broadcast(FMapSelectionDetails());
+	}
 }
 
 void ALobbyGameState::UpdateStartCountdownStatus()

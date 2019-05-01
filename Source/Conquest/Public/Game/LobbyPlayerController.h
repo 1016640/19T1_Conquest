@@ -66,10 +66,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Lobby)
 	void ChangePlayerColor(FColor Color);
 
-	/** Sets given map as the selected map. This will
-	only process if player is the host of the lobby */
+	/** Sets map at given index as the selected map. This
+	will only process if player is the host of the lobby */
 	UFUNCTION(BlueprintCallable, Category = Lobby)
-	void SelectMap(const FMapSelectionDetails& MapDetails);
+	void SelectMap(int32 MapIndex);
 
 private:
 
@@ -83,7 +83,7 @@ private:
 
 	/** Notifies the server to select the given map if we are host */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_NotifySelectMap(const FMapSelectionDetails& MapDetails);
+	void Server_NotifySelectMap(int32 MapIndex);
 
 private:
 

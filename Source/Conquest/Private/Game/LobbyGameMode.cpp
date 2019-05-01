@@ -26,10 +26,8 @@ ALobbyGameMode::ALobbyGameMode()
 	StartCountdownTime = 5.f;
 	bTravellingToMatch = false;
 
-	#if WITH_EDITORONLY_DATA
-	P1AssignedColor = FColor::Red;
-	P2AssignedColor = FColor::Green;
-	#endif
+	HostAssignedColor = FColor(255, 215, 0); // Gold
+	GuestAssignedColor = FColor(80, 50, 20); // Bronze
 }
 
 void ALobbyGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -55,7 +53,7 @@ void ALobbyGameMode::InitGameState()
 		if (SelectableMaps.Num() > 0)
 		{
 			int32 Index = FMath::RandRange(0, SelectableMaps.Num() - 1);
-			LobbyGameState->SetSelectedMap(SelectableMaps[Index]);
+			LobbyGameState->SetSelectedMap(Index);
 		}
 	}
 }
@@ -74,6 +72,8 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 			else
 			{
 				SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 1);
+
+				SendPlayerLobbyPlayerStates(GetPlayer1Controller());
 			}
 		}
 		else
@@ -168,9 +168,24 @@ void ALobbyGameMode::SetPlayerWithID(ALobbyPlayerController* Controller, int32 P
 			{
 				PlayerState->SetCSKPlayerID(PlayerID);
 
-				#if WITH_EDITORONLY_DATA
-				PlayerState->SetAssignedColor(PlayerID == 0 ? P1AssignedColor : P2AssignedColor);
-				#endif
+				// We need to avoid setting the new player with the same color as the other
+				if (PlayerID == 0)
+				{
+					PlayerState->SetAssignedColor(HostAssignedColor);
+				}
+				else
+				{
+					ALobbyPlayerController* HostController = GetPlayer1Controller();
+					ALobbyPlayerState* HostState = HostController ? HostController->GetLobbyPlayerState() : nullptr;
+					if (HostState && HostState->GetAssignedColor() == GuestAssignedColor)
+					{
+						PlayerState->SetAssignedColor(HostAssignedColor);
+					}
+					else
+					{
+						PlayerState->SetAssignedColor(GuestAssignedColor);
+					}
+				}
 			}
 		}
 	}
@@ -231,20 +246,17 @@ void ALobbyGameMode::NotifyChangeColor(ALobbyPlayerController* Player, const FCo
 	}
 }
 
-void ALobbyGameMode::NotifySelectMap(const FMapSelectionDetails& MapDetails)
+void ALobbyGameMode::NotifySelectMap(int32 MapIndex)
 {
 	if (bTravellingToMatch)
 	{
 		return;
 	}
 
-	if (MapDetails.IsValid())
+	ALobbyGameState* LobbyGameState = Cast<ALobbyGameState>(GameState);
+	if (LobbyGameState)
 	{
-		ALobbyGameState* LobbyGameState = Cast<ALobbyGameState>(GameState);
-		if (LobbyGameState)
-		{
-			LobbyGameState->SetSelectedMap(MapDetails);
-		}
+		LobbyGameState->SetSelectedMap(MapIndex);
 	}
 }
 
