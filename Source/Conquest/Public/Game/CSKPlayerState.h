@@ -27,6 +27,10 @@ public:
 
 protected:
 
+	// Begin APlayerState Interface
+	virtual void CopyProperties(APlayerState* PlayerState) override;
+	// End APlayerState Interface
+
 	// Begin UObject Interface
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	// End UObject Interface
@@ -66,7 +70,7 @@ protected:
 public:
 
 	/** Sets this players assigned color */
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Resources)
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = CSK)
 	void SetAssignedColor(FColor InColor);
 
 	/** Gives this player both gold and mana (can be negative) */
@@ -270,7 +274,7 @@ private:
 protected:
 
 	/** This players assigned color */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Resources)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = CSK)
 	FColor AssignedColor;
 
 	/** The amount of gold this player owns */

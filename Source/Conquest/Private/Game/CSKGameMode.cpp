@@ -701,18 +701,11 @@ void ACSKGameMode::OnMatchFinished()
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
-	//FString LevelName("L_Lobby");
-	//TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
+	FString LevelName("L_Lobby");
+	TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
 
-	//// Return to the lobby
-	//UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
-
-	// temp
-	UCSKGameInstance* GameInstance = GetGameInstance<UCSKGameInstance>();
-	if (GameInstance)
-	{
-		GameInstance->DestroySessionAfterMatchFinished();
-	}
+	// Return to the lobby
+	UCSKGameInstance::ServerTravelToLevel(this, LevelName, Options);
 }
 
 void ACSKGameMode::OnMatchAbort()

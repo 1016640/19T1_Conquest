@@ -98,9 +98,9 @@ void ACSKPawn::ZoomCamera(float Value)
 	CameraBoom->AddDesiredArmLength(300.f * Value);
 }
 
-void ACSKPawn::TravelToLocation(const FVector& Location, bool bCancellable)
+void ACSKPawn::TravelToLocation(const FVector& Location, float TravelTime, bool bCancellable)
 {
-	PawnMovement->TravelToLocation(Location, bCancellable);
+	PawnMovement->TravelToLocation(Location, TravelTime, bCancellable);
 }
 
 void ACSKPawn::TrackActor(AActor* ActorToTrack, bool bIgnoreIfStatic)
