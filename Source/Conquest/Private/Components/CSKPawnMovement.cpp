@@ -10,6 +10,8 @@ UCSKPawnMovement::UCSKPawnMovement()
 {
 	bIsTravelling = false;
 	bCanCacelTravel = false;
+
+	TravelToTime = 2.f;
 }
 
 void UCSKPawnMovement::AddInputVector(FVector WorldVector, bool bForce)
@@ -64,7 +66,7 @@ void UCSKPawnMovement::ApplyControlInputToVelocity(float DeltaTime)
 	}
 }
 
-void UCSKPawnMovement::TravelToLocation(const FVector& Location, bool bCancellable)
+void UCSKPawnMovement::TravelToLocation(const FVector& Location, float TravelTime, bool bCancellable)
 {
 	if (IsTrackingActor())
 	{
@@ -78,6 +80,7 @@ void UCSKPawnMovement::TravelToLocation(const FVector& Location, bool bCancellab
 
 		TravelFrom = UpdatedComponent->GetComponentLocation();
 		TravelGoal = Location;
+		TravelToTime = TravelTime;
 		TravelElapsedTime = 0.f;
 	}
 }
@@ -133,9 +136,8 @@ void UCSKPawnMovement::StopTrackingActor()
 // TODO: Maybe Move this to being executed in TickComponent (might need to copy FloatingPawnsMovements Tick and just add it somewhere)
 void UCSKPawnMovement::UpdateTravelTaskVelocity(float DeltaTime)
 {
-	// Travel over 2 seconds
-	const float TravelDilation = 2.f; // TODO: make this a variable?
-	TravelElapsedTime = FMath::Clamp(TravelElapsedTime + (DeltaTime / 2.f), 0.f, 1.f);
+	// Travels to location based on time we want to take
+	TravelElapsedTime = FMath::Clamp(TravelElapsedTime + (DeltaTime / TravelToTime), 0.f, 1.f);
 
 	float AlphaAlongTack = FMath::InterpSinInOut(0.f, 1.f, TravelElapsedTime);
 
@@ -173,11 +175,10 @@ void UCSKPawnMovement::UpdateTrackTaskVelocity(float DeltaTime)
 	FVector Displacement = TargetLocation - ComponentLocation;
 	
 	float Distance = Displacement.Size();
-	float MaxSpeed = GetMaxSpeed();
 
 	// Travel faster if further away, but maintain focus if within range
 	const float TravelDilation = 3.f; // TODO: make this a variable?
-	float Scale = Distance > (MaxSpeed / 4.f) ? (MaxSpeed * TravelDilation) : (Distance / DeltaTime);
+	float Scale = Distance > (MaxSpeed / 4.f) ? (GetMaxSpeed() * TravelDilation) : (Distance / DeltaTime);
 	
 	Velocity = Displacement.GetSafeNormal() * Scale;
 

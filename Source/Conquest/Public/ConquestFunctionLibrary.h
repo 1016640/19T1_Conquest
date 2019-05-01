@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Styling/SlateBrush.h"
 #include "Templates/SubclassOf.h"
 #include "ConquestFunctionLibrary.generated.h"
 
@@ -109,6 +110,46 @@ public:
 	/** The delta of the change (This value will always be positive) */
 	UPROPERTY(BlueprintReadOnly)
 	int32 Delta;
+};
+
+// TODO: This should be a data asset that we find via the asset manager
+/** Information about a map that the host can select to play on while in the lobby */
+USTRUCT(BlueprintType)
+struct CONQUEST_API FMapSelectionDetails
+{
+	GENERATED_BODY()
+
+public:
+
+	FMapSelectionDetails()
+	{
+		MapName = TEXT("Map");
+	}
+
+public:
+
+	/** Get if this map is valid */
+	bool IsValid() const;
+
+public:
+
+	/** The name of the map */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FName MapName;
+
+	/** A description about the map */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FText MapDescription;
+
+	/** An image of the map */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FSlateBrush MapImage;
+
+public:
+
+	/** The actual name of the .Map file. This is required to travel to the level */
+	UPROPERTY(EditAnywhere)
+	FString MapFileName;
 };
 
 /**

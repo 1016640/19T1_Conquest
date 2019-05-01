@@ -36,7 +36,7 @@ public:
 
 	/** Travels to the given point overtime from our owners current location */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	void TravelToLocation(const FVector& Location, bool bCancellable = true);
+	void TravelToLocation(const FVector& Location, float TravelTime, bool bCancellable = true);
 
 	/** Set the actor to track, setting this to null means to track no actor.
 	Tracking actors takes priority over all other forms of movement, so to restore
@@ -60,6 +60,13 @@ private:
 
 	/** Updates velocity to move with tracked actor */
 	void UpdateTrackTaskVelocity(float DeltaTime);
+
+public:
+
+	/** The amount of time (in seconds) which to take
+	to move to track goal when using TravelToLocation */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = CSK, meta = (ClampMin=0.1))
+	float TravelToTime;
 
 private:
 
