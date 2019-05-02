@@ -544,6 +544,8 @@ void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) co
 			FVector BoxExtents;
 			BoardPiece->GetActorBounds(false, Origin, BoxExtents);
 
+			// Origin of the bounds may not be exactly the actor location
+			Origin = BoardPiece->GetActorLocation();
 			FVector BoardOrigin = GetActorLocation();
 
 			// Scale the scaler by 2 as box extents if only half of the pieces actual size

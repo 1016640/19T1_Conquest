@@ -11,6 +11,7 @@
 class ABoardManager;
 class ACSKGameMode;
 class ACSKGameState;
+class ACSKPawn;
 class ACSKPlayerState;
 class ATile;
 class UCSKGameInstance;
@@ -193,6 +194,14 @@ public:
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
 
 public:
+
+	/** Get the local players CSK pawn */
+	UFUNCTION(BlueprintPure, Category = CSK, meta = (WorldContext = "WorldContextObject"))
+	static ACSKPawn* GetLocalPlayersCSKPawn(const UObject* WorldContextObject);
+
+	/** Requests local players CSK pawn to move to given tile */
+	UFUNCTION(BlueprintCallable, Category = CSK, meta = (WorldContext = "WorldContextObject"))
+	static void MoveLocalPlayerToTile(const UObject* WorldContextObject, ATile* Tile, float TravelTime, bool bCancellable);
 
 	/** Get if two tiles are within given amount of range of each other */
 	UFUNCTION(BlueprintPure, Category = Board)

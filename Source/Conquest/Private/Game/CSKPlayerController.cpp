@@ -50,6 +50,20 @@ void ACSKPlayerController::ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDC
 	CachedCSKHUD = Cast<ACSKHUD>(MyHUD);
 }
 
+void ACSKPlayerController::OnRep_Pawn()
+{
+	Super::OnRep_Pawn();
+
+	if (IsLocalPlayerController())
+	{
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			GameState->SetLocalPlayersPawn(GetCSKPawn());
+		}
+	}
+}
+
 void ACSKPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -196,8 +210,7 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 				// Execute instantly
 				if (IsPerformingActionPhase())
 				{
-					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
-					
+					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);				
 				}
 				else if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 				{
@@ -1063,13 +1076,13 @@ void ACSKPlayerController::Client_OnCastleMoveRequestFinished_Implementation()
 void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
 	SetCanSelectTile(false);
+	SetIgnoreMoveInput(true);
 
 	ACSKPawn* CSKPawn = GetCSKPawn();
 	if (CSKPawn && TargetTile)
 	{
 		// Have players watch get tower built		
-		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.5f, false);
-		SetIgnoreMoveInput(true);
+		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.5f, false);		
 	}
 
 	if (CachedCSKHUD)
@@ -1122,12 +1135,12 @@ void ACSKPlayerController::Client_OnCastSpellRequestConfirmed_Implementation(EAc
 		SetIgnoreMoveInput(true);
 	}
 
-	ACSKPawn* CSKPawn = GetCSKPawn();
-	if (CSKPawn && TargetTile)
-	{
-		// Have players watch spell in action 
-		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.f, false);
-	}
+	//ACSKPawn* CSKPawn = GetCSKPawn();
+	//if (CSKPawn && TargetTile)
+	//{
+	//	// Have players watch spell in action 
+	//	CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.f, false);
+	//}
 
 	// This can be reset here safely
 	PendingBonusSpell = nullptr;
@@ -1222,6 +1235,16 @@ bool ACSKPlayerController::DisableActionMode(ECSKActionPhaseMode ActionMode)
 	}
 
 	return false;
+}
+
+void ACSKPlayerController::Client_OnTowerActionStart_Implementation(ATile* TileWithTower)
+{
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn && TileWithTower)
+	{
+		// Have players concentrate on tower
+		CSKPawn->TravelToLocation(TileWithTower->GetActorLocation(), 1.f, true);
+	}
 }
 
 void ACSKPlayerController::MoveCastleToHoveredTile()
