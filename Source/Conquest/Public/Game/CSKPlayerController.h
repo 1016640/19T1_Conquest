@@ -98,6 +98,10 @@ public:
 	virtual void ClientSetHUD_Implementation(TSubclassOf<AHUD> NewHUDClass) override;
 	// End APlayerController Interface
 
+	// Begin AController Interface
+	virtual void OnRep_Pawn() override;
+	// End AController Interface
+
 	// Begin AActor Interface
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -487,6 +491,10 @@ public:
 	/** Disable the ability to use the given action mode for the rest of this round.
 	Get if no action remains (always returns false on client or if not in action phase) */
 	bool DisableActionMode(ECSKActionPhaseMode ActionMode);
+
+	/** Notify that the tower on given tile is starting is end round action */
+	UFUNCTION(Client, Reliable)
+	void Client_OnTowerActionStart(ATile* TileWithTower);
 
 public:
 

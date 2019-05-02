@@ -65,6 +65,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = Spells)
 	bool IsPrimarySpell() const { return bIsPrimarySpell; }
 
+	/** If this spell is allowed to continue execution */
+	UFUNCTION(BlueprintPure, Category = Spells)
+	bool CanSpellContinueExecution() const { return bRunning && !bCancelled; }
+
 public:
 
 	/** The player currently executing this event */

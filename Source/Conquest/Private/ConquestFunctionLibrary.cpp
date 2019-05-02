@@ -7,6 +7,7 @@
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
 #include "Game/CSKGameState.h"
+#include "Game/CSKPawn.h"
 #include "Resources/SpellCard.h"
 
 #include "UserWidget.h"
@@ -84,6 +85,24 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 	}
 
 	return nullptr;
+}
+
+ACSKPawn* UConquestFunctionLibrary::GetLocalPlayersCSKPawn(const UObject* WorldContextObject)
+{
+	ACSKGameState* GameState = GetCSKGameState(WorldContextObject);
+	return GameState ? GameState->GetLocalPlayerPawn() : nullptr;
+}
+
+void UConquestFunctionLibrary::MoveLocalPlayerToTile(const UObject* WorldContextObject, ATile* Tile, float TravelTime, bool bCancellable)
+{
+	if (Tile)
+	{
+		ACSKPawn* PlayersPawn = GetLocalPlayersCSKPawn(WorldContextObject);
+		if (PlayersPawn)
+		{
+			PlayersPawn->TravelToLocation(Tile->GetActorLocation(), TravelTime, bCancellable);
+		}
+	}
 }
 
 bool UConquestFunctionLibrary::AreTilesWithingRange(const ATile* T1, const ATile* T2, int32 Range, int32& OutDistance)

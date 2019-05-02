@@ -146,12 +146,27 @@ private:
 
 public:
 
+	/** If this tower is currently executing the build sequence */
+	UFUNCTION(BlueprintPure, Category = Tower)
+	bool IsExecutingBuildSequence() const { return bIsRunningBuildSequence; }
+
+	/** If this tower is currently executing the end round action */
+	UFUNCTION(BlueprintPure, Category = Tower)
+	bool IsExecutingEndRoundAction() const { return bIsRunningEndRoundAction; }
+
+public:
+
 	/** Event for when build sequence has finish. This only gets executed on the server */
 	FTowerBuildSequenceComplete OnBuildSequenceComplete;
 
 private:
 
-	/** If this tower is running its end round action (only valid on server) */
+	/** If this tower is running its build sequence */
+	UPROPERTY(VisibleInstanceOnly, Category = Tower)
+	uint8 bIsRunningBuildSequence : 1;
+
+	/** If this tower is running its end round action */
+	UPROPERTY(VisibleInstanceOnly, Replicated, Category = Tower)
 	uint8 bIsRunningEndRoundAction : 1;
 
 public:

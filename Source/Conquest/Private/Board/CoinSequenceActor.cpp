@@ -25,6 +25,10 @@ ACoinSequenceActor::ACoinSequenceActor()
 	Camera->SetupAttachment(DummyRoot);
 
 	bIsSequenceRunning = false;
+
+	#if WITH_EDITORONLY_DATA
+	bSkipSequenceInPIE = false;
+	#endif
 }
 
 void ACoinSequenceActor::BeginPlay()
@@ -75,13 +79,27 @@ void ACoinSequenceActor::StartCoinSequence()
 {
 	if (HasAuthority())
 	{
-		if (Coin)
+		if (CanActivateCoinSequence())
 		{
 			// We only handle this on the server
 			Coin->OnCoinFlipComplete.AddDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
 			Multi_StartCoinFlip();
 		}
 	}
+}
+
+bool ACoinSequenceActor::CanActivateCoinSequence() const
+{
+	if (Coin)
+	{
+		#if WITH_EDITORONLY_DATA
+		return !bSkipSequenceInPIE;
+		#else
+		return true;
+		#endif
+	}
+
+	return false;
 }
 
 void ACoinSequenceActor::Multi_StartCoinFlip_Implementation()

@@ -163,7 +163,7 @@ void ACSKGameState::SetMatchBoardManager(ABoardManager* InBoardManager)
 
 void ACSKGameState::SetLocalPlayersPawn(ACSKPawn* InPlayerPawn)
 {
-	if (HasAuthority() && !LocalPlayerPawn)
+	if (!LocalPlayerPawn)
 	{
 		if (InPlayerPawn && InPlayerPawn->IsLocallyControlled())
 		{
