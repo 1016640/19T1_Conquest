@@ -210,8 +210,7 @@ void ACSKPlayerController::SetSelectedSpellCard(TSubclassOf<USpellCard> InSpellC
 				// Execute instantly
 				if (IsPerformingActionPhase())
 				{
-					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);
-					
+					Server_RequestCastSpellAction(SelectedSpellCard, SelectedSpellIndex, TargetTile, SelectedSpellAdditionalMana);				
 				}
 				else if (bCanSelectNullifyQuickEffect || bCanSelectPostQuickEffect)
 				{
@@ -1080,7 +1079,7 @@ void ACSKPlayerController::Client_OnTowerBuildRequestConfirmed_Implementation(AT
 	SetIgnoreMoveInput(true);
 
 	ACSKPawn* CSKPawn = GetCSKPawn();
-	if (CSKPawn)
+	if (CSKPawn && TargetTile)
 	{
 		// Have players watch get tower built		
 		CSKPawn->TravelToLocation(TargetTile->GetActorLocation(), 1.5f, false);		

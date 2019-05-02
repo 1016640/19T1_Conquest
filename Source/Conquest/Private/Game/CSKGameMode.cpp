@@ -626,7 +626,7 @@ void ACSKGameMode::OnCoinFlipStart()
 		CoinSequenceActor = *It;
 	}
 
-	if (CoinSequenceActor)
+	if (CoinSequenceActor && CoinSequenceActor->CanActivateCoinSequence())
 	{
 		// Notify players to transition to board (Who will report back to us once done)
 		for (ACSKPlayerController* Controller : Players)
@@ -636,15 +636,14 @@ void ACSKGameMode::OnCoinFlipStart()
 	}
 	else
 	{
-		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match in 5 seconds"));
+		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match in 2 seconds"));
 
 		// Force match to start
 		StartingPlayerID = GenerateCoinFlipWinner() ? 0 : 1;
-		EnterMatchStateAfterDelay(ECSKMatchState::Running, 5.f);
+		EnterMatchStateAfterDelay(ECSKMatchState::Running, 2.f);
 	}
 }
 
-// TODO: Fixup this process once I get a better understanding of how game mode initiates itself and clients
 void ACSKGameMode::OnMatchStart()
 {
 	// Give players the default resources
@@ -703,6 +702,21 @@ void ACSKGameMode::OnMatchFinished()
 
 void ACSKGameMode::OnFinishedWaitingPostMatch()
 {
+	#if WITH_EDITOR
+	UWorld* World = GetWorld();
+	if (World && World->IsPlayInEditor())
+	{
+		// End PIE session
+		ACSKPlayerController* Controller = GetPlayer1Controller();
+		if (Controller)
+		{
+			Controller->ConsoleCommand("Quit", false);
+		}
+
+		return;
+	}
+	#endif
+
 	FString LevelName("L_Lobby");
 	TArray<FString> Options{ "listen", "gamemode='Blueprint'/Game/Game/Blueprints/BP_LobbyGameMode.BP_LobbyGameMode'" };
 

@@ -69,6 +69,12 @@ public:
 	/** Starts the coin sequence */
 	void StartCoinSequence();
 
+public:
+
+	/** If this coin sequence actor is able to start the sequence */
+	UFUNCTION(BlueprintPure, Category = Sequence)
+	bool CanActivateCoinSequence() const;
+
 private:
 
 	/** Notify to start the coin flip on each client */
@@ -89,4 +95,11 @@ private:
 
 	/** If the sequence is running */
 	uint8 bIsSequenceRunning : 1;
+
+	#if WITH_EDITORONLY_DATA
+	/** If we should allow the coin sequence while in editor. This will
+	result in warnings by the game mode that it failed to activate sequence */
+	UPROPERTY(EditAnywhere, Category = Sequence)
+	uint8 bSkipSequenceInPIE : 1;
+	#endif
 };
