@@ -9,6 +9,7 @@
 #include "ConquestFunctionLibrary.generated.h"
 
 class ABoardManager;
+class ACoinSequenceActor;
 class ACSKGameMode;
 class ACSKGameState;
 class ACSKPawn;
@@ -192,6 +193,10 @@ public:
 	/** Get the first board manager found in the level */
 	UFUNCTION(BlueprintPure, Category = Board, meta = (WorldContext = "WorldContextObject"))
 	static ABoardManager* FindMatchBoardManager(const UObject* WorldContextObject, bool bWarnIfNotFound = true);
+
+	/** Get the first coin sequence actor in the level */
+	UFUNCTION(BlueprintPure, Category = CSK, meta = (WorldContext = "WorldContextObject"))
+	static ACoinSequenceActor* FindCoinSequenceActor(const UObject* WorldContextObject);
 
 public:
 

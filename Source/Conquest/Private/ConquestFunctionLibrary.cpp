@@ -3,6 +3,7 @@
 #include "ConquestFunctionLibrary.h"
 #include "Conquest.h"
 #include "Board/BoardManager.h"
+#include "Board/CoinSequenceActor.h"
 #include "Board/Tile.h"
 #include "Game/CSKGameInstance.h"
 #include "Game/CSKGameMode.h"
@@ -82,6 +83,20 @@ ABoardManager* UConquestFunctionLibrary::FindMatchBoardManager(const UObject* Wo
 	if (bWarnIfNotFound)
 	{
 		UE_LOG(LogConquest, Warning, TEXT("FindMatchBoardManager: Was not able to find a board manager in world %s"), *World->GetPathName());
+	}
+
+	return nullptr;
+}
+
+ACoinSequenceActor* UConquestFunctionLibrary::FindCoinSequenceActor(const UObject* WorldContextObject)
+{
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+	if (World)
+	{
+		for (TActorIterator<ACoinSequenceActor> It(World); It; ++It)
+		{
+			return *It;
+		}
 	}
 
 	return nullptr;

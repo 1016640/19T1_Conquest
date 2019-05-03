@@ -88,6 +88,18 @@ void ACoinSequenceActor::StartCoinSequence()
 	}
 }
 
+void ACoinSequenceActor::FinishCoinSequence()
+{
+	if (HasAuthority())
+	{
+		if (Coin)
+		{
+			Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
+			Multi_FinishCoinFlip();
+		}
+	}
+}
+
 bool ACoinSequenceActor::CanActivateCoinSequence() const
 {
 	if (Coin)
@@ -117,6 +129,17 @@ void ACoinSequenceActor::Multi_StartCoinFlip_Implementation()
 		// Locally simulate the coin flip
 		Coin->Flip();
 		bIsSequenceRunning = true;
+	}
+}
+
+void ACoinSequenceActor::Multi_FinishCoinFlip_Implementation()
+{
+	if (Coin)
+	{
+		Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ClientHandleCoinFlipFinished);
+		SetActorTickEnabled(false);
+
+		bIsSequenceRunning = false;
 	}
 }
 

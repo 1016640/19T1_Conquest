@@ -646,11 +646,7 @@ void ACSKGameMode::OnCoinFlipStart()
 	bExecutingCoinSequnce = false;
 
 	// We need to find a sequence actor to use
-	UWorld* World = GetWorld();
-	for (TActorIterator<ACoinSequenceActor> It(World); It; ++It)
-	{
-		CoinSequenceActor = *It;
-	}
+	CoinSequenceActor = UConquestFunctionLibrary::FindCoinSequenceActor(this);
 
 	if (CoinSequenceActor && CoinSequenceActor->CanActivateCoinSequence())
 	{
@@ -964,7 +960,7 @@ void ACSKGameMode::OnPlayerReadyForCoinFlip()
 				--PlayersAtCoinSequence;
 				if (PlayersAtCoinSequence == 0)
 				{
-					CoinSequenceActor->Destroy();
+					CoinSequenceActor->FinishCoinSequence();
 					bExecutingCoinSequnce = false;
 
 					EnterMatchState(ECSKMatchState::Running);
