@@ -120,6 +120,7 @@ public:
 	virtual void StartPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
+	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual APawn* SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot) override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 	virtual bool HasMatchStarted() const override;	

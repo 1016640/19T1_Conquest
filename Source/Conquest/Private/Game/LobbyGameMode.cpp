@@ -60,28 +60,27 @@ void ALobbyGameMode::InitGameState()
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
-	// We need to set which player this is before continuing the login
-	{
-		if (GetPlayer1Controller() != nullptr)
-		{
-			// We should only ever have two players
-			if (!ensure(!GetPlayer2Controller()))
-			{
-				UE_LOG(LogConquest, Error, TEXT("More than 2 players have joined the lobby match even though the max is 2 players"));
-			}
-			else
-			{
-				SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 1);
+	//// We need to set which player this is before continuing the login
+	//{
+	//	if (GetPlayer1Controller() != nullptr)
+	//	{
+	//		// We should only ever have two players
+	//		if (!ensure(!GetPlayer2Controller()))
+	//		{
+	//			UE_LOG(LogConquest, Error, TEXT("More than 2 players have joined the lobby match even though the max is 2 players"));
+	//		}
+	//		else
+	//		{
+	//			SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 1);
 
-				SendPlayerLobbyPlayerStates(GetPlayer1Controller());
-			}
-		}
-		else
-		{
-			SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 0);
-		}
-
-	}
+	//			SendPlayerLobbyPlayerStates(GetPlayer1Controller());
+	//		}
+	//	}
+	//	else
+	//	{
+	//		SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 0);
+	//	}
+	//}
 
 	Super::PostLogin(NewPlayer);
 }
@@ -135,6 +134,32 @@ void ALobbyGameMode::Logout(AController* Exiting)
 	}
 
 	Super::Logout(Exiting);
+}
+
+void ALobbyGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+	// We need to set which player this is before continuing the login
+	{
+		if (GetPlayer1Controller() != nullptr)
+		{
+			// We should only ever have two players
+			if (!ensure(!GetPlayer2Controller()))
+			{
+				UE_LOG(LogConquest, Error, TEXT("More than 2 players have joined the lobby match even though the max is 2 players"));
+			}
+			else
+			{
+				SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 1);
+				SendPlayerLobbyPlayerStates(GetPlayer1Controller());
+			}
+		}
+		else
+		{
+			SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 0);
+		}
+	}
+
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 }
 
 bool ALobbyGameMode::IsMatchValid() const

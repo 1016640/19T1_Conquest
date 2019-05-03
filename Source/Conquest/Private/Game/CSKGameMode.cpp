@@ -142,10 +142,46 @@ void ACSKGameMode::StartPlay()
 
 void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 {
+	//// We need to set which player this is before continuing the login
+	//{
+	//	if (GetPlayer1Controller() != nullptr)
+	//	{		
+	//		// We should only ever have two players
+	//		if (!ensure(!GetPlayer2Controller()))
+	//		{
+	//			UE_LOG(LogConquest, Error, TEXT("More than 2 people of joined a CSK match even though only 2 max are allowed"));
+	//		}
+	//		else
+	//		{
+	//			SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
+	//		}
+	//	}
+	//	else
+	//	{
+	//		SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 0);
+	//	}
+	//}
+
+	Super::PostLogin(NewPlayer);
+}
+
+void ACSKGameMode::Logout(AController* Exiting)
+{
+	if (MatchState != ECSKMatchState::LeavingGame)
+	{
+		// TODO: Would want to have the exit option inform the server to end the game instead of abort like this
+		//AbortMatch();
+	}
+
+	Super::Logout(Exiting);
+}
+
+void ACSKGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
 	// We need to set which player this is before continuing the login
 	{
 		if (GetPlayer1Controller() != nullptr)
-		{		
+		{
 			// We should only ever have two players
 			if (!ensure(!GetPlayer2Controller()))
 			{
@@ -160,21 +196,9 @@ void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
 		{
 			SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 0);
 		}
-
 	}
 
-	Super::PostLogin(NewPlayer);
-}
-
-void ACSKGameMode::Logout(AController* Exiting)
-{
-	if (MatchState != ECSKMatchState::LeavingGame)
-	{
-		// TODO: Would want to have the exit option inform the server to end the game instead of abort like this
-		AbortMatch();
-	}
-
-	Super::Logout(Exiting);
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 }
 
 APawn* ACSKGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot)
@@ -432,10 +456,11 @@ void ACSKGameMode::EnterMatchState(ECSKMatchState NewState)
 			// timer only be active in this function if a delayed change is pending.
 		}
 
-		#if WITH_EDITOR
-		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKMatchState"));
-		UE_LOG(LogConquest, Log, TEXT("Entering Match State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
-		#endif
+		static UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKMatchState"));
+		if (EnumClass)
+		{
+			UE_LOG(LogConquest, Log, TEXT("Entering Match State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
+		}
 	
 		ECSKMatchState OldState = MatchState;
 		MatchState = NewState;
@@ -477,10 +502,11 @@ void ACSKGameMode::EnterRoundState(ECSKRoundState NewState)
 			// timer only be active in this function if a delayed change is pending.
 		}
 
-		#if WITH_EDITOR
-		UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKRoundState"));
-		UE_LOG(LogConquest, Log, TEXT("Entering Round State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
-		#endif
+		static UEnum* EnumClass = FindObject<UEnum>(ANY_PACKAGE, TEXT("ECSKRoundState"));
+		if (EnumClass)
+		{
+			UE_LOG(LogConquest, Log, TEXT("Entering Round State: %s"), *EnumClass->GetNameByIndex((int32)NewState).ToString());
+		}
 
 		ECSKRoundState OldState = RoundState;
 		RoundState = NewState;
