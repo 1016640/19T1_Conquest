@@ -568,6 +568,14 @@ void ACSKPlayerController::Client_TransitionToCoinSequence_Implementation(ACoinS
 	ACSKPlayerCameraManager* CameraManager = GetCSKPlayerCameraManager();
 	if (CameraManager)
 	{
+		if (!SequenceActor)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKPlayerController::Client_TransitionToCoinSequence: Sequence Actor is "
+				"null (Maybe not replicating? Finding a sequence actor manually in the level"));
+
+			SequenceActor = UConquestFunctionLibrary::FindCoinSequenceActor(this);
+		}
+
 		CameraManager->StartFadeInAndOutSequence(SequenceActor, 1.f);
 	}
 }
@@ -604,7 +612,11 @@ void ACSKPlayerController::OnTransitionToBoard()
 		if (BoardManager)
 		{
 			ATile* PortalTile = BoardManager->GetPlayerPortalTile(CSKPlayerID);
-			check(PortalTile);
+			if (!PortalTile)
+			{
+				UE_LOG(LogConquest, Warning, TEXT("No Portal Tile specified for player %i. Unable to place castle on board"), CSKPlayerID + 1);
+				return;
+			}
 
 			if (!BoardManager->PlaceBoardPieceOnTile(CastlePawn, PortalTile))
 			{

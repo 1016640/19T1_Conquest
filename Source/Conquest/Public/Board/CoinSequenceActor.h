@@ -69,6 +69,9 @@ public:
 	/** Starts the coin sequence */
 	void StartCoinSequence();
 
+	/** Finishes the coin sequence */
+	void FinishCoinSequence();
+
 public:
 
 	/** If this coin sequence actor is able to start the sequence */
@@ -80,6 +83,10 @@ private:
 	/** Notify to start the coin flip on each client */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_StartCoinFlip();
+
+	/** Notify to finish the coin flip on each client */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_FinishCoinFlip();
 
 	/** Callback for when the coin has finished the flip sequence. This version is
 	only called on the server and will inform the game mode of the flip result */
