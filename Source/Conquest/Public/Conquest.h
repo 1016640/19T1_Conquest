@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "ConquestFunctionLibrary.h"
 #include "EngineUtils.h"
+#include "Online.h"
 #include "UnrealNetwork.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogConquest, Log, All);
