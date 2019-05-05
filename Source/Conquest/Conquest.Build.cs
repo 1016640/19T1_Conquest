@@ -24,14 +24,14 @@ public class Conquest : ModuleRules
             "CoreUObject",
             "Engine",
             "InputCore",
+            "OnlineSubsystem",
+            "OnlineSubsystemUtils",
             "UMG"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "AIModule",
-            "OnlineSubsystem",
-            "OnlineSubsystemUtils",
             "Slate",
             "SlateCore"
         });
