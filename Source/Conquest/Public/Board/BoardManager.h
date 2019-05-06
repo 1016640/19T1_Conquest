@@ -250,11 +250,24 @@ public:
 
 	/** Attempts to place the board piece on given tile. This only runs on the server */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
-	bool PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const;
+	bool PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile);
 
 	/** Clears the board piece set on given tile. This only runs on the server */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Board|Tiles")
-	bool ClearBoardPieceOnTile(ATile* Tile) const;
+	bool ClearBoardPieceOnTile(ATile* Tile);
+
+private:
+
+	/** Add/Removes tile with board piece for each client */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_SetTileWithBoardPiece(ATile* Tile, bool bHasBoardPiece);
+
+protected:
+
+	/** All the tiles that have board pieces placed on them (This only tracks pieces placed through PlaceBoardPieceOnTile 
+	and ClearBoardPieceOnTile, if board pieces were placed outside of these functions they will not be found here) */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Board|Tiles")
+	TSet<ATile*> TilesWithBoardPieces;
 
 public:
 
@@ -266,7 +279,7 @@ public:
 	
 	/** Forces a refresh of all tiles highlight materials */
 	UFUNCTION(BlueprintCallable, CallInEditor)
-	void ForceTileHighlightRefresh();
+	void RefreshAllTilesHighlightMaterials();
 
 	/** Get the highlight material associated with given element */
 	UFUNCTION(BlueprintPure, Category = "Board|Tiles")

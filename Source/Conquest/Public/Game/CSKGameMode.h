@@ -334,8 +334,9 @@ public:
 
 public:
 
-	/** Notify from a player that they are ready for the coin flip */
-	void OnPlayerReadyForCoinFlip();
+	/** Notify from a player that they have finished
+	transition to the coin sequence or back to the board */
+	void OnPlayerTransitionSequenceFinished();
 
 	/** Notify from the coin sequence actor that the sequence has finished */
 	void OnStartingPlayerDecided(int32 WinningPlayerID);

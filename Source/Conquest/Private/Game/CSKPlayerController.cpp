@@ -377,7 +377,7 @@ void ACSKPlayerController::OnNewTileHovered_Implementation(ATile* NewTile)
 
 void ACSKPlayerController::NotifyFadeOutInSequenceFinished()
 {
-	Server_TransitionedToCoinSequence();
+	Server_TransitionSequenceFinished();
 }
 
 void ACSKPlayerController::SetCanSelectTile(bool bEnable)
@@ -602,44 +602,16 @@ void ACSKPlayerController::Client_TransitionToBoard_Implementation()
 	}
 }
 
-void ACSKPlayerController::OnTransitionToBoard()
+void ACSKPlayerController::Client_OnMatchStarted_Implementation()
 {
-	if (HasAuthority())
+	// Move the camera over to our castle (where our portal should be)
+	ACSKPawn* CSKPawn = GetCSKPawn();
+	if (CSKPawn)
 	{
-		// TODO: Move this to game mode (game mode should handle place board pieces)
-		// Occupy the space we are on
-		ABoardManager* BoardManager = UConquestFunctionLibrary::GetMatchBoardManager(this);
-		if (BoardManager)
+		if (CastlePawn)
 		{
-			ATile* PortalTile = BoardManager->GetPlayerPortalTile(CSKPlayerID);
-			if (!PortalTile)
-			{
-				UE_LOG(LogConquest, Warning, TEXT("No Portal Tile specified for player %i. Unable to place castle on board"), CSKPlayerID + 1);
-				return;
-			}
-
-			if (!BoardManager->PlaceBoardPieceOnTile(CastlePawn, PortalTile))
-			{
-				UE_LOG(LogConquest, Warning, TEXT("Unable to set player %i castle on portal tile as it's already occupied!"), CSKPlayerID);
-			}
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 2.f, false);
 		}
-
-		// Have client handle any local transition requirements
-		Client_OnTransitionToBoard();
-	}
-}
-
-bool ACSKPlayerController::Server_TransitionedToCoinSequence_Validate()
-{
-	return true;
-}
-
-void ACSKPlayerController::Server_TransitionedToCoinSequence_Implementation()
-{
-	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
-	if (GameMode)
-	{
-		GameMode->OnPlayerReadyForCoinFlip();
 	}
 }
 
@@ -650,6 +622,20 @@ void ACSKPlayerController::Client_OnMatchFinished_Implementation(bool bIsWinner)
 	if (CachedCSKHUD)
 	{
 		CachedCSKHUD->OnMatchFinished(bIsWinner);
+	}
+}
+
+bool ACSKPlayerController::Server_TransitionSequenceFinished_Validate()
+{
+	return true;
+}
+
+void ACSKPlayerController::Server_TransitionSequenceFinished_Implementation()
+{
+	ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
+	if (GameMode)
+	{
+		GameMode->OnPlayerTransitionSequenceFinished();
 	}
 }
 
@@ -1011,25 +997,6 @@ void ACSKPlayerController::OnRep_bCanSelectBonusSpellTarget()
 	else if (!IsPerformingActionPhase())
 	{
 		SetCanSelectTile(false);
-	}
-}
-
-void ACSKPlayerController::Client_OnTransitionToBoard_Implementation()
-{
-	// Move the camera over to our castle (where our portal should be)
-	ACSKPawn* CSKPawn = GetCSKPawn();
-	if (CSKPawn)
-	{
-		SetViewTargetWithBlend(CSKPawn);
-
-		if (CastlePawn)
-		{
-			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 2.f, false);
-		}
-	}
-	else
-	{
-		UE_LOG(LogConquest, Warning, TEXT("Client was unable to travel to castle as pawn was null! (Probaly not replicated yet)"));
 	}
 }
 
