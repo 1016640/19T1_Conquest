@@ -18,7 +18,7 @@ void ALobbyPlayerState::CopyProperties(APlayerState* PlayerState)
 	ACSKPlayerState* CSKPlayerState = Cast<ACSKPlayerState>(PlayerState);
 	if (CSKPlayerState)
 	{
-		AssignedColor = CSKPlayerState->GetAssignedColor();
+		CSKPlayerState->SetAssignedColor(AssignedColor);
 	}
 }
 

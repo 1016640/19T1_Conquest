@@ -286,8 +286,9 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_TransitionToBoard();
 
-	/** Called by the game mode when transitioning to the board */
-	void OnTransitionToBoard(); // Refactor
+	/** Notify that the match has started */
+	UFUNCTION(Client, Reliable)
+	void Client_OnMatchStarted();
 
 	/** Notify that the match has concluded */
 	UFUNCTION(Client, Reliable)
@@ -295,9 +296,10 @@ public:
 
 private:
 
-	/** Informs the server that this client has finished transition to the coin sequence area */
+	/** Informs the server that we have either finished
+	transitioning to the coin sequence or back to the board */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_TransitionedToCoinSequence();
+	void Server_TransitionSequenceFinished();
 
 public:
 
@@ -317,10 +319,6 @@ protected:
 	void FinishCollectionSequenceEvent();
 
 private:
-
-	/** Handle transition to board client side */
-	UFUNCTION(Client, Reliable)
-	void Client_OnTransitionToBoard(); // TODO: refactor
 
 	/** Notifies server that local client has finished collecting resources */
 	UFUNCTION(Server, Reliable, WithValidation)

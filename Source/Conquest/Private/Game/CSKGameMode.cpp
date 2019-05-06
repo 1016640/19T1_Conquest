@@ -140,37 +140,17 @@ void ACSKGameMode::StartPlay()
 	}
 }
 
-void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
-{
-	//// We need to set which player this is before continuing the login
-	//{
-	//	if (GetPlayer1Controller() != nullptr)
-	//	{		
-	//		// We should only ever have two players
-	//		if (!ensure(!GetPlayer2Controller()))
-	//		{
-	//			UE_LOG(LogConquest, Error, TEXT("More than 2 people of joined a CSK match even though only 2 max are allowed"));
-	//		}
-	//		else
-	//		{
-	//			SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
-	//		}
-	//	}
-	//	else
-	//	{
-	//		SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 0);
-	//	}
-	//}
-
-	Super::PostLogin(NewPlayer);
-}
-
 void ACSKGameMode::Logout(AController* Exiting)
 {
-	if (MatchState != ECSKMatchState::LeavingGame)
+	ACSKPlayerController* Controller = Cast<ACSKPlayerController>(Exiting);
+	if (Players.Find(Controller))
 	{
-		// TODO: Would want to have the exit option inform the server to end the game instead of abort like this
-		//AbortMatch();
+		// If host is leaving, the game will automatically end.
+		// If guest is leaving, mark them as surrendering 
+		if (Players[1] == Controller)
+		{
+			EndMatch(Players[0], ECSKMatchWinCondition::Surrender);
+		}
 	}
 
 	Super::Logout(Exiting);
@@ -642,6 +622,39 @@ void ACSKGameMode::OnCoinFlipStart()
 		GEngine->BlockTillLevelStreamingCompleted(GetWorld());
 	}
 
+	// We can place the players castles and tile colors here
+	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+	if (CSKGameState)
+	{
+		ABoardManager* BoardManager = CSKGameState->GetBoardManager();
+		if (BoardManager)
+		{
+			for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+			{
+				ACSKPlayerController* Controller = Players[i];
+
+				// We first need to create the player highlight materials for each player
+				ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
+				if (PlayerState)
+				{
+					BoardManager->SetHighlightColorForPlayer(i, PlayerState->GetAssignedColor());
+				}
+
+				// We can now set the players castle on the board, so it refreshes to correct material
+				ATile* PortalTile = BoardManager->GetPlayerPortalTile(Controller->CSKPlayerID);
+				if (PortalTile)
+				{
+					BoardManager->PlaceBoardPieceOnTile(Controller->GetCastlePawn(), PortalTile);
+				}
+				else
+				{
+					UE_LOG(LogConquest, Error, TEXT("No Portal Tile exists for Player %i! "
+						"Unable to place players castle"), Controller->CSKPlayerID + 1);
+				}
+			}
+		}
+	}
+
 	PlayersAtCoinSequence = 0;
 	bExecutingCoinSequnce = false;
 
@@ -673,32 +686,11 @@ void ACSKGameMode::OnMatchStart()
 
 	AWorldSettings* WorldSettings = GetWorldSettings();
 	WorldSettings->NotifyMatchStarted();
-	
-	// Initialize player colors here
-	ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
-	if (CSKGameState)
-	{
-		ABoardManager* BoardManager = CSKGameState->GetBoardManager();
-		if (BoardManager)
-		{
-			for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
-			{
-				ACSKPlayerController* Controller = Players[i];
 
-				ACSKPlayerState* PlayerState = Controller->GetCSKPlayerState();
-				if (PlayerState)
-				{
-					BoardManager->SetHighlightColorForPlayer(i, PlayerState->GetAssignedColor());
-				}
-			}
-		}
-	}
-
-	// Have each player transition to their board
-	for (int32 i = 0; i < CSK_MAX_NUM_PLAYERS; ++i)
+	// Notify each player that match is now starting
+	for (ACSKPlayerController* Controller : Players)
 	{
-		ACSKPlayerController* Controller = Players[i];
-		Controller->OnTransitionToBoard();
+		Controller->Client_OnMatchStarted();
 	}
 
 	SetActorTickEnabled(false);
@@ -948,7 +940,7 @@ bool ACSKGameMode::GenerateCoinFlipWinner_Implementation() const
 	return (RandomValue % 2) == 1;
 }
 
-void ACSKGameMode::OnPlayerReadyForCoinFlip()
+void ACSKGameMode::OnPlayerTransitionSequenceFinished()
 {
 	if (MatchState == ECSKMatchState::CoinFlip)
 	{

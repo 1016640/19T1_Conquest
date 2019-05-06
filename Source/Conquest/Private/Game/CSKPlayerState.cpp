@@ -40,7 +40,7 @@ void ACSKPlayerState::CopyProperties(APlayerState* PlayerState)
 	ALobbyPlayerState* LobbyPlayerState = Cast<ALobbyPlayerState>(PlayerState);
 	if (LobbyPlayerState)
 	{
-		AssignedColor = LobbyPlayerState->GetAssignedColor();
+		LobbyPlayerState->SetAssignedColor(AssignedColor);
 	}
 }
 

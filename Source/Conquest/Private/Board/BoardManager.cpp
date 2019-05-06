@@ -504,14 +504,13 @@ bool ABoardManager::CanPlaceTowerOnTile(const ATile* Tile) const
 	return false;
 }
 
-bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const
+bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile)
 {
 	if (HasAuthority())
 	{
 		if (Tile && Tile->SetBoardPiece(BoardPiece))
 		{
-			// TODO: Add delegate call here (could potentially call a multicasetfunction that fires off a delegate)
-			
+			Multi_SetTileWithBoardPiece(Tile, true);
 			return true;
 		}
 	}
@@ -519,19 +518,30 @@ bool ABoardManager::PlaceBoardPieceOnTile(AActor* BoardPiece, ATile* Tile) const
 	return false;
 }
 
-bool ABoardManager::ClearBoardPieceOnTile(ATile* Tile) const
+bool ABoardManager::ClearBoardPieceOnTile(ATile* Tile)
 {
 	if (HasAuthority())
 	{
 		if (Tile && Tile->ClearBoardPiece())
 		{
-			// TODO: Add delegate call here (could potentially call a multicasetfunction that fires off a delegate)
-
+			Multi_SetTileWithBoardPiece(Tile, false);
 			return true;
 		}
 	}
 
 	return false;
+}
+
+void ABoardManager::Multi_SetTileWithBoardPiece_Implementation(ATile* Tile, bool bHasBoardPiece)
+{
+	if (bHasBoardPiece)
+	{
+		TilesWithBoardPieces.Add(Tile);
+	}
+	else
+	{
+		TilesWithBoardPieces.Remove(Tile);
+	}
 }
 
 void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) const
@@ -556,7 +566,7 @@ void ABoardManager::MoveBoardPieceUnderBoard(AActor* BoardPiece, float Scale) co
 	}
 }
 
-void ABoardManager::ForceTileHighlightRefresh()
+void ABoardManager::RefreshAllTilesHighlightMaterials()
 {
 	if (HexGrid.bGridGenerated)
 	{
@@ -707,6 +717,12 @@ void ABoardManager::Multi_SetHighlightColorForPlayer_Implementation(int32 Player
 		if (PlayerHighlightMaterialTemplate)
 		{
 			HighlightMat = UMaterialInstanceDynamic::Create(PlayerHighlightMaterialTemplate, this);
+
+			// We want to refresh since a new material has been created
+			for (ATile* Tile : TilesWithBoardPieces)
+			{
+				SetTilesHighlightMaterial(Tile);
+			}
 		}
 		else
 		{

@@ -130,10 +130,10 @@ void ACSKHUD::OnActionStart(ECSKActionPhaseMode Mode, EActiveSpellContext SpellC
 	UCSKHUDWidget* Widget = GetCSKHUDInstance();
 	if (Widget)
 	{
-			Widget->OnActionStart();
+		Widget->OnActionStart();
 
-			switch (Mode)
-			{
+		switch (Mode)
+		{
 			case ECSKActionPhaseMode::MoveCastle:
 			{
 				Widget->OnMoveCastleActionStart();
