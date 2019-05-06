@@ -60,27 +60,31 @@ void ALobbyGameMode::InitGameState()
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
-	//// We need to set which player this is before continuing the login
-	//{
-	//	if (GetPlayer1Controller() != nullptr)
-	//	{
-	//		// We should only ever have two players
-	//		if (!ensure(!GetPlayer2Controller()))
-	//		{
-	//			UE_LOG(LogConquest, Error, TEXT("More than 2 players have joined the lobby match even though the max is 2 players"));
-	//		}
-	//		else
-	//		{
-	//			SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 1);
+	// We set the default color here since a player can only login once
+	ALobbyPlayerState* PlayerState = NewPlayer->GetPlayerState<ALobbyPlayerState>();
+	if (PlayerState)
+	{
+		if (Players[0] == nullptr)
+		{
+			PlayerState->SetAssignedColor(HostAssignedColor);
+		}
+		else
+		{
+			ensure(Players[1] == nullptr);
 
-	//			SendPlayerLobbyPlayerStates(GetPlayer1Controller());
-	//		}
-	//	}
-	//	else
-	//	{
-	//		SetPlayerWithID(CastChecked<ALobbyPlayerController>(NewPlayer), 0);
-	//	}
-	//}
+			// Avoid giving this player the same color as the host (as host might have changed theirs to guests default color)
+			ALobbyPlayerController* HostController = GetPlayer1Controller();
+			ALobbyPlayerState* HostState = HostController ? HostController->GetLobbyPlayerState() : nullptr;
+			if (HostState && HostState->GetAssignedColor() == GuestAssignedColor)
+			{
+				PlayerState->SetAssignedColor(HostAssignedColor);
+			}
+			else
+			{
+				PlayerState->SetAssignedColor(GuestAssignedColor);
+			}
+		}
+	}
 
 	Super::PostLogin(NewPlayer);
 }
@@ -192,25 +196,6 @@ void ALobbyGameMode::SetPlayerWithID(ALobbyPlayerController* Controller, int32 P
 			if (PlayerState)
 			{
 				PlayerState->SetCSKPlayerID(PlayerID);
-
-				// We need to avoid setting the new player with the same color as the other
-				if (PlayerID == 0)
-				{
-					PlayerState->SetAssignedColor(HostAssignedColor);
-				}
-				else
-				{
-					ALobbyPlayerController* HostController = GetPlayer1Controller();
-					ALobbyPlayerState* HostState = HostController ? HostController->GetLobbyPlayerState() : nullptr;
-					if (HostState && HostState->GetAssignedColor() == GuestAssignedColor)
-					{
-						PlayerState->SetAssignedColor(HostAssignedColor);
-					}
-					else
-					{
-						PlayerState->SetAssignedColor(GuestAssignedColor);
-					}
-				}
 			}
 		}
 	}

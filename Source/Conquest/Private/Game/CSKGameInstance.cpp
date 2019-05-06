@@ -8,6 +8,25 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
+const FOnlineSession& FConquestSearchResult::GetSession() const
+{
+	return SearchResult.Session;
+}
+
+FString FConquestSearchResult::GetSessionName() const
+{
+	if (SearchResult.IsValid())
+	{
+		/*const FNamedOnlineSession* NamedSession = dynamic_cast<const FNamedOnlineSession*>(&SearchResult.Session);
+		if (NamedSession)
+		{
+			return NamedSession->SessionName.ToString();
+		}*/
+	}
+
+	return GetSession().OwningUserName;
+}
+
 UCSKGameInstance::UCSKGameInstance()
 {
 	// Initialize session bindings
@@ -19,6 +38,15 @@ UCSKGameInstance::UCSKGameInstance()
 		OnDestroySessionComplete = FOnDestroySessionCompleteDelegate::CreateUObject(this, &UCSKGameInstance::NotifyDestroySessionComplete);
 	}
 }
+
+#if WITH_EDITOR
+FGameInstancePIEResult UCSKGameInstance::InitializeForPlayInEditor(int32 PIEInstanceIndex, const FGameInstancePIEParameters& Params)
+{
+	MatchSessionName = TEXT("Play In Editor");
+	
+	return Super::InitializeForPlayInEditor(PIEInstanceIndex, Params);	
+}
+#endif
 
 bool UCSKGameInstance::ServerTravelToLevel(const UObject* WorldContextObject, FString LevelName, const TArray<FString>& Options)
 {
@@ -45,12 +73,17 @@ bool UCSKGameInstance::ServerTravelToLevel(const UObject* WorldContextObject, FS
 	return false;
 }
 
+FString UCSKGameInstance::GetSessionName(const FConquestSearchResult& SearchResult)
+{
+	return SearchResult.GetSessionName();
+}
+
 bool UCSKGameInstance::HostMatch(FName MatchName, bool bIsLAN)
 {
 	const ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
 	check(LocalPlayer);
 
-	return CreateSession(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), MatchName, bIsLAN, true);
+	return InternalCreateSession(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), MatchName, bIsLAN, true);
 }
 
 bool UCSKGameInstance::FindMatches(bool bIsLAN)
@@ -58,23 +91,38 @@ bool UCSKGameInstance::FindMatches(bool bIsLAN)
 	const ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
 	check(LocalPlayer);
 
-	return FindSessions(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), bIsLAN, true);
+	return InternalFindSessions(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), bIsLAN, true);
 }
 
-bool UCSKGameInstance::JoinMatch(FName MatchName)
+bool UCSKGameInstance::JoinMatch(const FConquestSearchResult& SearchResult)
 {
 	const ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
 	check(LocalPlayer);
 
-	// TODO:
+	TSharedPtr<const FUniqueNetId> UserId = LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId();
 
-	//return JoinSession(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), MatchName, NeedSearchResult)
+	// Avoid joining a session we are already hosting
+	const FOnlineSession& Session = SearchResult.GetSession();
+	if (Session.OwningUserId != UserId)
+	{
+		FName SessionName = NAME_GameSession;
+	
+		// We need to retrieve the actual name of the session
+		/*const FNamedOnlineSession* NamedSession = dynamic_cast<const FNamedOnlineSession*>(&Session);
+		if (NamedSession)
+		{
+			SessionName = NamedSession->SessionName;
+		}*/
+
+		return InternalJoinSession(LocalPlayer->GetPreferredUniqueNetId().GetUniqueNetId(), SessionName, SearchResult.SearchResult);
+	}
+
 	return false;
 }
 
 bool UCSKGameInstance::DestroyMatch()
 {
-	return DestroySession(MatchSessionName);
+	return InternalDestroySession(MatchSessionName);
 }
 
 bool UCSKGameInstance::IsValidNameForSession_Implementation(const FName& SessionName) const
@@ -82,7 +130,7 @@ bool UCSKGameInstance::IsValidNameForSession_Implementation(const FName& Session
 	return SessionName.IsValid() && !SessionName.IsNone();
 }
 
-bool UCSKGameInstance::CreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence)
+bool UCSKGameInstance::InternalCreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence)
 {
 	if (!UserId.IsValid())
 	{
@@ -115,8 +163,7 @@ bool UCSKGameInstance::CreateSession(TSharedPtr<const FUniqueNetId> UserId, FNam
 			// We also want a valid name
 			if (!IsValidNameForSession(SessionName))
 			{
-				ULocalPlayer* const Player = GetFirstGamePlayer();
-				SessionName = FName(*Player->GetNickname());
+				SessionName = NAME_GameSession;
 			}
 
 			SessionSettings->Set(SETTING_MAPNAME, FString("L_Lobby"), EOnlineDataAdvertisementType::ViaOnlineService);
@@ -136,7 +183,7 @@ bool UCSKGameInstance::CreateSession(TSharedPtr<const FUniqueNetId> UserId, FNam
 	return false;
 }
 
-bool UCSKGameInstance::FindSessions(TSharedPtr<const FUniqueNetId> UserId, bool bIsLAN, bool bIsPresence)
+bool UCSKGameInstance::InternalFindSessions(TSharedPtr<const FUniqueNetId> UserId, bool bIsLAN, bool bIsPresence)
 {
 	if (!UserId.IsValid())
 	{
@@ -181,7 +228,7 @@ bool UCSKGameInstance::FindSessions(TSharedPtr<const FUniqueNetId> UserId, bool 
 	return false;
 }
 
-bool UCSKGameInstance::JoinSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, const FOnlineSessionSearchResult& SearchResult)
+bool UCSKGameInstance::InternalJoinSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, const FOnlineSessionSearchResult& SearchResult)
 {
 	if (!UserId.IsValid())
 	{
@@ -211,7 +258,7 @@ bool UCSKGameInstance::JoinSession(TSharedPtr<const FUniqueNetId> UserId, FName 
 	return false;
 }
 
-bool UCSKGameInstance::DestroySession(FName SessionName)
+bool UCSKGameInstance::InternalDestroySession(FName SessionName)
 {
 	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
 	if (OnlineSub)
@@ -290,13 +337,20 @@ void UCSKGameInstance::NotifyFindSessionsComplete(bool bWasSuccessful)
 		{
 			// Always clear this after our session task has finished
 			Sessions->ClearOnFindSessionsCompleteDelegate_Handle(Handle_OnFindSessions);
-
-			// We can immediately start the session once we created it
+			
+			// Wrap sessions so blueprints can interact with them
+			TArray<FConquestSearchResult> LatestSearchResults;
+			
 			const TArray<FOnlineSessionSearchResult>& SearchResults = SessionSearch->SearchResults;
 			if (SearchResults.Num() > 0)
 			{
-				// TODO:
+				for (const FOnlineSessionSearchResult& Result : SearchResults)
+				{
+					LatestSearchResults.Add(FConquestSearchResult(Result));
+				}
 			}
+
+			OnMatchesFound.Broadcast(bWasSuccessful, LatestSearchResults);
 		}
 	}
 }

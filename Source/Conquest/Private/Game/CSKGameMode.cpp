@@ -140,31 +140,6 @@ void ACSKGameMode::StartPlay()
 	}
 }
 
-void ACSKGameMode::PostLogin(APlayerController* NewPlayer)
-{
-	//// We need to set which player this is before continuing the login
-	//{
-	//	if (GetPlayer1Controller() != nullptr)
-	//	{		
-	//		// We should only ever have two players
-	//		if (!ensure(!GetPlayer2Controller()))
-	//		{
-	//			UE_LOG(LogConquest, Error, TEXT("More than 2 people of joined a CSK match even though only 2 max are allowed"));
-	//		}
-	//		else
-	//		{
-	//			SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 1);
-	//		}
-	//	}
-	//	else
-	//	{
-	//		SetPlayerWithID(CastChecked<ACSKPlayerController>(NewPlayer), 0);
-	//	}
-	//}
-
-	Super::PostLogin(NewPlayer);
-}
-
 void ACSKGameMode::Logout(AController* Exiting)
 {
 	if (MatchState != ECSKMatchState::LeavingGame)

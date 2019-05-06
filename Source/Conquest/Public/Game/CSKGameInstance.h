@@ -9,6 +9,42 @@
 class FOnlineSessionSearch;
 class FOnlineSessionSettings;
 
+/** Wrapper for a search result with additional information */
+USTRUCT(BlueprintType)
+struct CONQUEST_API FConquestSearchResult
+{
+	GENERATED_BODY()
+
+public:
+
+	FConquestSearchResult()
+	{
+
+	}
+
+	FConquestSearchResult(const FOnlineSessionSearchResult& InResult)
+		: SearchResult(InResult)
+	{
+
+	}
+
+public:
+
+	/** Get the session itself */
+	const FOnlineSession& GetSession() const;
+
+	/** Get the name of the session */
+	FString GetSessionName() const;
+
+public:
+
+	/** The result of the search */
+	FOnlineSessionSearchResult SearchResult;
+};
+
+/** Delegate for when finding matches has finished */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FFindMatchFinished, bool, bWasSuccessful, const TArray<FConquestSearchResult>&, SearchResults);
+
 /**
  * Instance for handling data used throughout CSK. Provides functions for creating,
  * joining and ending online sessions specified to the criteria of CSK
@@ -24,9 +60,23 @@ public:
 
 public:
 
+	// Begin UGameInstance Interface
+	#if WITH_EDITOR
+	virtual FGameInstancePIEResult InitializeForPlayInEditor(int32 PIEInstanceIndex, const FGameInstancePIEParameters& Params);
+	#endif
+	// End UGameInstance Interface
+
+public:
+
 	/** Server travels to given level with options */
 	UFUNCTION(BlueprintCallable, Category = CSK, meta = (WorldContext = "WorldContextObject"))
 	static bool ServerTravelToLevel(const UObject* WorldContextObject, FString LevelName, const TArray<FString>& Options);
+
+public:
+
+	/** Get the name of the session of a search result */
+	UFUNCTION(BlueprintPure, Category = Online)
+	static FString GetSessionName(const FConquestSearchResult& SearchResult);
 
 public:
 
@@ -40,7 +90,7 @@ public:
 
 	/** Joins the match with given name */
 	UFUNCTION(BlueprintCallable, Category = CSK)
-	bool JoinMatch(FName MatchName);
+	bool JoinMatch(const FConquestSearchResult& SearchResult);
 
 	/** Leaves the current match. Destroys it if host */
 	UFUNCTION(BlueprintCallable, Category = CSK)
@@ -52,28 +102,35 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category = CSK)
 	bool IsValidNameForSession(const FName& SessionName) const;
 
+	/** Get the name of the current match */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	const FName& GetMatchName() const { return MatchSessionName; }
+
+public:
+
+	/** Event fired after match search has finished */
+	UPROPERTY(BlueprintAssignable)
+	FFindMatchFinished OnMatchesFound;
+
 private:
 
 	/** The name of the match we either are hosting or have joined */
 	UPROPERTY(Transient)
 	FName MatchSessionName;
 
-	/** All the sessions that were found during the last search */
-	TArray<FOnlineSessionSearchResult> LatestSearchResults;
-
 protected:
 
 	/** Creates a new session to host */
-	bool CreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence);
+	bool InternalCreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence);
 
 	/** Finds online sessions matching specifications */
-	bool FindSessions(TSharedPtr<const FUniqueNetId> UserId, bool bIsLAN, bool bIsPresence);
+	bool InternalFindSessions(TSharedPtr<const FUniqueNetId> UserId, bool bIsLAN, bool bIsPresence);
 
 	/** Joins the session with given name */
-	bool JoinSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, const FOnlineSessionSearchResult& SearchResult);
+	bool InternalJoinSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, const FOnlineSessionSearchResult& SearchResult);
 
 	/** Destroys the current session thats active */
-	bool DestroySession(FName SessionName);
+	bool InternalDestroySession(FName SessionName);
 
 	/** Notify that create session request has completed */
 	virtual void NotifyCreateSessionComplete(FName SessionName, bool bWasSuccessful);
