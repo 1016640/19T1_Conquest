@@ -180,10 +180,16 @@ private:
 	/** Helper function for setting a player to ID */
 	void SetPlayerWithID(ACSKPlayerController* Controller, int32 PlayerID);
 
+	/** Helper function for clearing a player with ID, marking them as having left */
+	void ClearPlayer(ACSKPlayerController* Controller);
+
 protected:
 
 	/** Array containing both players in order */
 	FCSKPlayerControllerArray Players;
+
+	/** Bitset for if a player has left (or both) */
+	uint32 PlayersLeft : 2;
 
 	/** The class to use to spawn the first players castle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes, meta = (DisplayName = "Player 1 Castle Class"))
@@ -287,6 +293,12 @@ protected:
 
 private:
 
+	/** Ends the match if state of match is not valid (see IsMatchValid()) */
+	bool EndMatchIfNotValid();
+
+	/** Checks if match is able to start, starting it if allowed */
+	void TryStartMatch();
+
 	/** Helper function for entering given match state after given delay */
 	void EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay);
 
@@ -324,6 +336,9 @@ private:
 
 	/** Timer handle to the small delay before entering a new round state */
 	FTimerHandle Handle_EnterRoundState;
+
+	/** Timer handle to the repeating check for if the match should start */
+	FTimerHandle Handle_TryStartMatch;
 
 public:
 
@@ -423,9 +438,6 @@ private:
 	/** Timer handle for managing the collection phase sequences. This is both as an initial delay
 	before updating resources and a limit timer in-case clients take to long to finish their sequence */
 	FTimerHandle Handle_CollectionSequences;
-
-
-
 
 public:
 
