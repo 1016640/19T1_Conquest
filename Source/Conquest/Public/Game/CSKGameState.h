@@ -18,8 +18,27 @@ class USpell;
 class USpellCard;
 class UTowerConstructionData;
 
+/** The state of the games timer (What is currently being timed */
+UENUM(BlueprintType)
+enum class ECSKTimerState : uint8
+{
+	/** Counting down action phase */
+	ActionPhase,
+
+	/** Counting down quick effect selection */
+	QuickEffect,
+
+	/** Counting down bonus spell selection */
+	BonusSpell,
+
+	/** Counting down a custom timer (notify via OnCustomTimerFinished) */
+	Custom
+};
+
 /** Delegate for when the round state changes */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCSKRoundStateChanged, ECSKRoundState, NewState);
+
+/** Delegate for when the custom timer /
 
 /**
  * Tracks state of game and stats about the board
@@ -101,6 +120,10 @@ public:
 	/** Get if an action phase is active */
 	UFUNCTION(BlueprintPure, Category = CSK)
 	bool IsActionPhaseActive() const;
+
+	/** Get if the end round phase is active */
+	UFUNCTION(BlueprintPure, Category = CSK)
+	bool IsEndRoundPhaseActive() const;
 
 	/** Get the player ID of the winner */
 	UFUNCTION(BlueprintPure, Category = CSK)
@@ -276,6 +299,12 @@ protected:
 	UPROPERTY(Transient, Replicated)
 	float ActionPhaseTimeRemaining;
 
+	UPROPERTY(Transient, Replicated)
+	int32 TimeRemaining;
+
+	UPROPERTY(Transient, Replicated)
+	uint32 bPauseTimer : 1;
+
 	/** If action phase timer has been frozen */
 	UPROPERTY(Transient)
 	uint32 bFreezeActionPhaseTimer : 1;
@@ -441,7 +470,7 @@ protected:
 	int32 MaxNumDuplicatedTowers;
 
 	/** The max amount of duplicated types of all NORMAL towers player can have built at once */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = Rules)
 	int32 MaxNumDuplicatedTowerTypes;
 
 	/** The max number of LEGENDARY towers a player can have built at once */
@@ -456,6 +485,24 @@ protected:
 	// TODO: See CSKGameMode.h (ln 412) for a TODO
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
 	TArray<TSubclassOf<UTowerConstructionData>> AvailableTowers;
+
+public:
+
+	/** Notify that the given player has reached their opponents portal */
+	void HandlePortalReached(ACSKPlayerController* Controller, ATile* ReachedPortal);
+
+	/** Notify that the given player has destroyed their opponents castle */
+	void HandleCastleDestroyed(ACSKPlayerController* Controller, ACastle* DestroyedCastle);
+
+private:
+
+	/** Handle portal reached client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandlePortalReached(ACSKPlayerState* Player, ATile* ReachedPortal);
+
+	/** Handle castle destroyed client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleCastleDestroyed(ACSKPlayerState* Player, ACastle* DestroyedCastle);
 
 public:
 

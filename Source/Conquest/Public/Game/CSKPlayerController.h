@@ -596,4 +596,10 @@ private:
 	as it will only contain the hovered tile if we are allowed to cast the selected spell on it */
 	UPROPERTY(Transient)
 	TArray<ATile*> SelectedActionTileCandidates;
+
+public:
+
+	/** Notify that players castle has been destroyed */
+	UFUNCTION(Client, Reliable)
+	void Client_OnCastleDestroyed(const ACSKPlayerState* Owner, ACastle* Castle);
 };

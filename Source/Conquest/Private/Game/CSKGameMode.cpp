@@ -83,17 +83,6 @@ ACSKGameMode::ACSKGameMode()
 	#endif
 }
 
-void ACSKGameMode::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-	// Keep checking till we can start the match
-	if (GameState->GetServerWorldTimeSeconds() > InitialMatchDelay && ShouldStartMatch())
-	{
-		EnterMatchState(ECSKMatchState::CoinFlip);
-	}
-}
-
 void ACSKGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	// Fix the size of the players array, as it won't be changing throughout the match
@@ -147,7 +136,8 @@ void ACSKGameMode::Logout(AController* Exiting)
 	if (Controller && Players.IsValidIndex(Controller->CSKPlayerID))
 	{
 		// We add one since PlayerID is an index
-		PlayersLeft |= (Controller->CSKPlayerID + 1);
+		//PlayersLeft |= (Controller->CSKPlayerID + 1);
+		AbortMatch();
 	}
 
 	Super::Logout(Exiting);
@@ -504,8 +494,9 @@ void ACSKGameMode::StartMatch()
 {
 	if (ShouldStartMatch())
 	{
-		// Start the match
-		EnterMatchState(ECSKMatchState::Running);
+		// We start the match by going to the coin flip, this
+		// will also handle skipping the flip sequence if needed
+		EnterMatchState(ECSKMatchState::CoinFlip);
 	}
 }
 
@@ -599,12 +590,17 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 {
 	// Allow actors in the world to start ticking while we wait
 	AWorldSettings* WorldSettings = GetWorldSettings();
-	WorldSettings->NotifyBeginPlay();
+	WorldSettings->NotifyBeginPlay(); 
+
+	// Keep checking for if we can start the match
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_TryStartMatch, this, &ACSKGameMode::TryStartMatch, 1.f, true, InitialMatchDelay);
 }
 
 void ACSKGameMode::OnCoinFlipStart()
 {
-	SetActorTickEnabled(false);
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.ClearTimer(Handle_TryStartMatch);
 
 	// We want to make sure these are done before we start any match operations (including the coin flip)
 	{
@@ -719,9 +715,9 @@ void ACSKGameMode::OnMatchFinished()
 		}
 	}
 
-	// Clear potential round state delay
+	// Clear any timers we might have active
 	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.ClearTimer(Handle_EnterRoundState);
+	TimerManager.ClearAllTimersForObject(this);
 
 	// Delay exiting so players can read post match states
 	EnterMatchStateAfterDelay(ECSKMatchState::LeavingGame, FMath::Max(1.f, PostMatchDelay));
@@ -753,6 +749,9 @@ void ACSKGameMode::OnFinishedWaitingPostMatch()
 
 void ACSKGameMode::OnMatchAbort()
 {
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.ClearAllTimersForObject(this);
+
 	OnFinishedWaitingPostMatch();
 }
 
@@ -813,30 +812,12 @@ void ACSKGameMode::OnEndRoundPhaseStart()
 	}
 }
 
-bool ACSKGameMode::EndMatchIfNotValid()
+void ACSKGameMode::TryStartMatch()
 {
-	// Checks if both players are valid, will return false
-	// if any player is null (meaning they left the game)
-	if (IsMatchValid())
+	if (ShouldStartMatch())
 	{
-		return false;
+		StartMatch();
 	}
-
-	if (Players[0] != nullptr)
-	{
-		EndMatch(Players[0], ECSKMatchWinCondition::Surrender);
-	}
-	else if (Players[1] != nullptr)
-	{
-		EndMatch(Players[1], ECSKMatchWinCondition::Surrender);
-	}
-	else
-	{
-		// Both players are invalid
-		AbortMatch();
-	}
-
-	return true;
 }
 
 void ACSKGameMode::EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay)
@@ -967,6 +948,36 @@ void ACSKGameMode::HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundStat
 			break;
 		}
 	}
+}
+
+bool ACSKGameMode::CheckSurrenderCondition()
+{
+	if (!HasMatchFinished())
+	{
+		// Has a player left?
+		if (PlayersLeft != 0)
+		{
+			// First Bit = Host Left
+			// Second Bit = Guest Left
+			if (PlayersLeft == 0b01)
+			{
+				EndMatch(Players[1], ECSKMatchWinCondition::Surrender);
+			}
+			else if (PlayersLeft = 0b10)
+			{
+				EndMatch(Players[0], ECSKMatchWinCondition::Surrender);
+			}		
+			// Both players have left
+			else
+			{
+				AbortMatch();
+			}
+
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool ACSKGameMode::GenerateCoinFlipWinner_Implementation() const
@@ -2830,6 +2841,7 @@ bool ACSKGameMode::PrepareEndRoundActionTowers()
 			const TArray<ATower*>& PlayerTower = PlayerState->GetOwnedTowers();
 			for (ATower* Tower : PlayerTower)
 			{
+				// TODO: We might not need to check WantsEndRoundPhaseEvent here anymore!
 				if (ensure(Tower) && Tower->WantsEndRoundPhaseEvent())
 				{
 					ActionTowers.Add(Tower);
@@ -2888,11 +2900,27 @@ bool ACSKGameMode::StartRunningTowersEndRoundAction(int32 Index)
 	{
 		check(IsEndRoundPhaseInProgress());
 
-		// TODO: Double check if this tower can run now (as previous actions
-		// might have changed whether it can perform an end action phase!)
-
+		// This tower might not need to perform it's end round anymore,
+		// this could be due to another action affecting it's calculations
 		ATower* TowerToRun = EndRoundActionTowers[Index];
-		if (ensure(TowerToRun))
+		if (!TowerToRun->WantsEndRoundPhaseEvent())
+		{
+			TowerToRun = nullptr;
+
+			// Keep cycling through each tower till we reach the next tower that can
+			while (EndRoundActionTowers.IsValidIndex(++Index))
+			{
+				ATower* Tower = EndRoundActionTowers[Index];
+				if (Tower->WantsEndRoundPhaseEvent())
+				{
+					TowerToRun = Tower;
+					break;
+				}
+			}
+		}
+
+		// Possibility of TowerToRun being null (meaning it or remaining towers no longer need it)
+		if (TowerToRun)
 		{
 			UE_LOG(LogConquest, Log, TEXT("Executing end round action for Tower %s. Action index = %i"), 
 				*TowerToRun->GetFName().ToString(), Index + 1);
@@ -3034,17 +3062,23 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 			// We need to make sure this tower is removed from end round phase actions
 			if (IsEndRoundPhaseInProgress())
 			{
-				// TODO: THis tower might be the tower running (but for now)
-
 				// This tower could possibly be a tower with an end round action
 				int32 Index = EndRoundActionTowers.Find(DestroyedTower);
 				if (Index != -1)
 				{
+					if (Index == EndRoundRunningTower)
+					{
+						check(EndRoundActionTowers[Index] == DestroyedTower);
+						UE_LOG(LogConquest, Warning, TEXT("Tower %s has destroyed itself during it's action. "
+							"Is this intended?"), *DestroyedTower->GetFName().ToString());
+
+						// We let this tower finish it's execution
+					}
+
 					// We need to revert the index back one if this tower has already,
 					// executed as not doing so will skip one towers end round action
 					if (Index >= EndRoundRunningTower)
 					{
-
 						--EndRoundRunningTower;
 					}
 
@@ -3104,6 +3138,11 @@ void ACSKGameMode::CacheAndClearHealthReports()
 	}
 }
 
+bool ACSKGameMode::PostActionCheckWinCondition()
+{
+	return false;
+}
+
 void ACSKGameMode::ClearDestroyedTowers()
 {
 	// We move over the towers for two reasons:
@@ -3128,7 +3167,7 @@ void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
 		ACSKPlayerController* Controller = Cast<ACSKPlayerController>(NetConnection->PlayerController);
 		if (Controller)
 		{
-			
+			//PlayersLeft |= Controller->CSKPlayerID + 1;
 		}
 	}
 }

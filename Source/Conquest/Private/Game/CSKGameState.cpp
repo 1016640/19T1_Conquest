@@ -146,6 +146,7 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
 	DOREPLIFETIME(ACSKGameState, MaxNumTowers);
 	DOREPLIFETIME(ACSKGameState, MaxNumDuplicatedTowers);
+	DOREPLIFETIME(ACSKGameState, MaxNumDuplicatedTowerTypes);
 	DOREPLIFETIME(ACSKGameState, MaxNumLegendaryTowers);
 	DOREPLIFETIME(ACSKGameState, MaxBuildRange);
 	DOREPLIFETIME(ACSKGameState, AvailableTowers);
@@ -210,6 +211,16 @@ bool ACSKGameState::IsActionPhaseActive() const
 	if (IsMatchInProgress())
 	{
 		return RoundState == ECSKRoundState::FirstActionPhase || RoundState == ECSKRoundState::SecondActionPhase;
+	}
+
+	return false;
+}
+
+bool ACSKGameState::IsEndRoundPhaseActive() const
+{
+	if (IsMatchInProgress())
+	{
+		return RoundState == ECSKRoundState::EndRoundPhase;
 	}
 
 	return false;
@@ -985,21 +996,6 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 	return true;
 }
 
-float ACSKGameState::GetMatchTimeSeconds() const
-{
-	if (MatchState == ECSKMatchState::CoinFlip || MatchState == ECSKMatchState::Running)
-	{
-		float MatchCurrentTime = GetWorld()->GetTimeSeconds();
-		return MatchCurrentTime - MatchStartTime;
-	}
-	else if (MatchState == ECSKMatchState::WaitingPostMatch)
-	{
-		return MatchEndTime - MatchStartTime;
-	}
-
-	return 0.f;
-}
-
 void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
 {
 	SetFreezeActionPhaseTimer(true);
@@ -1064,4 +1060,44 @@ void ACSKGameState::Multi_HandleBonusSpellSelection_Implementation()
 	// We want to count down the bonus spell selection time
 	bCountdownBonusSpellTimer = true;
 	SetFreezeActionPhaseTimer(false);
+}
+
+void ACSKGameState::HandlePortalReached(ACSKPlayerController* Controller, ATile* ReachedPortal)
+{
+	if (IsActionPhaseActive() && HasAuthority())
+	{
+		Multi_HandlePortalReached(Controller->GetCSKPlayerState(), ReachedPortal);
+	}
+}
+
+void ACSKGameState::HandleCastleDestroyed(ACSKPlayerController* Controller, ACastle* DestroyedCastle)
+{
+	// Castles can be destroyed during the action phase (via Spells) or the end round action phase (via Towers)
+	if (IsActionPhaseActive() || IsEndRoundPhaseActive() && HasAuthority())
+	{
+		Multi_HandleCastleDestroyed(Controller->GetCSKPlayerState(), DestroyedCastle);
+	}
+}
+
+void ACSKGameState::Multi_HandlePortalReached_Implementation(ACSKPlayerState* Player, ATile* ReachedPortal)
+{
+}
+
+void ACSKGameState::Multi_HandleCastleDestroyed_Implementation(ACSKPlayerState* Player, ACastle* DestroyedCastle)
+{
+}
+
+float ACSKGameState::GetMatchTimeSeconds() const
+{
+	if (MatchState == ECSKMatchState::CoinFlip || MatchState == ECSKMatchState::Running)
+	{
+		float MatchCurrentTime = GetWorld()->GetTimeSeconds();
+		return MatchCurrentTime - MatchStartTime;
+	}
+	else if (MatchState == ECSKMatchState::WaitingPostMatch)
+	{
+		return MatchEndTime - MatchStartTime;
+	}
+
+	return 0.f;
 }

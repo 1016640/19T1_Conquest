@@ -125,10 +125,6 @@ public:
 	virtual bool HasMatchStarted() const override;	
 	// End AGameModeBase Interface
 
-	// Begin AActor Interface
-	virtual void Tick(float DeltaTime) override;
-	// End AActor Interface
-
 protected:
 
 	// Begin UObject Interface
@@ -179,9 +175,6 @@ private:
 
 	/** Helper function for setting a player to ID */
 	void SetPlayerWithID(ACSKPlayerController* Controller, int32 PlayerID);
-
-	/** Helper function for clearing a player with ID, marking them as having left */
-	void ClearPlayer(ACSKPlayerController* Controller);
 
 protected:
 
@@ -293,9 +286,6 @@ protected:
 
 private:
 
-	/** Ends the match if state of match is not valid (see IsMatchValid()) */
-	bool EndMatchIfNotValid();
-
 	/** Checks if match is able to start, starting it if allowed */
 	void TryStartMatch();
 
@@ -310,6 +300,9 @@ private:
 
 	/** Determines the round state change event to called based on previous and new round state */
 	void HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundState NewState);
+
+	/** Ends the match if a player has left, declaring the remaining player as the winner. Get if game can continue */
+	bool CheckSurrenderCondition();
 
 protected:
 
@@ -328,6 +321,11 @@ protected:
 	/** The condition the winner met in order to win */
 	UPROPERTY()
 	ECSKMatchWinCondition MatchWinCondition;
+
+	/** The pending winner from destroying the other players castle.
+	This will only be valid when a castle has been destroyed */
+	UPROPERTY()
+	ACSKPlayerController* PendingMatchWinner;
 
 private:
 
@@ -947,6 +945,9 @@ protected:
 	void CacheAndClearHealthReports();
 
 private:
+
+	/** Checks if a players castle has been destroyed */
+	bool PostActionCheckWinCondition();
 
 	/** Actually destroys the towers that were destroyed during the latest action */
 	void ClearDestroyedTowers();
