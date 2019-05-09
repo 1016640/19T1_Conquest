@@ -64,16 +64,16 @@ ACSKGameMode::ACSKGameMode()
 	MaxNumDuplicatedTowerTypes = 2;
 	MaxBuildRange = 4;
 
-	ActionPhaseTime = 90.f;
-	BonusActionPhaseTime = 20.f;
+	ActionPhaseTime = 90;
+	BonusActionPhaseTime = 20;
 	MinTileMovements = 1;
 	MaxTileMovements = 2;
 	bLimitOneMoveActionPerTurn = false;
 	MaxSpellUses = 1;
 	MaxSpellCardsInHand = 3;
 
-	QuickEffectCounterTime = 15.f;
-	BonusSpellSelectTime = 15.f;
+	QuickEffectCounterTime = 15;
+	BonusSpellSelectTime = 15;
 	InitialMatchDelay = 2.f;
 	PostMatchDelay = 15.f;
 
@@ -963,7 +963,7 @@ bool ACSKGameMode::CheckSurrenderCondition()
 			{
 				EndMatch(Players[1], ECSKMatchWinCondition::Surrender);
 			}
-			else if (PlayersLeft = 0b10)
+			else if (PlayersLeft == 0b10)
 			{
 				EndMatch(Players[0], ECSKMatchWinCondition::Surrender);
 			}		
@@ -2344,7 +2344,7 @@ bool ACSKGameMode::ConfirmCastSpell(USpell* Spell, USpellCard* SpellCard, ASpell
 		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
 		if (CSKGameState)
 		{
-			CSKGameState->HandleSpellRequestConfirmed(Tile);
+			CSKGameState->HandleSpellRequestConfirmed(Context, Tile);
 		}
 	}
 
@@ -2482,7 +2482,7 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreQuickEffectCheck, bool bIgnoreBon
 	{
 		if (CSKGameState)
 		{
-			CSKGameState->HandleSpellRequestFinished();
+			CSKGameState->HandleSpellRequestFinished(Context);
 		}
 	}
 

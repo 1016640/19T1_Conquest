@@ -600,6 +600,6 @@ private:
 public:
 
 	/** Notify that players castle has been destroyed */
-	UFUNCTION(Client, Reliable)
-	void Client_OnCastleDestroyed(const ACSKPlayerState* Owner, ACastle* Castle);
+	//UFUNCTION(Client, Reliable)
+	//void Client_OnCastleDestroyed(const ACSKPlayerState* Player, ACastle* Castle);
 };

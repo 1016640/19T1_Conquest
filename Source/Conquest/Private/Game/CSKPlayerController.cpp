@@ -454,10 +454,15 @@ void ACSKPlayerController::SelectTile()
 
 void ACSKPlayerController::ResetCamera()
 {
-	ACSKPawn* CSKPawn = GetCSKPawn();
-	if (CSKPawn && CastlePawn)
+	// Think of this as an easy method for the player to move back to their castle.
+	// This means we only want to do it when the player is able to move freely
+	if (!IsMoveInputIgnored())
 	{
-		CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 1.5f);
+		ACSKPawn* CSKPawn = GetCSKPawn();
+		if (CSKPawn && CastlePawn)
+		{
+			CSKPawn->TravelToLocation(CastlePawn->GetActorLocation(), 1.5f);
+		}
 	}
 }
 

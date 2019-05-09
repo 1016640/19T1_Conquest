@@ -32,13 +32,17 @@ enum class ECSKTimerState : uint8
 	BonusSpell,
 
 	/** Counting down a custom timer (notify via OnCustomTimerFinished) */
-	Custom
+	Custom,
+
+	/** Timer is inactive */
+	None UMETA(Hidden="true")
 };
 
 /** Delegate for when the round state changes */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCSKRoundStateChanged, ECSKRoundState, NewState);
 
-/** Delegate for when the custom timer /
+/** Delegate for when the custom timer has finished. Passes if timer was skipped */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FCSKCustomTimerFinished, bool, bWasSkipped);
 
 /**
  * Tracks state of game and stats about the board
@@ -51,12 +55,6 @@ class CONQUEST_API ACSKGameState : public AGameStateBase
 public:
 
 	ACSKGameState();
-
-public:
-
-	// Begin AActor Interface
-	virtual void Tick(float DeltaTime) override;
-	// End AActor Interface
 
 protected:
 
@@ -203,25 +201,6 @@ protected:
 
 public:
 
-	/** Updates the latest action health reports */
-	void SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports);
-
-	/** Get if action phase is timed */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	bool IsActionPhaseTimed() const { return ActionPhaseTimeRemaining != -1.f; }
-
-	/** Get the amount of instances of given type of tower active on the board */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
-
-	/** Get if quick effect time is timed */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	bool IsQuickEffectCounterTimed() const { return QuickEffectCounterTimeRemaining != -1.f; }
-
-	/** Get if bonus spell time is timed */
-	UFUNCTION(BlueprintPure, Category = Rules)
-	bool IsBonusSpellCounterTimed() const { return BonusSpellCounterTimerRemaining != 1.f; }
-
 	/** Get the player ID of whose action phase it is */
 	FORCEINLINE int32 GetActionPhasePlayerID() const { return ActionPhasePlayerID; }
 
@@ -233,10 +212,35 @@ public:
 	UFUNCTION(BlueprintPure, Category = CSK)
 	ACSKPlayerState* GetOpposingPlayerState(ACSKPlayerState* Player) const;
 
+	/** Get if action phase is timed */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsActionPhaseTimed() const { return ActionPhaseTime != -1; }
+
+	/** Activates a custom timer for given duration. This timer will call
+	CustomTimerFinishedEvent once completed, which can be bound to using GetCustomTimerFinishedEvent() */
+	bool ActivateCustomTimer(int32 InDuration);
+
+	/** Clears custom timer if custom timer is currently active */
+	void DeactivateCustomTimer();
+
+	/** Get the custom timer finished event */
+	FCSKCustomTimerFinished& GetCustomTimerFinishedEvent() { return CustomTimerFinishedEvent; }
+
+	/** Get if the state timer is currently active */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	bool IsTimerActive() const { return TimerState != ECSKTimerState::None; }
+
 	/** Get the time remaining for current action taking place (this
 	can either action phase turn time, quick effect counter time) */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
+	int32 GetCountdownTimeRemaining(bool& bOutIsInfinite) const;
+
+	/** Get the amount of instances of given type of tower active on the board */
+	UFUNCTION(BlueprintPure, Category = Rules)
+	int32 GetTowerInstanceCount(TSubclassOf<ATower> Tower) const;
+
+	/** Updates the latest action health reports */
+	void SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports);
 
 	/** Get all the towers that were damaged during the previous action */
 	UFUNCTION(BlueprintPure, Category = "CSK|Game")
@@ -256,31 +260,31 @@ public:
 
 protected:
 
-	/** Helper function for checking if phase timer should count down */
-	FORCEINLINE bool ShouldCountdownPhaseTimer() const
-	{
-		if (IsActionPhaseActive())
-		{
-			return !bFreezeActionPhaseTimer;
-		}
+	/** Activates the timer for given state */
+	void ActivateTickTimer(ECSKTimerState InTimerState, int32 InTime);
 
-		return false;
-	}
+	/** Deactivates the timer */
+	void DeactivateTickTimer();
 
-	/** Helper function for enabling/disabling action phase timer */
-	FORCEINLINE void SetFreezeActionPhaseTimer(bool bEnable)
-	{
-		bFreezeActionPhaseTimer = bEnable;
-		SetActorTickEnabled(!bEnable);
-	}
+	/** Set if tick for timer is enabled/disabled */
+	void SetTickTimerEnabled(bool bEnable);
 
-	/** Helper function for adding bonus time to action phase timer */
-	void AddBonusActionPhaseTime();
+	/** Helper function for adding bonus time to given time clamped by action phase time */
+	int32 GetActionTimeBonusApplied(int32 Time) const;
 
 private:
 
-	/** Resets action phase variables */
-	void ResetActionPhaseProperties();
+	/** Updates action phase properties, including activating timer */
+	void UpdateActionPhaseProperties();
+
+	/** Handles ticking the timer */
+	void TickTimer();
+
+	/** Handles when timer has finished */
+	void HandleTickTimerFinished();
+
+	/** Executes the custom timer finished event only if bound */
+	void ExecuteCustomTimerFinishedEvent(bool bWasSkipped);
 
 	/** Generates a new array containing health reports filtered by passed in arguments */
 	TArray<FHealthChangeReport> QueryLatestHealthReports(bool bDamaged, ACSKPlayerState* InOwner, bool bExcludeDead) const;
@@ -295,43 +299,38 @@ protected:
 	UPROPERTY(Transient)
 	int32 ActionPhasePlayerID;
 
-	/** Time remaining in this action phase */
+	/** The reason why the timer is currently ticking */
 	UPROPERTY(Transient, Replicated)
-	float ActionPhaseTimeRemaining;
+	ECSKTimerState TimerState;
 
+	/** The time remaining for the current timer state */
 	UPROPERTY(Transient, Replicated)
 	int32 TimeRemaining;
 
-	UPROPERTY(Transient, Replicated)
-	uint32 bPauseTimer : 1;
-
-	/** If action phase timer has been frozen */
+	/** The amount of time the action phase had before entering a different timer state */
 	UPROPERTY(Transient)
-	uint32 bFreezeActionPhaseTimer : 1;
+	int32 NewActionPhaseTimeRemaining;
+
+	/** If the timer is paused, this doesn't pause the actual timer
+	but instead skips TickTimer whenever the callback is executed */
+	UPROPERTY(Transient)
+	uint32 bTimerPaused : 1;
 
 	/** Lookup table for how many instances of a certain tower exists on the board */
 	UPROPERTY(Transient)
 	TMap<TSubclassOf<ATower>, int32> TowerInstanceTable;
 
-	/** If we should countdown the quick effect counter time */
-	UPROPERTY(Transient)
-	uint32 bCountdownQuickEffectTimer : 1;
-
-	/** Time remaining for player to select a quick effect spell */
-	UPROPERTY(Transient, Replicated)
-	float QuickEffectCounterTimeRemaining;
-
-	/** If we should countdown the bonus spell counter timer */
-	UPROPERTY(Transient)
-	uint32 bCountdownBonusSpellTimer : 1;
-
-	/** Time remaining for player to select a target for bonus spell */
-	UPROPERTY(Transient, Replicated)
-	float BonusSpellCounterTimerRemaining;
-
 	/** The health reports from the latest action */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = "CSK|Game")
 	TArray<FHealthChangeReport> LatestActionHealthReports;
+
+private:
+
+	/** Handle for the timers tick */
+	FTimerHandle Handle_TickTimer;
+
+	/** Event for when the custom timer has finished */
+	FCSKCustomTimerFinished CustomTimerFinishedEvent;
 
 public:
 
@@ -348,10 +347,10 @@ public:
 	void HandleBuildRequestFinished(ATower* NewTower);
 
 	/** Notify that a spell has been cast and will soon start */
-	void HandleSpellRequestConfirmed(ATile* TargetTile);
+	void HandleSpellRequestConfirmed(EActiveSpellContext Context, ATile* TargetTile);
 
 	/** Notify that the current spell request has finished */
-	void HandleSpellRequestFinished();
+	void HandleSpellRequestFinished(EActiveSpellContext Context);
 
 	/** Notify that a quick effect is being selected */
 	void HandleQuickEffectSelectionStart(bool bNullify);
@@ -379,11 +378,11 @@ private:
 
 	/** Handle spell request confirmation client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleSpellRequestConfirmed(ATile* TargetTile);
+	void Multi_HandleSpellRequestConfirmed(EActiveSpellContext Context, ATile* TargetTile);
 
 	/** Handle spell request finished client side */
 	UFUNCTION(NetMulticast, Reliable)
-	void Multi_HandleSpellRequestFinished();
+	void Multi_HandleSpellRequestFinished(EActiveSpellContext Context);
 
 	/** Handle quick effect selection client side */
 	UFUNCTION(NetMulticast, Reliable)
@@ -451,7 +450,7 @@ protected:
 
 	/** Cached action phase timer used to reset action phase time each round */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)
-	float ActionPhaseTime;
+	int32 ActionPhaseTime;
 
 	/** The minimum amount of tiles a player must move each action phase */
 	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Rules)

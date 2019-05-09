@@ -869,11 +869,11 @@ public:
 
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetActionPhaseTime() const { return ActionPhaseTime; }
+	int32 GetActionPhaseTime() const { return ActionPhaseTime; }
 
 	/** Get the bonus time to add to action phase time after finishing an action */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
+	int32 GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
 
 	/** Get the min amount of tiles that must be traversed per action phase */
 	FORCEINLINE int32 GetMinTileMovementsPerTurn() const { return MinTileMovements; }
@@ -883,21 +883,21 @@ public:
 
 	/** Get the time a quick effect selection lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
+	int32 GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
 
 	/** Get the time a bonus spell selection lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetBonusSpellSelectTime() const { return BonusSpellSelectTime; }
+	int32 GetBonusSpellSelectTime() const { return BonusSpellSelectTime; }
 
 protected:
 
 	/** The amount of time (in seconds) an action phase lasts before forcing exit (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float ActionPhaseTime;
+	int32 ActionPhaseTime;
 
 	/** Additional time to give players after having finished an action during their action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float BonusActionPhaseTime;
+	int32 BonusActionPhaseTime;
 
 	/** The min amount of tiles a player can move per action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
@@ -916,11 +916,11 @@ protected:
 
 	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float QuickEffectCounterTime;
+	int32 QuickEffectCounterTime;
 
 	/** The time the player has to select a target when granted a bonus spell that requires one (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float BonusSpellSelectTime;
+	int32 BonusSpellSelectTime;
 
 	/** How long we wait before starting the match (starting the coin flip).
 	A delay of two seconds or greater is recommended to allow actors to replicate */

@@ -115,6 +115,16 @@ protected:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
 	void UnbindPlayerInput();
 
+	/** Enables a custom timer (via CSKGameState) that will finished after given duration.
+	This has the possibility of failing, this function will not handle re-trying */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	bool SetCustomTimer(int32 Duration);
+
+	/** Disables the custom timer (if set). Will automatically be called
+	when ending execution or the already bound timer has executed */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = Spells, meta = (BlueprintProtected = "true"))
+	void ClearCustomTimer();
+
 	/** If the player is allowed to select the given tile for spell.
 	This can run on both the owning players client and the server */
 	UFUNCTION(BlueprintImplementableEvent, Category = Spells, meta = (DisplayName = "Can Select Tile for Spell"))
@@ -125,16 +135,27 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Spells, meta = (DisplayName = "On Tile Selected for Spell"))
 	void BP_OnTileSelectedForSpell(ATile* TargetTile);
 
+	/** Called when custom timer has finished (or has been interrupted) */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = Spells, meta = (DisplayName = "On Spell Custom Timer Finished"))
+	void BP_OnSpellCustomTimerFinished(bool bFinished);
+
 private:
 
-	/** Binds custom tile selection callbacks client side */
+	/** Binds player input client side */
 	UFUNCTION(Client, Reliable)
 	void Client_BindPlayerInput(bool bBind);
 
+	/** Callback from timer when duration has elapsed */
+	UFUNCTION()
+	void OnCustomTimerFinished(bool bWasSkipped);
+
 private:
 
-	/** If custom tile selection callbacks have been bound */
+	/** If player input has been bound */
 	uint8 bIsInputBound : 1;
+
+	/** If custom timer callback has been bound */
+	uint8 bIsTimerBound : 1;
 
 protected:
 

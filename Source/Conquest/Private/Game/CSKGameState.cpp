@@ -33,9 +33,9 @@ ACSKGameState::ACSKGameState()
 	MatchWinCondition = ECSKMatchWinCondition::Unknown;
 
 	CoinTossWinnerPlayerID = -1;
-	ActionPhaseTimeRemaining = -1.f;
-	bFreezeActionPhaseTimer = false;
-	bCountdownQuickEffectTimer = false;
+	TimerState = ECSKTimerState::None;
+	TimeRemaining = 0;
+	bTimerPaused = false;
 
 	ActionPhaseTime = 90.f;
 	MaxNumTowers = 7;
@@ -45,73 +45,6 @@ ACSKGameState::ACSKGameState()
 	MaxTileMovements = 2;
 
 	RoundsPlayed = 0;
-}
-
-void ACSKGameState::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-	if (ShouldCountdownPhaseTimer())
-	{
-		// Bonus spell selection
-		if (bCountdownBonusSpellTimer)
-		{
-			if (!IsBonusSpellCounterTimed())
-			{
-				return;
-			}
-
-			BonusSpellCounterTimerRemaining = FMath::Max(0.f, BonusSpellCounterTimerRemaining - DeltaTime);
-			if (BonusSpellCounterTimerRemaining == 0.f)
-			{
-				// Game mode only exists on the server
-				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-				if (GameMode)
-				{
-					// Default to player skipping to use spell
-					GameMode->RequestSkipBonusSpell();
-					bCountdownBonusSpellTimer = false;
-				}
-			}
-		}
-		// Quick effect selection
-		else if (bCountdownQuickEffectTimer)
-		{
-			if (!IsQuickEffectCounterTimed())
-			{
-				return;
-			}
-
-			QuickEffectCounterTimeRemaining = FMath::Max(0.f, QuickEffectCounterTimeRemaining - DeltaTime);
-			if (QuickEffectCounterTimeRemaining == 0.f)
-			{
-				// Game mode only exists on the server
-				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-				if (GameMode)
-				{
-					// Default to player skipping to counter
-					GameMode->RequestSkipQuickEffect();
-					bCountdownQuickEffectTimer = false;
-				}
-			}
-		}
-		// Action phase timer
-		else if (IsActionPhaseTimed())
-		{
-			ActionPhaseTimeRemaining = FMath::Max(0.f, ActionPhaseTimeRemaining - DeltaTime);
-			if (HasAuthority() && ActionPhaseTimeRemaining == 0.f)
-			{
-				// Game mode only exists on the server
-				ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-				if (GameMode)
-				{
-					// TODO: notify game mode that time has run out
-					// Game mode should then auto path closer to opponents portal (if player hasn't moved)
-					GameMode->RequestEndActionPhase(true);
-				}
-			}
-		}
-	}
 }
 
 void ACSKGameState::OnRep_ReplicatedHasBegunPlay()
@@ -138,9 +71,8 @@ void ACSKGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(ACSKGameState, RoundState);
 
 	DOREPLIFETIME(ACSKGameState, CoinTossWinnerPlayerID);
-	DOREPLIFETIME(ACSKGameState, ActionPhaseTimeRemaining);
-	DOREPLIFETIME(ACSKGameState, QuickEffectCounterTimeRemaining);
-	DOREPLIFETIME(ACSKGameState, BonusSpellCounterTimerRemaining);
+	DOREPLIFETIME(ACSKGameState, TimerState);
+	DOREPLIFETIME(ACSKGameState, TimeRemaining);
 	DOREPLIFETIME(ACSKGameState, LatestActionHealthReports);
 
 	DOREPLIFETIME(ACSKGameState, ActionPhaseTime);
@@ -249,6 +181,13 @@ void ACSKGameState::NotifyMatchStart()
 	if (HasAuthority())
 	{
 		bReplicatedHasBegunPlay = true;
+
+		// Game mode only exists on the server
+		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+		if (GameMode)
+		{
+			CoinTossWinnerPlayerID = GameMode->GetStartingPlayersID();
+		}
 	}
 
 	RoundsPlayed = 0;
@@ -284,33 +223,21 @@ void ACSKGameState::NotifyMatchAbort()
 void ACSKGameState::NotifyCollectionPhaseStart()
 {
 	++RoundsPlayed;
-	
-	// Only save on first round
-	if (RoundsPlayed == 1)
-	{
-		// Game mode only exists on the server
-		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-		if (GameMode)
-		{
-			CoinTossWinnerPlayerID = GameMode->GetStartingPlayersID();
-		}
-	}
 }
 
 void ACSKGameState::NotifyFirstActionPhaseStart()
 {
-	++RoundsPlayed;
-	ResetActionPhaseProperties();
+	UpdateActionPhaseProperties();
 }
 
 void ACSKGameState::NotifySecondActionPhaseStart()
 {
-	ResetActionPhaseProperties();
+	UpdateActionPhaseProperties();
 }
 
 void ACSKGameState::NotifyEndRoundPhaseStart()
 {
-	ResetActionPhaseProperties();
+	UpdateActionPhaseProperties();
 }
 
 void ACSKGameState::OnRep_MatchState()
@@ -408,25 +335,6 @@ void ACSKGameState::Multi_SetWinDetails_Implementation(int32 WinnerID, ECSKMatch
 	MatchWinCondition = WinCondition;
 }
 
-void ACSKGameState::SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports)
-{
-	if (HasAuthority())
-	{
-		LatestActionHealthReports = InHealthReports;
-	}
-}
-
-int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
-{
-	const int32* Num = TowerInstanceTable.Find(Tower);
-	if (Num != nullptr)
-	{
-		return *Num;
-	}
-
-	return 0;
-}
-
 ACSKPlayerState* ACSKGameState::GetPlayerStateWithID(int32 PlayerID) const
 {
 	for (APlayerState* Player : PlayerArray)
@@ -452,45 +360,59 @@ ACSKPlayerState* ACSKGameState::GetOpposingPlayerState(ACSKPlayerState* Player) 
 	return nullptr;
 }
 
-float ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
+bool ACSKGameState::ActivateCustomTimer(int32 InDuration)
+{
+	if (HasAuthority() && InDuration > 0)
+	{
+		// We don't allow custom timers to override the core game timers
+		if (TimerState == ECSKTimerState::None || TimerState == ECSKTimerState::Custom)
+		{
+			ActivateTickTimer(ECSKTimerState::Custom, InDuration);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void ACSKGameState::DeactivateCustomTimer()
+{
+	if (HasAuthority() && TimerState == ECSKTimerState::Custom)
+	{
+		DeactivateTickTimer();
+	}
+}
+
+int32 ACSKGameState::GetCountdownTimeRemaining(bool& bOutIsInfinite) const
 {
 	bOutIsInfinite = false;
 
-	if (bCountdownBonusSpellTimer)
+	if (TimerState != ECSKTimerState::None)
 	{
-		if (IsBonusSpellCounterTimed())
-		{
-			return BonusSpellCounterTimerRemaining;
-		}
-		else
-		{
-			bOutIsInfinite = true;
-		}
-	}
-	else if (bCountdownQuickEffectTimer)
-	{
-		if (IsQuickEffectCounterTimed())
-		{
-			return QuickEffectCounterTimeRemaining;
-		}
-		else
-		{
-			bOutIsInfinite = true;
-		}
-	}
-	else if (IsActionPhaseActive())
-	{
-		if (IsActionPhaseTimed())
-		{
-			return ActionPhaseTimeRemaining;
-		}
-		else
-		{
-			bOutIsInfinite = true;
-		}
+		bOutIsInfinite = TimeRemaining == -1;
+		return TimeRemaining;
 	}
 
-	return 0.f;
+	return 0;
+}
+
+int32 ACSKGameState::GetTowerInstanceCount(TSubclassOf<ATower> Tower) const
+{
+	const int32* Num = TowerInstanceTable.Find(Tower);
+	if (Num != nullptr)
+	{
+		return *Num;
+	}
+
+	return 0;
+}
+
+void ACSKGameState::SetLatestActionHealthReports(const TArray<FHealthChangeReport>& InHealthReports)
+{
+	if (HasAuthority())
+	{
+		LatestActionHealthReports = InHealthReports;
+	}
 }
 
 TArray<FHealthChangeReport> ACSKGameState::GetDamageHealthReports(bool bFilterOutDead) const
@@ -513,35 +435,171 @@ TArray<FHealthChangeReport> ACSKGameState::GetPlayersHealingHealthReports(ACSKPl
 	return QueryLatestHealthReports(false, PlayerState, true);
 }
 
-void ACSKGameState::AddBonusActionPhaseTime()
+void ACSKGameState::ActivateTickTimer(ECSKTimerState InTimerState, int32 InTime)
 {
-	if (IsActionPhaseTimed())
+	if (HasAuthority())
 	{
-		// Game mode only exists on the server
-		ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
-		if (GameMode)
+		if (InTimerState == ECSKTimerState::None)
 		{
-			ActionPhaseTimeRemaining = FMath::Min(GameMode->GetActionPhaseTime(), ActionPhaseTimeRemaining + GameMode->GetBonusActionPhaseTime());
+			DeactivateTickTimer();
+			return;
+		}
+
+		// Action phase can be switched out with quick effect and bonus spell states
+		if (TimerState != ECSKTimerState::None && TimerState != ECSKTimerState::ActionPhase)
+		{
+			UE_LOG(LogConquest, Warning, TEXT("Activating new timer state while another is already active!"))
+		}
+
+		// We save this to restore later (if required)
+		if (TimerState == ECSKTimerState::ActionPhase)
+		{
+			NewActionPhaseTimeRemaining = TimeRemaining;
+		}
+
+		// Custom listener would appreciate being notified it was cancelled
+		if (TimerState == ECSKTimerState::Custom)
+		{
+			ExecuteCustomTimerFinishedEvent(true);
+		}
+
+		TimerState = InTimerState;
+		TimeRemaining = InTime;
+
+		// We allow setting infinite times using -1, but
+		// for this we don't need to activate the timer
+		if (TimeRemaining > 0)
+		{
+			SetTickTimerEnabled(true);
 		}
 	}
 }
 
-void ACSKGameState::ResetActionPhaseProperties()
+void ACSKGameState::DeactivateTickTimer()
 {
-	ActionPhaseTimeRemaining = ActionPhaseTime;
-	QuickEffectCounterTimeRemaining = -1.f;
+	if (HasAuthority())
+	{
+		TimerState = ECSKTimerState::None;
+		TimeRemaining = 0;
 
-	// This will disable tick when entering end round phase
-	SetFreezeActionPhaseTimer(!IsActionPhaseActive());
+		SetTickTimerEnabled(false);
+	}
+}
 
+void ACSKGameState::SetTickTimerEnabled(bool bEnable)
+{
+	if (HasAuthority())
+	{
+		FTimerManager& TimerManager = GetWorldTimerManager();
+		if (bEnable && !TimerManager.IsTimerActive(Handle_TickTimer))
+		{
+			AWorldSettings* WorldSettings = GetWorldSettings();
+			TimerManager.SetTimer(Handle_TickTimer, this, &ACSKGameState::TickTimer, WorldSettings->GetEffectiveTimeDilation(), true);
+		}
+		else if (!bEnable && TimerManager.IsTimerActive(Handle_TickTimer))
+		{
+			TimerManager.ClearTimer(Handle_TickTimer);
+		}
+	}
+}
+
+int32 ACSKGameState::GetActionTimeBonusApplied(int32 Time) const
+{
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		if (IsActionPhaseTimed())
+		{
+			return FMath::Min(ActionPhaseTime, Time + GameMode->GetBonusActionPhaseTime());
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
+	return ActionPhaseTime;
+}
+
+void ACSKGameState::UpdateActionPhaseProperties()
+{
 	// Determine which players action phase it is
 	if (IsActionPhaseActive())
 	{
 		ActionPhasePlayerID = RoundState == ECSKRoundState::FirstActionPhase ? CoinTossWinnerPlayerID : FMath::Abs(CoinTossWinnerPlayerID - 1);
+		ActivateTickTimer(ECSKTimerState::ActionPhase, ActionPhaseTime);
 	}
 	else
 	{
 		ActionPhasePlayerID = -1;
+		DeactivateTickTimer();
+	}
+}
+
+void ACSKGameState::TickTimer()
+{
+	// We should only tick on the server
+	if (HasAuthority() && !bTimerPaused)
+	{
+		TimeRemaining -= 1;
+		if (TimeRemaining <= 0)
+		{
+			HandleTickTimerFinished();
+		}
+	}
+}
+
+void ACSKGameState::HandleTickTimerFinished()
+{
+	ensure(TimeRemaining <= 0);
+
+	// Game mode only exists on the server
+	ACSKGameMode* GameMode = Cast<ACSKGameMode>(AuthorityGameMode);
+	if (GameMode)
+	{
+		// Need to save this here as deactivate will clear it
+		ECSKTimerState FinishedTimer = TimerState;
+
+		// Deactivate it now, as some of these events 
+		// might result in another timer being set
+		DeactivateTickTimer();
+
+		switch (FinishedTimer)
+		{
+			case ECSKTimerState::ActionPhase:
+			{
+				GameMode->RequestEndActionPhase(true);
+				break;
+			}
+			case ECSKTimerState::QuickEffect:
+			{
+				GameMode->RequestSkipQuickEffect();
+				break;
+			}
+			case ECSKTimerState::BonusSpell:
+			{
+				GameMode->RequestSkipBonusSpell();
+				break;
+			}
+			case ECSKTimerState::Custom:
+			{
+				ExecuteCustomTimerFinishedEvent(false);
+				break;
+			}
+		}
+	}
+}
+
+void ACSKGameState::ExecuteCustomTimerFinishedEvent(bool bWasSkipped)
+{
+	if (CustomTimerFinishedEvent.IsBound())
+	{
+		CustomTimerFinishedEvent.Execute(bWasSkipped);
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState: CustomTimerFinishedEvent "
+			"has not been bound even though timer state is set to custom!"));
 	}
 }
 
@@ -584,6 +642,9 @@ void ACSKGameState::HandleMoveRequestConfirmed()
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
+		NewActionPhaseTimeRemaining = TimeRemaining;
+		DeactivateTickTimer();
+
 		Multi_HandleMoveRequestConfirmed();
 	}
 }
@@ -593,7 +654,7 @@ void ACSKGameState::HandleMoveRequestFinished()
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
-		AddBonusActionPhaseTime();
+		ActivateTickTimer(ECSKTimerState::ActionPhase, GetActionTimeBonusApplied(NewActionPhaseTimeRemaining));
 
 		Multi_HandleMoveRequestFinished();
 	}
@@ -603,6 +664,9 @@ void ACSKGameState::HandleBuildRequestConfirmed(ATile* TargetTile)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
+		NewActionPhaseTimeRemaining = TimeRemaining;
+		DeactivateTickTimer();
+
 		Multi_HandleBuildRequestConfirmed(TargetTile);
 	}
 }
@@ -612,28 +676,38 @@ void ACSKGameState::HandleBuildRequestFinished(ATower* NewTower)
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
-		AddBonusActionPhaseTime();
+		ActivateTickTimer(ECSKTimerState::ActionPhase, GetActionTimeBonusApplied(NewActionPhaseTimeRemaining));
 
 		Multi_HandleBuildRequestFinished(NewTower);
 	}
 }
 
-void ACSKGameState::HandleSpellRequestConfirmed(ATile* TargetTile)
+void ACSKGameState::HandleSpellRequestConfirmed(EActiveSpellContext Context, ATile* TargetTile)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
-		Multi_HandleSpellRequestConfirmed(TargetTile);
+		// This function can get called multiple times during a spell action (up to 3 times).
+		// We use timer state instead of context as it's possible to skip quick effect selections,
+		// which would result in time remaining representing the quick effect selection
+		/*if (TimerState == ECSKTimerState::ActionPhase)
+		{
+			NewActionPhaseTimeRemaining = TimeRemaining;
+		}*/
+
+		DeactivateTickTimer();
+
+		Multi_HandleSpellRequestConfirmed(Context, TargetTile);
 	}
 }
 
-void ACSKGameState::HandleSpellRequestFinished()
+void ACSKGameState::HandleSpellRequestFinished(EActiveSpellContext Context)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
 		// Add bonus time after an action is complete
-		AddBonusActionPhaseTime();
+		ActivateTickTimer(ECSKTimerState::ActionPhase, GetActionTimeBonusApplied(NewActionPhaseTimeRemaining));
 
-		Multi_HandleSpellRequestFinished();
+		Multi_HandleSpellRequestFinished(Context);
 	}
 }
 
@@ -641,14 +715,19 @@ void ACSKGameState::HandleQuickEffectSelectionStart(bool bNullify)
 {
 	if (IsActionPhaseActive() && HasAuthority())
 	{
+		// We only save if nullifying, doing this when not will result in potentially
+		// using this saved value when allowing for a post quick effect selection
+		/*if (bNullify)
+		{
+			ensure(TimerState == ECSKTimerState::ActionPhase);
+			NewActionPhaseTimeRemaining = TimeRemaining;
+		}*/
+
 		ACSKGameMode* GameMode = CastChecked<ACSKGameMode>(AuthorityGameMode);
 
-		// Zero means indefinite
-		QuickEffectCounterTimeRemaining = GameMode->GetQuickEffectCounterTime();
-		if (QuickEffectCounterTimeRemaining == 0.f)
-		{
-			QuickEffectCounterTimeRemaining = -1.f;
-		}
+		// Start timing selection
+		int32 SelectTime = GameMode->GetQuickEffectCounterTime();
+		ActivateTickTimer(ECSKTimerState::QuickEffect, SelectTime);
 
 		Multi_HandleQuickEffectSelection(bNullify);
 	}
@@ -660,12 +739,9 @@ void ACSKGameState::HandleBonusSpellSelectionStart()
 	{
 		ACSKGameMode* GameMode = CastChecked<ACSKGameMode>(AuthorityGameMode);
 
-		// Zero means indefinite
-		BonusSpellCounterTimerRemaining = GameMode->GetBonusSpellSelectTime();
-		if (BonusSpellCounterTimerRemaining == 0.f)
-		{
-			BonusSpellCounterTimerRemaining = -1.f;
-		}
+		// Start timing selection
+		int32 SelectTime = GameMode->GetBonusSpellSelectTime();
+		ActivateTickTimer(ECSKTimerState::BonusSpell, SelectTime);
 
 		Multi_HandleBonusSpellSelection();
 	}
@@ -917,9 +993,9 @@ void ACSKGameState::UpdateRules()
 		AvailableTowers = GameMode->GetAvailableTowers();
 		
 		// Zero means indefinite
-		if (ActionPhaseTime == 0.f)
+		if (ActionPhaseTime == 0)
 		{
-			ActionPhaseTime = -1.f;
+			ActionPhaseTime = -1;
 		}
 
 		UE_LOG(LogConquest, Log, TEXT("ACSKGameState: Rules updated"));
@@ -998,23 +1074,21 @@ bool ACSKGameState::CanPlayerBuildTower(const ACSKPlayerState* PlayerState, TSub
 
 void ACSKGameState::Multi_HandleMoveRequestConfirmed_Implementation()
 {
-	SetFreezeActionPhaseTimer(true);
+	
 }
 
 void ACSKGameState::Multi_HandleMoveRequestFinished_Implementation()
 {
-	SetFreezeActionPhaseTimer(false);
+	
 }
 
 void ACSKGameState::Multi_HandleBuildRequestConfirmed_Implementation(ATile* TargetTile)
 {
-	SetFreezeActionPhaseTimer(true);
+	
 }
 
 void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewTower)
 {
-	SetFreezeActionPhaseTimer(false);
-
 	if (ensure(NewTower))
 	{
 		// Update tower instance counters
@@ -1034,32 +1108,24 @@ void ACSKGameState::Multi_HandleBuildRequestFinished_Implementation(ATower* NewT
 	}
 }
 
-void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(ATile* TargetTile)
+void ACSKGameState::Multi_HandleSpellRequestConfirmed_Implementation(EActiveSpellContext Context, ATile* TargetTile)
 {
-	SetFreezeActionPhaseTimer(true);
-	bCountdownQuickEffectTimer = false;
-	bCountdownBonusSpellTimer = false;
+
 }
 
-void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation()
+void ACSKGameState::Multi_HandleSpellRequestFinished_Implementation(EActiveSpellContext Context)
 {
-	SetFreezeActionPhaseTimer(false);
-	bCountdownQuickEffectTimer = false;
-	bCountdownBonusSpellTimer = false;
+
 }
 
 void ACSKGameState::Multi_HandleQuickEffectSelection_Implementation(bool bNullify)
 {
-	// We want to count down the quick effect selection time
-	bCountdownQuickEffectTimer = true;
-	SetFreezeActionPhaseTimer(false);
+
 }
 
 void ACSKGameState::Multi_HandleBonusSpellSelection_Implementation()
 {
-	// We want to count down the bonus spell selection time
-	bCountdownBonusSpellTimer = true;
-	SetFreezeActionPhaseTimer(false);
+
 }
 
 void ACSKGameState::HandlePortalReached(ACSKPlayerController* Controller, ATile* ReachedPortal)
