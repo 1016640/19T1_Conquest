@@ -1772,24 +1772,27 @@ ASpellActor* ACSKGameMode::CastSubSpellForActiveSpell(TSubclassOf<USpell> SubSpe
 	// The player casting the current active spell
 	ACSKPlayerController* SpellCaster = nullptr;
 
-	// We get player based on context but bonus context doesn't specify enough
-	EActiveSpellContext CurrentContext = ActiveSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActiveSpellContext;
-	switch (CurrentContext)
+	// TODO: We could get the spell caster via (ActiveSpellActor->CastingPlayer->GetCSKPlayerController())
 	{
-		case EActiveSpellContext::Action:
+		// We get player based on context but bonus context doesn't specify enough
+		EActiveSpellContext CurrentContext = ActiveSpellContext == EActiveSpellContext::Bonus ? BonusSpellContext : ActiveSpellContext;
+		switch (CurrentContext)
 		{
-			SpellCaster = ActionPhaseActiveController;
-			break;
-		}
-		case EActiveSpellContext::Counter:
-		{
-			SpellCaster = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
-			break;
-		}
-		default:
-		{
-			check(false);
-			break;
+			case EActiveSpellContext::Action:
+			{
+				SpellCaster = ActionPhaseActiveController;
+				break;
+			}
+			case EActiveSpellContext::Counter:
+			{
+				SpellCaster = GetOpposingPlayersController(ActionPhaseActiveController->CSKPlayerID);
+				break;
+			}
+			default:
+			{
+				check(false);
+				break;
+			}
 		}
 	}
 
