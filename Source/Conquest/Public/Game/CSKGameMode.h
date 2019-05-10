@@ -17,6 +17,7 @@ class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
+class AWinnerSequenceActor;
 class IBoardPieceInterface;
 class UHealthComponent;
 class USpell;
@@ -210,13 +211,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void StartMatch();
 
-	/** Ends the match */
+	/** Ends the match (without sequence actor) */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void EndMatch(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition);
 
 	/** Forcefully ends the match with no winner decided */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void AbortMatch();
+
+private:
+
+	/** Ends the match after the winner sequence has played. Caches the winner and win condition */
+	void CacheWinnerAndPlayWinnerSequence(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition);
+
+	/** Notify from winner sequence actor it has finished */
+	UFUNCTION()
+	void OnWinnerSequenceFinished();
+
+	/** Checks if match should now end after an action (that could have spawned a winner sequence actor) */
+	bool PostActionCheckEndMatch();
+
+private:
+
+	/** If the match has finished but we a winner sequence actor was spawned. We need this so if
+	the game was finished immediately, we can end the game after the current action being played */
+	uint32 bWinnerSequenceActorSpawned : 1;
+
+	/** If either the winner sequence actor has finished or the active action has finished. This is
+	handled internally by PostActionCheckEndMatch to determine if the match should now officially end */
+	uint32 bWinnerSequenceOrActionFinished : 1;
 
 public:
 
@@ -321,11 +344,6 @@ protected:
 	/** The condition the winner met in order to win */
 	UPROPERTY()
 	ECSKMatchWinCondition MatchWinCondition;
-
-	/** The pending winner from destroying the other players castle.
-	This will only be valid when a castle has been destroyed */
-	UPROPERTY()
-	ACSKPlayerController* PendingMatchWinner;
 
 private:
 
@@ -946,9 +964,6 @@ protected:
 
 private:
 
-	/** Checks if a players castle has been destroyed */
-	bool PostActionCheckWinCondition();
-
 	/** Actually destroys the towers that were destroyed during the latest action */
 	void ClearDestroyedTowers();
 
@@ -971,6 +986,21 @@ private:
 	these to destroy them after said action has completed, rather than during it */
 	UPROPERTY(Transient)
 	TArray<ATower*> ActiveActionsDestroyedTowers;
+
+protected:
+
+	/** Spawns and initializes winner sequence actor */
+	AWinnerSequenceActor* SpawnWinnerSequenceActor(ACSKPlayerState* Winner, ECSKMatchWinCondition WinCondition) const;
+
+protected:
+
+	/** The sequence actor to spawn when a player wins via reaching the opponents portal */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	TSubclassOf<AWinnerSequenceActor> PortalReachedSequenceClass;
+
+	/** The sequence actor to spawn when a player wins via destroying the opponents castle */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	TSubclassOf<AWinnerSequenceActor> CastleDestroyedSequenceClass;
 
 protected:
 

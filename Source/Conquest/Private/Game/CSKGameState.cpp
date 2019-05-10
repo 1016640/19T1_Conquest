@@ -1141,6 +1141,10 @@ void ACSKGameState::HandleCastleDestroyed(ACSKPlayerController* Controller, ACas
 	// Castles can be destroyed during the action phase (via Spells) or the end round action phase (via Towers)
 	if (IsActionPhaseActive() || IsEndRoundPhaseActive() && HasAuthority())
 	{
+		// We want to freeze the timer to prevent timer events from being sent
+		// (There is a chance that custom timer is currently active)
+		bTimerPaused = true;
+
 		Multi_HandleCastleDestroyed(Controller->GetCSKPlayerState(), DestroyedCastle);
 	}
 }

@@ -23,6 +23,7 @@
 #include "TimerManager.h"
 #include "Tower.h"
 #include "TowerConstructionData.h"
+#include "WinnerSequenceActor.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -50,6 +51,9 @@ ACSKGameMode::ACSKGameMode()
 	RoundState = ECSKRoundState::Invalid;
 	MatchWinner = nullptr;
 	MatchWinCondition = ECSKMatchWinCondition::Unknown;
+	
+	bWinnerSequenceActorSpawned = false;
+	bWinnerSequenceOrActionFinished = false;
 
 	StartingGold = 5;
 	StartingMana = 3;
@@ -76,6 +80,9 @@ ACSKGameMode::ACSKGameMode()
 	BonusSpellSelectTime = 15;
 	InitialMatchDelay = 2.f;
 	PostMatchDelay = 15.f;
+
+	PortalReachedSequenceClass = AWinnerSequenceActor::StaticClass();
+	CastleDestroyedSequenceClass = AWinnerSequenceActor::StaticClass();
 
 	#if WITH_EDITORONLY_DATA
 	P1AssignedColor = FColor::Red;
@@ -516,6 +523,57 @@ void ACSKGameMode::AbortMatch()
 {
 	// Abandon the match
 	EnterMatchState(ECSKMatchState::Aborted);
+}
+
+void ACSKGameMode::CacheWinnerAndPlayWinnerSequence(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition)
+{
+	if (ShouldEndMatch() && WinningPlayer)
+	{
+		MatchWinner = WinningPlayer;
+		MatchWinCondition = MetCondition;
+
+		ACSKPlayerState* PlayerState = WinningPlayer->GetCSKPlayerState();
+
+		// Try to spawn the finish sequence actor, if we fail, just end the match now
+		AWinnerSequenceActor* SequenceActor = SpawnWinnerSequenceActor(PlayerState, MetCondition);
+		if (SequenceActor)
+		{
+			bWinnerSequenceActorSpawned = true;
+			SequenceActor->OnSequenceFinished.BindDynamic(this, &ACSKGameMode::OnWinnerSequenceFinished);
+		}
+		else
+		{
+			// End the match now
+			EnterMatchState(ECSKMatchState::WaitingPostMatch);
+		}
+	}
+}
+
+void ACSKGameMode::OnWinnerSequenceFinished()
+{
+	// The sequence actor could potentially finish before the current action. We want
+	// to wait for both the action and the sequence to finish before ending the match
+	PostActionCheckEndMatch();
+}
+
+bool ACSKGameMode::PostActionCheckEndMatch()
+{
+	if (bWinnerSequenceActorSpawned)
+	{
+		if (bWinnerSequenceOrActionFinished)
+		{
+			// We can now end the match
+			EnterMatchState(ECSKMatchState::WaitingPostMatch);
+			return true;
+		}
+		else
+		{
+			// We wait for the next time this function is called before ending the match
+			bWinnerSequenceOrActionFinished = true;
+		}
+	}
+
+	return false;
 }
 
 bool ACSKGameMode::ShouldStartMatch_Implementation() const
@@ -1246,6 +1304,11 @@ void ACSKGameMode::NotifyCollectionPhaseSequenceFinished(ACSKPlayerController* P
 
 bool ACSKGameMode::RequestEndActionPhase(bool bTimeOut)
 {
+	if (bWinnerSequenceActorSpawned)
+	{
+		return false;
+	}
+
 	// Player is not the active player
 	if (!ActionPhaseActiveController || !ActionPhaseActiveController->IsPerformingActionPhase())
 	{
@@ -1529,7 +1592,7 @@ bool ACSKGameMode::RequestCastQuickEffect(TSubclassOf<USpellCard> SpellCard, int
 	}
 
 	// We might be performing another action (we check move and build
-	// individually as quick effect can be activated even if spell action is active
+	// individually as quick effect can be activated even if spell action is active)
 	if (!IsActionPhaseInProgress() ||
 		IsWaitingForCastleMove() || IsWaitingForBuildTower())
 	{
@@ -2070,7 +2133,12 @@ bool ACSKGameMode::PostCastleMoveCheckWinCondition(ATile* SegmentTile)
 		int32 PlayerID = OpposingController->CSKPlayerID;
 		if (BoardManager->GetPlayerPortalTile(PlayerID) == SegmentTile)
 		{
-			EndMatch(ActionPhaseActiveController, ECSKMatchWinCondition::PortalReached);
+			// End the match (play potential winner sequence)
+			CacheWinnerAndPlayWinnerSequence(ActionPhaseActiveController, ECSKMatchWinCondition::PortalReached);
+
+			// We want to execute this now as we have already finished the action
+			PostActionCheckEndMatch();
+			
 			return true;
 		}
 	}
@@ -2408,6 +2476,13 @@ void ACSKGameMode::FinishCastSpell(bool bIgnoreQuickEffectCheck, bool bIgnoreBon
 	// We can now destroy the towers that were destroyed during the spell cast. We do
 	// this now so all towers remain valid for spells to use while their still active
 	ClearDestroyedTowers();
+
+	// The match might be over due to a castle being destroyed.
+	// We want to stop here if that is the case
+	if (PostActionCheckEndMatch())
+	{
+		return;
+	}
 
 	if (!bIgnoreQuickEffectCheck)
 	{
@@ -2785,6 +2860,13 @@ void ACSKGameMode::NotifyEndRoundActionFinished(ATower* Tower)
 	{
 		ClearDestroyedTowers();
 
+		// The match might be over due to a castle being destroyed.
+		// We want to stop here if that is the case
+		if (PostActionCheckEndMatch())
+		{
+			return;
+		}
+
 		// If we should end the end round phase and move back onto the collection phase
 		bool bEndPhase = false;
 
@@ -3040,9 +3122,11 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 		{
 			ACastle* DestroyedCastle = static_cast<ACastle*>(CompOwner);
 
-			// for now TODO: Have action finish (this either being spell or end round phase action)
-			// then stop executing it after those	
-			EndMatch(GetOpposingPlayersController(PlayerState->GetCSKPlayerID()), ECSKMatchWinCondition::CastleDestroyed);
+			// TODO: Notify game state!
+
+			// End the match (after a potential win sequence)
+			ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(PlayerState->GetCSKPlayerID());
+			CacheWinnerAndPlayWinnerSequence(OpposingPlayer, ECSKMatchWinCondition::CastleDestroyed);
 		}
 		else
 		{
@@ -3061,6 +3145,8 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 				DestroyedTower->SetActorHiddenInGame(true);
 				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
 			}
+
+			// TODO: Notify game state!
 
 			// We need to make sure this tower is removed from end round phase actions
 			if (IsEndRoundPhaseInProgress())
@@ -3141,11 +3227,6 @@ void ACSKGameMode::CacheAndClearHealthReports()
 	}
 }
 
-bool ACSKGameMode::PostActionCheckWinCondition()
-{
-	return false;
-}
-
 void ACSKGameMode::ClearDestroyedTowers()
 {
 	// We move over the towers for two reasons:
@@ -3160,6 +3241,49 @@ void ACSKGameMode::ClearDestroyedTowers()
 			Tower->Destroy();
 		}
 	}
+}
+
+AWinnerSequenceActor* ACSKGameMode::SpawnWinnerSequenceActor(ACSKPlayerState* Winner, ECSKMatchWinCondition WinCondition) const
+{
+	if (!Winner)
+	{
+		return nullptr;
+	}
+
+	// We spawn a different sequence actor based on the win condition
+	TSubclassOf<AWinnerSequenceActor> SequenceClass = nullptr;
+	switch (WinCondition)
+	{
+		case ECSKMatchWinCondition::PortalReached:
+		{
+			SequenceClass = PortalReachedSequenceClass;
+			break;
+		}
+		case ECSKMatchWinCondition::CastleDestroyed:
+		{
+			SequenceClass = CastleDestroyedSequenceClass;
+			break;
+		}
+	}
+	
+	if (SequenceClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.ObjectFlags |= RF_Transient;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.bDeferConstruction = true;
+		
+		AWinnerSequenceActor* SequenceActor = GetWorld()->SpawnActor<AWinnerSequenceActor>(SequenceClass, SpawnParams);
+		if (SequenceActor)
+		{
+			SequenceActor->InitSequenceActor(Winner, WinCondition);
+			SequenceActor->FinishSpawning(FTransform::Identity);
+		}
+
+		return SequenceActor;
+	}
+
+	return nullptr;
 }
 
 void ACSKGameMode::OnDisconnect(UWorld* InWorld, UNetDriver* NetDriver)
