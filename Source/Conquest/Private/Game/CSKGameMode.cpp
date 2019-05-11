@@ -564,13 +564,14 @@ bool ACSKGameMode::PostActionCheckEndMatch()
 		{
 			// We can now end the match
 			EnterMatchState(ECSKMatchState::WaitingPostMatch);
-			return true;
 		}
 		else
 		{
 			// We wait for the next time this function is called before ending the match
 			bWinnerSequenceOrActionFinished = true;
 		}
+
+		return true;
 	}
 
 	return false;
@@ -3118,14 +3119,20 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 
 	if (bKilled)
 	{
+		ACSKGameState* CSKGameState = Cast<ACSKGameState>(GameState);
+
 		if (CompOwner->IsA<ACastle>())
 		{
 			ACastle* DestroyedCastle = static_cast<ACastle*>(CompOwner);
+			ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(PlayerState->GetCSKPlayerID());
 
-			// TODO: Notify game state!
+			// Notify game state
+			if (CSKGameState)
+			{
+				CSKGameState->HandleCastleDestroyed(OpposingPlayer, DestroyedCastle);
+			}
 
 			// End the match (after a potential win sequence)
-			ACSKPlayerController* OpposingPlayer = GetOpposingPlayersController(PlayerState->GetCSKPlayerID());
 			CacheWinnerAndPlayWinnerSequence(OpposingPlayer, ECSKMatchWinCondition::CastleDestroyed);
 		}
 		else
@@ -3146,7 +3153,11 @@ void ACSKGameMode::OnBoardPieceHealthChanged(UHealthComponent* HealthComp, int32
 				DestroyedTower->BP_OnDestroyed(PlayerState->GetCSKPlayerController());
 			}
 
-			// TODO: Notify game state!
+			// Notify game state
+			if (CSKGameState)
+			{
+				CSKGameState->HandleTowerDestroyed(DestroyedTower, false);
+			}
 
 			// We need to make sure this tower is removed from end round phase actions
 			if (IsEndRoundPhaseInProgress())

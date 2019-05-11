@@ -493,6 +493,9 @@ public:
 	/** Notify that the given player has destroyed their opponents castle */
 	void HandleCastleDestroyed(ACSKPlayerController* Controller, ACastle* DestroyedCastle);
 
+	/** Notify that a building has been destroyed */
+	void HandleTowerDestroyed(ATower* DestroyedTower, bool bByRequest);
+
 private:
 
 	/** Handle portal reached client side */
@@ -502,6 +505,10 @@ private:
 	/** Handle castle destroyed client side */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_HandleCastleDestroyed(ACSKPlayerState* Player, ACastle* DestroyedCastle);
+
+	/** Handle tower destroyed client side */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_HandleTowerDestroyed(ATower* DestroyedTower, bool bByRequest);
 
 public:
 

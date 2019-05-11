@@ -975,7 +975,6 @@ protected:
 	TArray<FHealthChangeReport> ActiveActionHealthReports;
 
 	/** The health change reports from the previous action */
-	// TODO: The game state needs these, so clients can also access them!
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CSK|Game")
 	TArray<FHealthChangeReport> PreviousActionHealthReports;
 

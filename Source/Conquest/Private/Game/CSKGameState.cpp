@@ -1149,12 +1149,50 @@ void ACSKGameState::HandleCastleDestroyed(ACSKPlayerController* Controller, ACas
 	}
 }
 
+void ACSKGameState::HandleTowerDestroyed(ATower* DestroyedTower, bool bByRequest)
+{
+	// Towers can be destroyed during the action phase (via Spells) or the end round action phase (via Towers)
+	if (IsActionPhaseActive() || IsEndRoundPhaseActive() && HasAuthority())
+	{
+		Multi_HandleTowerDestroyed(DestroyedTower, bByRequest);
+	}
+}
+
 void ACSKGameState::Multi_HandlePortalReached_Implementation(ACSKPlayerState* Player, ATile* ReachedPortal)
 {
 }
 
 void ACSKGameState::Multi_HandleCastleDestroyed_Implementation(ACSKPlayerState* Player, ACastle* DestroyedCastle)
 {
+}
+
+void ACSKGameState::Multi_HandleTowerDestroyed_Implementation(ATower* DestroyedTower, bool bByRequest)
+{
+	if (ensure(DestroyedTower))
+	{
+		// Update tower instance counters
+		TSubclassOf<ATower> TowerClass = DestroyedTower->GetClass();
+		if (TowerInstanceTable.Contains(TowerClass))
+		{
+			int32& InstanceCount = TowerInstanceTable[TowerClass];
+			InstanceCount = FMath::Max(0, InstanceCount - 1);
+			
+			// We remove this tower from table if no more of it exists
+			if (InstanceCount == 0)
+			{
+				TowerInstanceTable.Remove(TowerClass);
+			}
+		}
+		// Only log on server
+		else if (HasAuthority())
+		{
+			UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleTowerDestroyed: Class %s was not in instance table"), *TowerClass->GetName());
+		}
+	}
+	else
+	{
+		UE_LOG(LogConquest, Warning, TEXT("ACSKGameState::Multi_HandleTowerDestroyed: DestroyedTower is null"));
+	}
 }
 
 float ACSKGameState::GetMatchTimeSeconds() const

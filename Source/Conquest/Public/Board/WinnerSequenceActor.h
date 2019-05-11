@@ -7,6 +7,7 @@
 #include "Components/TimelineComponent.h"
 #include "WinnerSequenceActor.generated.h"
 
+class ACastle;
 class UCurveFloat;
 
 /** Delegate for when the sequence has finished */
@@ -86,4 +87,43 @@ private:
 	/** The timeline to play during the sequence. When this time
 	line ends is when the sequence is considered to have finished */
 	FTimeline SequenceTimeline;
+};
+
+/**
+ * Winner sequence actor for when the a player has destroyed their opponents castle
+*/
+UCLASS(abstract)
+class CONQUEST_API ACastleDestroyedSequenceActor : public AWinnerSequenceActor
+{
+	GENERATED_BODY()
+
+public:
+
+	// Begin AWinnerSequenceActor Interface
+	virtual void InitSequenceActor(ACSKPlayerState* InWinningPlayer, ECSKMatchWinCondition InWinCondition) override;
+	// End AWinnerSequenceActor
+
+protected:
+
+	// Begin UObject Interface
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	// End UObject Interface
+
+public:
+
+	/** The opponents castle (This is the castle that has been destroyed) */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Sequence)
+	ACastle* OpponentsCastle;
+
+	/** The random stream to use for aethetic reasons. This is synced amongst
+	all instances of this actor for all clients (but not number of uses) */
+	UPROPERTY(BlueprintReadOnly, Transient, Replicated, Category = Sequence)
+	FRandomStream RandomStream;
+
+protected:
+
+	/** Generates a random location around the opponents castle within given
+	bounds. This will use the random stream that was generated originally */
+	UFUNCTION(BlueprintPure, Category = Sequence, meta = (BlueprintProtected = "true"))
+	FVector GetPointAroundCastle(const FVector& Bounds) const;
 };

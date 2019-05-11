@@ -3,7 +3,9 @@
 #include "WinnerSequenceActor.h"
 #include "CSKGameState.h"
 #include "CSKPawn.h"
+#include "CSKPlayerState.h"
 
+#include "Castle.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 
@@ -117,3 +119,46 @@ void AWinnerSequenceActor::OnTimelineFinished()
 	Destroy();
 }
 
+void ACastleDestroyedSequenceActor::InitSequenceActor(ACSKPlayerState* InWinningPlayer, ECSKMatchWinCondition InWinCondition)
+{
+	if (HasAuthority() && !HasActorBegunPlay())
+	{
+		Super::InitSequenceActor(InWinningPlayer, InWinCondition);
+
+		// Get the opponents castle
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (ensure(GameState))
+		{
+			ACSKPlayerState* LosingPlayer = GameState->GetOpposingPlayerState(InWinningPlayer);
+			if (ensure(LosingPlayer))
+			{
+				OpponentsCastle = LosingPlayer->GetCastle();
+			}
+		}
+
+		// Generate a random seed (will be synced amongst all remote instances)
+		{
+			RandomStream.GenerateNewSeed();
+		}
+	}
+}
+
+void ACastleDestroyedSequenceActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ACastleDestroyedSequenceActor, OpponentsCastle, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ACastleDestroyedSequenceActor, RandomStream, COND_InitialOnly);
+}
+
+FVector ACastleDestroyedSequenceActor::GetPointAroundCastle(const FVector& Bounds) const
+{
+	FVector Origin = OpponentsCastle ? OpponentsCastle->GetActorLocation() : FVector::ZeroVector;
+	FBox Box = FBox::BuildAABB(Origin, Bounds);
+	
+	// We have to mimic FMath::RandPointInBox as it doesn't take in a custom seed
+	return FVector(
+		RandomStream.FRandRange(Box.Min.X, Box.Max.X),
+		RandomStream.FRandRange(Box.Min.Y, Box.Max.Y),
+		RandomStream.FRandRange(Box.Min.Z, Box.Max.Z));
+}
