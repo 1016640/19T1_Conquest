@@ -7,6 +7,7 @@
 
 #include "Castle.h"
 #include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 
 AWinnerSequenceActor::AWinnerSequenceActor()
@@ -87,16 +88,13 @@ void AWinnerSequenceActor::ConstructTimeline()
 
 void AWinnerSequenceActor::OnDilationInterpUpdated(float Value)
 {
-	if (HasAuthority())
+	AWorldSettings* WorldSettings = GetWorldSettings();
+	if (WorldSettings)
 	{
-		AWorldSettings* WorldSettings = GetWorldSettings();
-		if (WorldSettings)
+		if (Value > 0.f)
 		{
-			if (Value > 0.f)
-			{
-				WorldSettings->MatineeTimeDilation = Value;
-				WorldSettings->ForceNetUpdate();
-			}
+			WorldSettings->MatineeTimeDilation = Value;
+			WorldSettings->ForceNetUpdate();
 		}
 	}
 }
@@ -117,6 +115,95 @@ void AWinnerSequenceActor::OnTimelineFinished()
 	}
 
 	Destroy();
+}
+
+void APortalReachedSequenceActor::BeginPlay()
+{
+	Super::BeginPlay();
+	
+	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
+	if (Castle)
+	{
+		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		InitialRotation = Mesh->GetComponentRotation();
+
+		// Have local player focus on winners castle
+		ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+		if (GameState)
+		{
+			ACSKPawn* CSKPawn = GameState->GetLocalPlayerPawn();
+			if (CSKPawn)
+			{
+				CSKPawn->TrackActor(Castle);
+			}
+		}
+	}
+	else
+	{
+		InitialRotation = FRotator::ZeroRotator;
+	}
+}
+
+void APortalReachedSequenceActor::ConstructTimeline()
+{
+	Super::ConstructTimeline();
+
+	// Set rotation callback
+	if (RotationCurve)
+	{
+		FOnTimelineFloat RotationCallback;
+		RotationCallback.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(APortalReachedSequenceActor, OnRotationInterpUpdated));
+		SequenceTimeline.AddInterpFloat(RotationCurve, RotationCallback);
+	}
+
+	// Set scaling callback
+	if (ScaleCurve)
+	{
+		FOnTimelineVector ScaleCallback;
+		ScaleCallback.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(APortalReachedSequenceActor, OnScaleInterpUpdated));
+		SequenceTimeline.AddInterpVector(ScaleCurve, ScaleCallback);
+	}
+}
+
+void APortalReachedSequenceActor::OnTimelineFinished()
+{
+	Super::OnTimelineFinished();
+
+	// We hide the players castle to simulate them having transported to another realm
+	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
+	if (Castle)
+	{
+		Castle->SetActorHiddenInGame(true);
+	}
+}
+
+void APortalReachedSequenceActor::OnRotationInterpUpdated(float Value)
+{
+	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
+	if (Castle)
+	{
+		// Rotate around yaw axis
+		float Degrees = 360.f * (Value - FMath::TruncToFloat(Value));
+
+		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		Mesh->SetWorldRotation(InitialRotation + FRotator(0.f, Degrees, 0.f));		
+	}
+}
+
+void APortalReachedSequenceActor::OnScaleInterpUpdated(FVector Value)
+{
+	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
+	if (Castle)
+	{
+		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		Mesh->SetWorldScale3D(Value);
+	}
+}
+
+ACastleDestroyedSequenceActor::ACastleDestroyedSequenceActor()
+{
+	MinDelayInterval = 0.4f;
+	MaxDelayInterval = 0.6f;
 }
 
 void ACastleDestroyedSequenceActor::InitSequenceActor(ACSKPlayerState* InWinningPlayer, ECSKMatchWinCondition InWinCondition)
@@ -143,12 +230,62 @@ void ACastleDestroyedSequenceActor::InitSequenceActor(ACSKPlayerState* InWinning
 	}
 }
 
+void ACastleDestroyedSequenceActor::BeginPlay()
+{
+	// We need to reset this as clients will have only replicated the initial seed
+	RandomStream.Reset();
+
+	Super::BeginPlay();
+
+	// Have local player focus on losers castle
+	ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+	if (GameState)
+	{
+		ACSKPawn* CSKPawn = GameState->GetLocalPlayerPawn();
+		if (CSKPawn)
+		{
+			CSKPawn->TrackActor(OpponentsCastle);
+		}
+	}
+
+	// This will start the interval event loop
+	OnIntervalDelayFinished();
+}
+
 void ACastleDestroyedSequenceActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(ACastleDestroyedSequenceActor, OpponentsCastle, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(ACastleDestroyedSequenceActor, RandomStream, COND_InitialOnly);
+}
+
+#if WITH_EDITOR
+void ACastleDestroyedSequenceActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACastleDestroyedSequenceActor, MinDelayInterval))
+	{
+		MaxDelayInterval = FMath::Max(MinDelayInterval, MaxDelayInterval);
+	}
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(ACastleDestroyedSequenceActor, MaxDelayInterval))
+	{
+		MinDelayInterval = FMath::Min(MinDelayInterval, MaxDelayInterval);
+	}
+}
+#endif
+
+void ACastleDestroyedSequenceActor::OnIntervalDelayFinished()
+{
+	BP_OnIntervalEvent();
+
+	float RandomDelay = RandomStream.FRandRange(MinDelayInterval, MaxDelayInterval);
+	
+	// Keep cycling back here
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(Handle_IntervalEvent, this, &ACastleDestroyedSequenceActor::OnIntervalDelayFinished, RandomDelay, false);
 }
 
 FVector ACastleDestroyedSequenceActor::GetPointAroundCastle(const FVector& Bounds) const
