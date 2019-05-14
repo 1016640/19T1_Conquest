@@ -16,6 +16,7 @@ ACoinSequenceActor::ACoinSequenceActor()
 	// We simulate movement on the client
 	bReplicates = true;
 	bReplicateMovement = false;
+	bAlwaysRelevant = true;
 	bNetLoadOnClient = true;
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
@@ -61,12 +62,6 @@ void ACoinSequenceActor::Tick(float DeltaTime)
 		FVector Displacement = Coin->GetCoinLocation() - NewLocation;
 		FRotator Rotation = FRotationMatrix::MakeFromX(Displacement).Rotator();
 		Camera->SetWorldRotation(Rotation);
-
-		// Sequence technically concludes once we reach the final camera location
-		/*if (FVector::PointsAreNear(NewLocation, CameraDesiredLocation, 1.f))
-		{
-			SetActorTickEnabled(false);
-		}*/
 	}
 }
 
@@ -97,6 +92,8 @@ void ACoinSequenceActor::FinishCoinSequence()
 			Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
 			Multi_FinishCoinFlip();
 		}
+
+		TearOff();
 	}
 }
 

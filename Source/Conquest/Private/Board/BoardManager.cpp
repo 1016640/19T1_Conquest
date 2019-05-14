@@ -39,15 +39,22 @@ ABoardManager::ABoardManager()
 	SetRootComponent(DummyRoot);
 	DummyRoot->SetMobility(EComponentMobility::Static);
 
-	#if WITH_EDITORONLY_DATA
 	UBillboardComponent* Billboard = CreateEditorOnlyDefaultSubobject<UBillboardComponent>(TEXT("Billboard"));
-	Billboard->SetupAttachment(DummyRoot);
-	Billboard->bIsEditorOnly = true;
 
-	static ConstructorHelpers::FObjectFinder<UTexture2D> ActorTexture(TEXT("/Engine/EditorResources/S_Actor.S_Actor"));
-	if (ActorTexture.Succeeded())
+	#if WITH_EDITORONLY_DATA
+	if (!IsRunningCommandlet())
 	{
-		Billboard->SetSprite(ActorTexture.Object);
+		if (Billboard)
+		{
+			Billboard->SetupAttachment(DummyRoot);
+			Billboard->bHiddenInGame = true;
+
+			static ConstructorHelpers::FObjectFinder<UTexture2D> ActorTexture(TEXT("/Engine/EditorResources/S_Actor.S_Actor"));
+			if (ActorTexture.Succeeded())
+			{
+				Billboard->SetSprite(ActorTexture.Object);
+			}
+		}
 	}
 	#endif
 

@@ -223,6 +223,17 @@ protected:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected="true"))
 	void UnbindPlayerInput();
 
+	/** Enables a custom timer (via CSKGameState) that will finished after given duration. This will
+	only work during the end round action and will be automaitcally unbound. This also has the possibility 
+	of failing, this function will not handle re-trying */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected = "true"))
+	bool SetCustomTimer(int32 Duration);
+
+	/** Disables the custom timer (if set). This should be used when the event
+	the timer was waiting for has passed and the timer is no longer needed */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = BoardPiece, meta = (BlueprintProtected = "true"))
+	void ClearCustomTimer();
+
 	/** If the player is allowed to select the given tile for end round action phase.
 	This can run on both the owning players client and the server */
 	UFUNCTION(BlueprintImplementableEvent, Category = BoardPiece, meta = (DisplayName="Can Select Tile for Action"))
@@ -233,14 +244,25 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = BoardPiece, meta = (DisplayName = "On Tile Selected for Action"))
 	void BP_OnTileSelectedForAction(ATile* TargetTile);
 
+	/** Called when custom timer has finished (or has been interrupted) */
+	UFUNCTION(BlueprintImplementableEvent, BlueprintAuthorityOnly, Category = BoardPiece, meta = (DisplayName = "On Action Custom Timer Finished"))
+	void BP_OnActionCustomTimerFinished(bool bFinished);
+
 private:
 
 	/** Binds player input client side */
 	UFUNCTION(Client, Reliable)
 	void Client_BindPlayerInput(bool bBind);
 
+	/** Callback from timer when duration has elapsed */
+	UFUNCTION()
+	void OnCustomTimerFinished(bool bWasSkipped);
+
 private:
 
 	/** If player input has been bound*/
 	uint8 bIsInputBound : 1;
+
+	/** If custom timer callback has been bound */
+	uint8 bIsTimerBound : 1;
 };

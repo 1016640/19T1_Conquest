@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSKGameInstance.h"
+#include "OnlineSubsystemUtils.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -130,6 +131,11 @@ bool UCSKGameInstance::IsValidNameForSession_Implementation(const FName& Session
 	return SessionName.IsValid() && !SessionName.IsNone();
 }
 
+IOnlineSubsystem* UCSKGameInstance::GetOnlineSubsystem() const
+{
+	return Online::GetSubsystem(GetWorld());
+}
+
 bool UCSKGameInstance::InternalCreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence)
 {
 	if (!UserId.IsValid())
@@ -138,7 +144,7 @@ bool UCSKGameInstance::InternalCreateSession(TSharedPtr<const FUniqueNetId> User
 		return false;
 	}
 
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		// We need the sessions interface in order to create sessions
@@ -191,7 +197,7 @@ bool UCSKGameInstance::InternalFindSessions(TSharedPtr<const FUniqueNetId> UserI
 		return false;
 	}
 
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		// We need the sessions interface in order to find sessions
@@ -236,7 +242,7 @@ bool UCSKGameInstance::InternalJoinSession(TSharedPtr<const FUniqueNetId> UserId
 		return false;
 	}
 
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		// We need the sessions interface in order to join sessions
@@ -260,7 +266,7 @@ bool UCSKGameInstance::InternalJoinSession(TSharedPtr<const FUniqueNetId> UserId
 
 bool UCSKGameInstance::InternalDestroySession(FName SessionName)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		// We need the sessions interface in order to join sessions
@@ -284,7 +290,7 @@ bool UCSKGameInstance::InternalDestroySession(FName SessionName)
 
 void UCSKGameInstance::NotifyCreateSessionComplete(FName SessionName, bool bWasSuccessful)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		IOnlineSessionPtr Sessions = OnlineSub->GetSessionInterface();
@@ -307,7 +313,7 @@ void UCSKGameInstance::NotifyCreateSessionComplete(FName SessionName, bool bWasS
 
 void UCSKGameInstance::NotifyStartSessionComplete(FName SessionName, bool bWasSuccessful)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		IOnlineSessionPtr Sessions = OnlineSub->GetSessionInterface();
@@ -329,7 +335,7 @@ void UCSKGameInstance::NotifyStartSessionComplete(FName SessionName, bool bWasSu
 
 void UCSKGameInstance::NotifyFindSessionsComplete(bool bWasSuccessful)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		IOnlineSessionPtr Sessions = OnlineSub->GetSessionInterface();
@@ -357,7 +363,7 @@ void UCSKGameInstance::NotifyFindSessionsComplete(bool bWasSuccessful)
 
 void UCSKGameInstance::NotifyJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		IOnlineSessionPtr Sessions = OnlineSub->GetSessionInterface();
@@ -387,7 +393,7 @@ void UCSKGameInstance::NotifyJoinSessionComplete(FName SessionName, EOnJoinSessi
 
 void UCSKGameInstance::NotifyDestroySessionComplete(FName SessionName, bool bWasSuccessful)
 {
-	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	IOnlineSubsystem* OnlineSub = GetOnlineSubsystem();
 	if (OnlineSub)
 	{
 		IOnlineSessionPtr Sessions = OnlineSub->GetSessionInterface();

@@ -2,6 +2,7 @@
 
 #include "SpellActor.h"
 #include "CSKGameMode.h"
+#include "CSKGameState.h"
 #include "CSKPlayerController.h"
 #include "CSKPlayerState.h"
 
@@ -26,6 +27,9 @@ ASpellActor::ASpellActor()
 	bIsPrimarySpell = true;
 	bRunning = false;
 	bCancelled = false;
+
+	bIsInputBound = false;
+	bIsTimerBound = false;
 
 	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(DummyRoot);
@@ -96,6 +100,12 @@ void ASpellActor::FinishSpell()
 			UnbindPlayerInput();
 		}
 
+		// Stop the timer we may have bound
+		if (bIsTimerBound)
+		{
+			ClearCustomTimer();
+		}
+
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		if (GameMode)
 		{
@@ -123,7 +133,7 @@ void ASpellActor::BindPlayerInput()
 {
 	if (HasAuthority())
 	{
-		if (bRunning && !bCancelled && !bIsInputBound)
+		if (CanSpellContinueExecution() && !bIsInputBound)
 		{
 			ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
 			if (Controller)
@@ -144,7 +154,7 @@ void ASpellActor::UnbindPlayerInput()
 {
 	if (HasAuthority())
 	{
-		if (bRunning && !bCancelled && !bIsInputBound)
+		if (bIsInputBound)
 		{
 			ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
 			if (Controller)
@@ -154,11 +164,91 @@ void ASpellActor::UnbindPlayerInput()
 
 				// Notify client to also unbind callbacks
 				Client_BindPlayerInput(false);
+			}
 
-				bIsInputBound = false;
+			bIsInputBound = false;
+		}
+	}
+}
+
+bool ASpellActor::SetCustomTimer(int32 Duration)
+{
+	if (HasAuthority())
+	{
+		// We don't check if we have already bound a timer to allow for timers to be reset
+		if (CanSpellContinueExecution())
+		{
+			ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (GameState && GameState->ActivateCustomTimer(Duration))
+			{
+				GameState->GetCustomTimerFinishedEvent().BindDynamic(this, &ASpellActor::OnCustomTimerFinished);
+				bIsTimerBound = true;
+
+				return true;
+			}
+			else
+			{
+				UE_LOG(LogConquest, Warning, TEXT("ASpellActor: Failed to set custom timer with duration of %i"), Duration);
 			}
 		}
 	}
+
+	return false;
+}
+
+void ASpellActor::ClearCustomTimer()
+{
+	if (HasAuthority())
+	{
+		if (bIsTimerBound)
+		{
+			ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (GameState)
+			{
+				GameState->DeactivateCustomTimer();
+				GameState->GetCustomTimerFinishedEvent().Unbind();
+			}
+
+			bIsTimerBound = false;
+		}
+	}
+}
+
+void ASpellActor::Client_BindPlayerInput_Implementation(bool bBind)
+{
+	if (CastingPlayer)
+	{
+		ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
+		if (CastingPlayer)
+		{
+			if (bBind)
+			{
+				EnableInput(Controller);
+				Controller->CustomCanSelectTile.BindDynamic(this, &ASpellActor::BP_CanSelectTileForSpell);
+
+				// Player needs to be able to move
+				Controller->SetIgnoreMoveInput(false);
+				Controller->SetCanSelectTile(true);
+			}
+			else
+			{
+				DisableInput(Controller);
+				Controller->CustomCanSelectTile.Unbind();
+
+				// Player should no longer be able to move
+				Controller->SetIgnoreMoveInput(true);
+				Controller->SetCanSelectTile(false);
+			}
+		}
+	}
+}
+
+void ASpellActor::OnCustomTimerFinished(bool bWasSkipped)
+{
+	// We first clear the custom timer (as blueprints could possibly reset it)
+	ClearCustomTimer();
+
+	BP_OnSpellCustomTimerFinished(!bWasSkipped);
 }
 
 ASpellActor* ASpellActor::CastSubSpell(TSubclassOf<USpell> InSpell, ATile* InTargetTile, int32 InAdditionalMana, int32 InOverrideCost)
@@ -209,35 +299,6 @@ void ASpellActor::OnSubSpellFinished(ASpellActor* FinishedSpell)
 			if (GameMode)
 			{
 				GameMode->OnSubSpellFinished.Unbind();
-			}
-		}
-	}
-}
-
-void ASpellActor::Client_BindPlayerInput_Implementation(bool bBind)
-{
-	if (CastingPlayer)
-	{
-		ACSKPlayerController* Controller = CastingPlayer->GetCSKPlayerController();
-		if (CastingPlayer)
-		{
-			if (bBind)
-			{
-				EnableInput(Controller);
-				Controller->CustomCanSelectTile.BindDynamic(this, &ASpellActor::BP_CanSelectTileForSpell);
-
-				// Player needs to be able to move
-				Controller->SetIgnoreMoveInput(false);
-				Controller->SetCanSelectTile(true);
-			}
-			else
-			{
-				DisableInput(Controller);
-				Controller->CustomCanSelectTile.Unbind();
-
-				// Player should no longer be able to move
-				Controller->SetIgnoreMoveInput(true);
-				Controller->SetCanSelectTile(false);
 			}
 		}
 	}
