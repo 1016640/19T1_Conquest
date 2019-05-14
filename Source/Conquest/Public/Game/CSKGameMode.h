@@ -17,6 +17,7 @@ class APlayerStart;
 class ASpellActor;
 class ATile;
 class ATower;
+class AWinnerSequenceActor;
 class IBoardPieceInterface;
 class UHealthComponent;
 class USpell;
@@ -125,10 +126,6 @@ public:
 	virtual bool HasMatchStarted() const override;	
 	// End AGameModeBase Interface
 
-	// Begin AActor Interface
-	virtual void Tick(float DeltaTime) override;
-	// End AActor Interface
-
 protected:
 
 	// Begin UObject Interface
@@ -185,6 +182,9 @@ protected:
 	/** Array containing both players in order */
 	FCSKPlayerControllerArray Players;
 
+	/** Bitset for if a player has left (or both) */
+	uint32 PlayersLeft : 2;
+
 	/** The class to use to spawn the first players castle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes, meta = (DisplayName = "Player 1 Castle Class"))
 	TSubclassOf<ACastle> Player1CastleClass;
@@ -211,13 +211,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void StartMatch();
 
-	/** Ends the match */
+	/** Ends the match (without sequence actor) */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void EndMatch(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition);
 
 	/** Forcefully ends the match with no winner decided */
 	UFUNCTION(BlueprintCallable, Category = CSK)
 	void AbortMatch();
+
+private:
+
+	/** Ends the match after the winner sequence has played. Caches the winner and win condition */
+	void CacheWinnerAndPlayWinnerSequence(ACSKPlayerController* WinningPlayer, ECSKMatchWinCondition MetCondition);
+
+	/** Notify from winner sequence actor it has finished */
+	UFUNCTION()
+	void OnWinnerSequenceFinished();
+
+	/** Checks if match should now end after an action (that could have spawned a winner sequence actor) */
+	bool PostActionCheckEndMatch();
+
+private:
+
+	/** If the match has finished but we a winner sequence actor was spawned. We need this so if
+	the game was finished immediately, we can end the game after the current action being played */
+	uint32 bWinnerSequenceActorSpawned : 1;
+
+	/** If either the winner sequence actor has finished or the active action has finished. This is
+	handled internally by PostActionCheckEndMatch to determine if the match should now officially end */
+	uint32 bWinnerSequenceOrActionFinished : 1;
 
 public:
 
@@ -287,6 +309,9 @@ protected:
 
 private:
 
+	/** Checks if match is able to start, starting it if allowed */
+	void TryStartMatch();
+
 	/** Helper function for entering given match state after given delay */
 	void EnterMatchStateAfterDelay(ECSKMatchState NewState, float Delay);
 
@@ -298,6 +323,9 @@ private:
 
 	/** Determines the round state change event to called based on previous and new round state */
 	void HandleRoundStateChange(ECSKRoundState OldState, ECSKRoundState NewState);
+
+	/** Ends the match if a player has left, declaring the remaining player as the winner. Get if game can continue */
+	bool CheckSurrenderCondition();
 
 protected:
 
@@ -324,6 +352,9 @@ private:
 
 	/** Timer handle to the small delay before entering a new round state */
 	FTimerHandle Handle_EnterRoundState;
+
+	/** Timer handle to the repeating check for if the match should start */
+	FTimerHandle Handle_TryStartMatch;
 
 public:
 
@@ -423,9 +454,6 @@ private:
 	/** Timer handle for managing the collection phase sequences. This is both as an initial delay
 	before updating resources and a limit timer in-case clients take to long to finish their sequence */
 	FTimerHandle Handle_CollectionSequences;
-
-
-
 
 public:
 
@@ -859,11 +887,11 @@ public:
 
 	/** Get the time an action phase lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetActionPhaseTime() const { return ActionPhaseTime; }
+	int32 GetActionPhaseTime() const { return ActionPhaseTime; }
 
 	/** Get the bonus time to add to action phase time after finishing an action */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
+	int32 GetBonusActionPhaseTime() const { return BonusActionPhaseTime; }
 
 	/** Get the min amount of tiles that must be traversed per action phase */
 	FORCEINLINE int32 GetMinTileMovementsPerTurn() const { return MinTileMovements; }
@@ -873,21 +901,21 @@ public:
 
 	/** Get the time a quick effect selection lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
+	int32 GetQuickEffectCounterTime() const { return QuickEffectCounterTime; }
 
 	/** Get the time a bonus spell selection lasts */
 	UFUNCTION(BlueprintPure, Category = Rules)
-	float GetBonusSpellSelectTime() const { return BonusSpellSelectTime; }
+	int32 GetBonusSpellSelectTime() const { return BonusSpellSelectTime; }
 
 protected:
 
 	/** The amount of time (in seconds) an action phase lasts before forcing exit (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float ActionPhaseTime;
+	int32 ActionPhaseTime;
 
 	/** Additional time to give players after having finished an action during their action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float BonusActionPhaseTime;
+	int32 BonusActionPhaseTime;
 
 	/** The min amount of tiles a player can move per action phase */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 1))
@@ -906,11 +934,11 @@ protected:
 
 	/** The time the player has to select a quick effect spell when other player is casting a spell (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float QuickEffectCounterTime;
+	int32 QuickEffectCounterTime;
 
 	/** The time the player has to select a target when granted a bonus spell that requires one (zero means indefinite) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Rules, meta = (ClampMin = 0))
-	float BonusSpellSelectTime;
+	int32 BonusSpellSelectTime;
 
 	/** How long we wait before starting the match (starting the coin flip).
 	A delay of two seconds or greater is recommended to allow actors to replicate */
@@ -947,7 +975,6 @@ protected:
 	TArray<FHealthChangeReport> ActiveActionHealthReports;
 
 	/** The health change reports from the previous action */
-	// TODO: The game state needs these, so clients can also access them!
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CSK|Game")
 	TArray<FHealthChangeReport> PreviousActionHealthReports;
 
@@ -958,6 +985,21 @@ private:
 	these to destroy them after said action has completed, rather than during it */
 	UPROPERTY(Transient)
 	TArray<ATower*> ActiveActionsDestroyedTowers;
+
+protected:
+
+	/** Spawns and initializes winner sequence actor */
+	AWinnerSequenceActor* SpawnWinnerSequenceActor(ACSKPlayerState* Winner, ECSKMatchWinCondition WinCondition) const;
+
+protected:
+
+	/** The sequence actor to spawn when a player wins via reaching the opponents portal */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	TSubclassOf<AWinnerSequenceActor> PortalReachedSequenceClass;
+
+	/** The sequence actor to spawn when a player wins via destroying the opponents castle */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Classes)
+	TSubclassOf<AWinnerSequenceActor> CastleDestroyedSequenceClass;
 
 protected:
 

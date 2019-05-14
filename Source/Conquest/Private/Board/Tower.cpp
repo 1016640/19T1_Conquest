@@ -4,6 +4,7 @@
 #include "Tile.h"
 #include "BoardManager.h"
 #include "CSKGameMode.h"
+#include "CSKGameState.h"
 #include "CSKPlayerController.h"
 #include "CSKPlayerState.h"
 
@@ -35,6 +36,7 @@ ATower::ATower()
 
 	bIsRunningEndRoundAction = false;
 	bIsInputBound = false;
+	bIsTimerBound = false;
 
 	// TODO: We might change this to skeletal meshes later
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
@@ -155,6 +157,12 @@ void ATower::FinishEndRoundAction()
 			UnbindPlayerInput();
 		}
 
+		// Stop the timer we may have bound
+		if (bIsTimerBound)
+		{
+			ClearCustomTimer();
+		}
+
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
 		check(GameMode);
 		
@@ -255,6 +263,49 @@ void ATower::UnbindPlayerInput()
 	}
 }
 
+bool ATower::SetCustomTimer(int32 Duration)
+{
+	if (HasAuthority())
+	{
+		// We don't check if we have already bound a timer to allow for timers to be reset
+		if (bIsRunningEndRoundAction)
+		{
+			ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (GameState && GameState->ActivateCustomTimer(Duration))
+			{
+				GameState->GetCustomTimerFinishedEvent().BindDynamic(this, &ATower::OnCustomTimerFinished);
+				bIsTimerBound = true;
+
+				return true;
+			}
+			else
+			{
+				UE_LOG(LogConquest, Warning, TEXT("ATower: Failed to set custom timer with duration of %i"), Duration);
+			}
+		}
+	}
+
+	return false;
+}
+
+void ATower::ClearCustomTimer()
+{
+	if (HasAuthority())
+	{
+		if (bIsRunningEndRoundAction && bIsTimerBound)
+		{
+			ACSKGameState* GameState = UConquestFunctionLibrary::GetCSKGameState(this);
+			if (GameState)
+			{
+				GameState->DeactivateCustomTimer();
+				GameState->GetCustomTimerFinishedEvent().Unbind();
+			}
+
+			bIsTimerBound = false;
+		}
+	}
+}
+
 void ATower::Client_BindPlayerInput_Implementation(bool bBind)
 {
 	if (OwnerPlayerState)
@@ -284,3 +335,12 @@ void ATower::Client_BindPlayerInput_Implementation(bool bBind)
 		}
 	}
 }
+
+void ATower::OnCustomTimerFinished(bool bWasSkipped)
+{
+	// We first clear the custom timer (as blueprints could possibly reset it)
+	ClearCustomTimer();
+
+	BP_OnActionCustomTimerFinished(!bWasSkipped);
+}
+

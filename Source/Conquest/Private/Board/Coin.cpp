@@ -33,7 +33,7 @@ void ACoin::Tick(float DeltaTime)
 	ensure(IsCoinFlipping());	
 	FlipTimeline.TickTimeline(DeltaTime);
 
-	// We want to determine a winner after playing half of the sequence (but not every frame after
+	// We want to determine a winner after playing half of the sequence (but not every frame after)
 	if (!bWinnerDetermined && HasHalfOfTimelinePlayed())
 	{
 		ACSKGameMode* GameMode = UConquestFunctionLibrary::GetCSKGameMode(this);
@@ -130,7 +130,6 @@ void ACoin::OnRotationInterpUpdated(float Value)
 	{
 		Value -= 0.5f;
 	}
-
 
 	// Rotate around pitch axis
 	float Degrees = 360.f * (Value - FMath::TruncToFloat(Value));
