@@ -120,6 +120,9 @@ private:
 
 protected:
 
+	/** Helper function for retrieving the online subsystem to use */
+	IOnlineSubsystem* GetOnlineSubsystem() const;
+
 	/** Creates a new session to host */
 	bool InternalCreateSession(TSharedPtr<const FUniqueNetId> UserId, FName SessionName, bool bIsLAN, bool bIsPresence);
 
