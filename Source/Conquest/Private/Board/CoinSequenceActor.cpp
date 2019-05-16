@@ -89,7 +89,9 @@ void ACoinSequenceActor::FinishCoinSequence()
 	{
 		if (Coin)
 		{
+			Coin->SetActorHiddenInGame(true);
 			Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
+
 			Multi_FinishCoinFlip();
 		}
 
@@ -155,5 +157,17 @@ void ACoinSequenceActor::ClientHandleCoinFlipFinished(bool bHeads)
 {
 	CameraDesiredLocation = GetActorTransform().TransformPosition(FocusCameraLocation);
 	Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ClientHandleCoinFlipFinished);
+}
+
+void ACoinSequenceActor::SetupCoinSequence()
+{
+	if (HasAuthority())
+	{
+		// Have coin setup for all clients
+		if (Coin)
+		{
+			Coin->Multi_SetupCoin();
+		}
+	}
 }
 
