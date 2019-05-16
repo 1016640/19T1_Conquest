@@ -128,4 +128,16 @@ public:
 	(GetActorLocation does not return true location) */
 	UFUNCTION(BlueprintPure, Category = Coin)
 	FVector GetCoinLocation() const;
+
+public:
+
+	/** Notify that the coin is about to be flipped */
+	UFUNCTION(Reliable, NetMulticast)
+	void Multi_SetupCoin();
+
+protected:
+
+	/** Set up the coin flip client side */
+	UFUNCTION(BlueprintImplementableEvent, Category = Coin, meta = (DisplayName = "Setup Coin"))
+	void BP_SetupCoin();
 };

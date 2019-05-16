@@ -503,7 +503,11 @@ void ACSKGameMode::StartMatch()
 	{
 		// We start the match by going to the coin flip, this
 		// will also handle skipping the flip sequence if needed
-		EnterMatchState(ECSKMatchState::CoinFlip);
+		EnterMatchStateAfterDelay(ECSKMatchState::CoinFlip, 2.f);
+
+		// This could possibly be called from TryStartMatch
+		FTimerManager& TimerManager = GetWorldTimerManager();
+		TimerManager.ClearTimer(Handle_TryStartMatch);
 	}
 }
 
@@ -658,9 +662,6 @@ void ACSKGameMode::OnStartWaitingPreMatch()
 
 void ACSKGameMode::OnCoinFlipStart()
 {
-	FTimerManager& TimerManager = GetWorldTimerManager();
-	TimerManager.ClearTimer(Handle_TryStartMatch);
-
 	// We want to make sure these are done before we start any match operations (including the coin flip)
 	{
 		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
@@ -721,6 +722,9 @@ void ACSKGameMode::OnCoinFlipStart()
 
 	if (CoinSequenceActor && CoinSequenceActor->CanActivateCoinSequence())
 	{
+		// We can have sequence setup while players transition to the board
+		CoinSequenceActor->SetupCoinSequence();
+
 		// Notify players to transition to board (Who will report back to us once done)
 		for (ACSKPlayerController* Controller : Players)
 		{

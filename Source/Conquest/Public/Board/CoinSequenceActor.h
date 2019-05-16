@@ -109,4 +109,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = Sequence)
 	uint8 bSkipSequenceInPIE : 1;
 	#endif
+
+public:
+
+	/** Set up the sequence and coin before starting the coin flip */
+	void SetupCoinSequence();
 };

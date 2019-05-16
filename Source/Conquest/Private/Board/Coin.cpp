@@ -154,3 +154,8 @@ FVector ACoin::GetCoinLocation() const
 {
 	return Mesh->GetComponentLocation();
 }
+
+void ACoin::Multi_SetupCoin_Implementation()
+{
+	BP_SetupCoin();
+}
