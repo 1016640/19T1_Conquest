@@ -738,6 +738,11 @@ void ACSKGameMode::OnCoinFlipStart()
 	{
 		UE_LOG(LogConquest, Warning, TEXT("Failed to start coin flip sequence. Skipping the sequence and starting match in 2 seconds"));
 
+		if (CoinSequenceActor)
+		{
+			CoinSequenceActor->CleanupCoinSequence();
+		}
+
 		// Force match to start
 		StartingPlayerID = GenerateCoinFlipWinner() ? 0 : 1;
 		EnterMatchStateAfterDelay(ECSKMatchState::Running, 2.f);
@@ -1062,6 +1067,8 @@ void ACSKGameMode::OnPlayerTransitionSequenceFinished()
 				if (PlayersAtCoinSequence == 0)
 				{
 					CoinSequenceActor->FinishCoinSequence();
+					CoinSequenceActor->CleanupCoinSequence();
+
 					bExecutingCoinSequnce = false;
 
 					EnterMatchState(ECSKMatchState::Running);
@@ -1256,9 +1263,12 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 			}
 		}
 
+		int32 OriginalGold = State->GetGold();
+		int32 OriginalMana = State->GetMana();
+
 		// Update resources
-		int32 NewGold = ClampGoldToLimit(State->GetGold() + GoldToGive);
-		int32 NewMana = ClampManaToLimit(State->GetMana() + ManaToGive);
+		int32 NewGold = ClampGoldToLimit(OriginalGold + GoldToGive);
+		int32 NewMana = ClampManaToLimit(OriginalMana + ManaToGive);
 		State->SetResources(NewGold, NewMana);
 
 		// Pick up a spell from the deck (reshuffle the discard pile if required)
@@ -1280,7 +1290,11 @@ void ACSKGameMode::UpdatePlayerResources(ACSKPlayerController* Controller, int32
 			}
 		}
 
-		FCollectionPhaseResourcesTally TalliedResults(GoldToGive, ManaToGive, bDeckReshuffled, SpellCard);
+		// The actual amount of gold and mana we gave to this player
+		int32 GoldGiven = NewGold - OriginalGold;
+		int32 ManaGiven = NewMana - OriginalMana;
+
+		FCollectionPhaseResourcesTally TalliedResults(GoldGiven, ManaGiven, bDeckReshuffled, SpellCard);
 		Controller->Client_OnCollectionPhaseResourcesTallied(TalliedResults);
 	}
 	else

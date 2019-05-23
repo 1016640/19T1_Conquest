@@ -159,3 +159,8 @@ void ACoin::Multi_SetupCoin_Implementation()
 {
 	BP_SetupCoin();
 }
+
+void ACoin::Multi_CleanupCoin_Implementation()
+{
+	BP_CleanupCoin();
+}

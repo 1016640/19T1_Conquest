@@ -8,7 +8,7 @@
 #include "Castle.generated.h"
 
 class UFloatingPawnMovement;
-class USkeletalMeshComponent;
+class UStaticMeshComponent;
 
 /**
  * Castles are towers that have the capability of moving. Castles are indirectly
@@ -44,8 +44,8 @@ protected:
 
 public:
 
-	/** Get skeletal mesh component */
-	FORCEINLINE USkeletalMeshComponent* GetMesh() const { return Mesh; }
+	/** Get static mesh component */
+	FORCEINLINE UStaticMeshComponent* GetMesh() const { return Mesh; }
 
 	/** Get pawn movement component */
 	FORCEINLINE UFloatingPawnMovement* GetPawnMovement() const { return PawnMovement; }
@@ -54,7 +54,7 @@ private:
 
 	/** Animated skeletal mesh */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))
-	USkeletalMeshComponent* Mesh;
+	UStaticMeshComponent* Mesh;
 
 	/** Basic Movement component */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Components, meta = (AllowPrivateAccess = "true"))

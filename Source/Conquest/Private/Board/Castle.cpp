@@ -5,7 +5,7 @@
 #include "CSKPlayerState.h"
 
 #include "HealthComponent.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "GameFramework/FloatingPawnMovement.h"
 
 #define LOCTEXT_NAMESPACE "Castle"
@@ -21,14 +21,17 @@ ACastle::ACastle()
 	AutoPossessAI = EAutoPossessAI::Disabled;
 	AIControllerClass = ACastleAIController::StaticClass();
 
-	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Mesh"));
-	SetRootComponent(Mesh);
-	Mesh->SetMobility(EComponentMobility::Movable);
+	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(DummyRoot);
+	DummyRoot->SetMobility(EComponentMobility::Movable);
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(DummyRoot);
 	Mesh->SetSimulatePhysics(false);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	PawnMovement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("MovementComp"));
-	PawnMovement->SetUpdatedComponent(Mesh);
+	PawnMovement->SetUpdatedComponent(DummyRoot);
 	PawnMovement->MaxSpeed = 800.f;
 	PawnMovement->Acceleration = 2000.f;
 	PawnMovement->Deceleration = 2000.f;

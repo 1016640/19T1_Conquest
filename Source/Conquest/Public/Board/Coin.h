@@ -14,7 +14,7 @@ class UStaticMeshComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCoinFlipFinished, bool, bHeads);
 
 /** 
- * The coin to flip when determining which player goes first
+ * The coin to flip when determining which player goes first. This is used by the coin sequence actor 
 */
 UCLASS(abstract)
 class CONQUEST_API ACoin : public AActor
@@ -132,12 +132,20 @@ public:
 public:
 
 	/** Notify that the coin is about to be flipped */
-	UFUNCTION(Reliable, NetMulticast)
+	UFUNCTION(NetMulticast, Reliable)
 	void Multi_SetupCoin();
+
+	/** Notify that the coin has finished flipping (after sequence has finished) */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_CleanupCoin();
 
 protected:
 
 	/** Set up the coin flip client side */
 	UFUNCTION(BlueprintImplementableEvent, Category = Coin, meta = (DisplayName = "Setup Coin"))
 	void BP_SetupCoin();
+
+	/** Clean up the coin flip client side */
+	UFUNCTION(BlueprintImplementableEvent, Category = Coin, meta = (DisplayName = "Cleanup Coin"))
+	void BP_CleanupCoin();
 };

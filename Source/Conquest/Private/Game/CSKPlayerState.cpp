@@ -113,7 +113,10 @@ void ACSKPlayerState::SetResources(int32 InGold, int32 InMana)
 {
 	if (HasAuthority())
 	{
+		TotalGoldCollected += FMath::Max(0, InGold - Gold);
 		Gold = FMath::Max(0, InGold);
+
+		TotalManaCollected += FMath::Max(0, InMana - Mana);
 		Mana = FMath::Max(0, InMana);
 	}
 }

@@ -88,14 +88,10 @@ void ACoinSequenceActor::FinishCoinSequence()
 	if (HasAuthority())
 	{
 		if (Coin)
-		{
-			Coin->SetActorHiddenInGame(true);
+		{ 
 			Coin->OnCoinFlipComplete.RemoveDynamic(this, &ACoinSequenceActor::ServerHandleCoinFlipFinished);
-
 			Multi_FinishCoinFlip();
 		}
-
-		TearOff();
 	}
 }
 
@@ -166,8 +162,24 @@ void ACoinSequenceActor::SetupCoinSequence()
 		// Have coin setup for all clients
 		if (Coin)
 		{
+			Coin->SetActorHiddenInGame(false);
 			Coin->Multi_SetupCoin();
 		}
+	}
+}
+
+void ACoinSequenceActor::CleanupCoinSequence()
+{
+	if (HasAuthority())
+	{
+		// Have coin setup for all clients
+		if (Coin)
+		{
+			//Coin->Multi_CleanupCoin();
+			Coin->SetActorHiddenInGame(true);
+		}
+
+		TearOff();
 	}
 }
 

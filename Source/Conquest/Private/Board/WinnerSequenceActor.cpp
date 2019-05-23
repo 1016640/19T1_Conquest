@@ -6,8 +6,7 @@
 #include "CSKPlayerState.h"
 
 #include "Castle.h"
-#include "Components/SceneComponent.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 
 AWinnerSequenceActor::AWinnerSequenceActor()
@@ -124,7 +123,7 @@ void APortalReachedSequenceActor::BeginPlay()
 	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
 	if (Castle)
 	{
-		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		UStaticMeshComponent* Mesh = Castle->GetMesh();
 		InitialRotation = Mesh->GetComponentRotation();
 
 		// Have local player focus on winners castle
@@ -134,7 +133,7 @@ void APortalReachedSequenceActor::BeginPlay()
 			ACSKPawn* CSKPawn = GameState->GetLocalPlayerPawn();
 			if (CSKPawn)
 			{
-				CSKPawn->TrackActor(Castle);
+				CSKPawn->TravelToLocation(Castle->GetActorLocation(), 1.f);
 			}
 		}
 	}
@@ -185,7 +184,7 @@ void APortalReachedSequenceActor::OnRotationInterpUpdated(float Value)
 		// Rotate around yaw axis
 		float Degrees = 360.f * (Value - FMath::TruncToFloat(Value));
 
-		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		UStaticMeshComponent* Mesh = Castle->GetMesh();
 		Mesh->SetWorldRotation(InitialRotation + FRotator(0.f, Degrees, 0.f));		
 	}
 }
@@ -195,7 +194,7 @@ void APortalReachedSequenceActor::OnScaleInterpUpdated(FVector Value)
 	ACastle* Castle = WinningPlayer ? WinningPlayer->GetCastle() : nullptr;
 	if (Castle)
 	{
-		USkeletalMeshComponent* Mesh = Castle->GetMesh();
+		UStaticMeshComponent* Mesh = Castle->GetMesh();
 		Mesh->SetWorldScale3D(Value);
 	}
 }
@@ -242,9 +241,9 @@ void ACastleDestroyedSequenceActor::BeginPlay()
 	if (GameState)
 	{
 		ACSKPawn* CSKPawn = GameState->GetLocalPlayerPawn();
-		if (CSKPawn)
+		if (CSKPawn && OpponentsCastle)
 		{
-			CSKPawn->TrackActor(OpponentsCastle);
+			CSKPawn->TravelToLocation(OpponentsCastle->GetActorLocation(), 1.f);
 		}
 	}
 

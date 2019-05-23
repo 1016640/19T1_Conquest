@@ -38,10 +38,12 @@ ATower::ATower()
 	bIsInputBound = false;
 	bIsTimerBound = false;
 
-	// TODO: We might change this to skeletal meshes later
+	USceneComponent* DummyRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(DummyRoot);
+	DummyRoot->SetMobility(EComponentMobility::Movable);
+
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	SetRootComponent(Mesh);
-	Mesh->SetMobility(EComponentMobility::Movable);
+	Mesh->SetupAttachment(DummyRoot);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetSimulatePhysics(false);
 

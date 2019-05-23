@@ -114,4 +114,7 @@ public:
 
 	/** Set up the sequence and coin before starting the coin flip */
 	void SetupCoinSequence();
+
+	/** Clean up the sequence and coin either after finishing or if skipped */
+	void CleanupCoinSequence();
 };
